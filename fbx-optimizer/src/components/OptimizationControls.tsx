@@ -9,6 +9,7 @@ interface OptimizationControlsProps {
     optimizedKeyframeCount: number;
     onExport: () => void;
     fileName: string | null;
+    isExporting?: boolean;
 }
 
 export default function OptimizationControls({
@@ -18,7 +19,8 @@ export default function OptimizationControls({
     originalKeyframeCount,
     optimizedKeyframeCount,
     onExport,
-    fileName
+    fileName,
+    isExporting = false
 }: OptimizationControlsProps) {
 
     const reductionPercentage = originalKeyframeCount > 0
@@ -106,14 +108,14 @@ export default function OptimizationControls({
             {/* 導出按鈕 */}
             <button
                 onClick={onExport}
-                disabled={!fileName}
-                className={`flex items-center justify-center gap-2 w-full py-3 px-4 rounded-md font-medium transition-colors ${fileName
+                disabled={!fileName || isExporting}
+                className={`flex items-center justify-center gap-2 w-full py-3 px-4 rounded-md font-medium transition-colors ${fileName && !isExporting
                     ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20'
                     : 'bg-gray-700 text-gray-500 cursor-not-allowed'
                     }`}
             >
                 <Download className="w-4 h-4" />
-                導出優化後的 GLB (推薦)
+                {isExporting ? '導出中...' : '導出優化後的 GLB (推薦)'}
             </button>
             <p className="text-[10px] text-gray-500 text-center mt-1">
                 *Three.js 不支援 FBX 導出，已自動轉為更高效的 GLB 格式
