@@ -1,0 +1,294 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture:        { value: grey }
+        lightTextureBody:   { value: grey }      # 身體發光貼圖
+        maskTexture:        { value: grey }      # 刷光遮罩貼圖
+        lightTexture:       { value: grey }      # 刷光漸層貼圖
+        mouthMaskTexture:   { value: grey }      # 嘴部遮罩貼圖
+        matcapTexture:      { value: grey }      # Matcap 金屬反射貼圖
+        normalMap:          { value: normal }    # 法線貼圖
+        
+        # 基礎顏色
+        mainColor:          { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        multColor:          { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        bleachColor:        { value: [1, 1, 1, 0], linear: true, editor: { type: color, parent: USE_BLEACH_COLOR } }  # 🆕 邊緣泛光顏色（alpha 控制強度）
+        
+        # 混合與發光
+        mixBrightness:      { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        breathSpeed:        { value: 1.0, range: [0.0, 5.0], editor: { type: slider } }
+        breathIntensity:    { value: 0.5, range: [0.0, 1.0], editor: { type: slider } }
+        
+        # 刷光參數
+        maskWeight:         { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        maskWeight2:        { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        lightRange:         { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        lightSpeed:         { value: 1.0, range: [0.0, 5.0], editor: { type: slider } }
+        
+        # 灰階與對比度
+        grayScaleFactor:    { value: 0.0, range: [0.0, 1.0], editor: { type: slider } }
+        contrast:           { value: 1.0, range: [0.5, 2.0], editor: { type: slider } }
+        
+        # Matcap 與法線
+        reflectivity:       { value: 0.5, range: [0.0, 1.0], editor: { type: slider } }
+        reflectivity2:      { value: 0.5, range: [0.0, 1.0], editor: { type: slider } }
+        brightnessFactor:   { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        normalStrength:     { value: 1.0, range: [0.0, 5.0], editor: { type: slider } }
+        
+        tilingOffset:       { value: [1, 1, 0, 0] }
+        alphaThreshold:     { value: 0.5, editor: { parent: USE_ALPHA_TEST } }
+        
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+
+CCProgram unlit-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 a_color;
+    out lowp vec4 v_color;
+  #endif
+
+  out vec2 v_uv;
+  out vec3 v_worldNormal;
+  out vec3 v_worldPos;
+  out vec3 v_viewNormal;
+  out mediump vec4 v_tangent;
+
+  uniform TexCoords {
+    vec4 tilingOffset;
+  };
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+    
+    // 世界空間法線與位置
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+    v_worldPos = (matWorld * In.position).xyz;
+    
+    // 視圖空間法線（用於 Matcap）
+    v_viewNormal = normalize(mat3(cc_matView) * v_worldNormal);
+    
+    // 切線空間
+    v_tangent.xyz = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+    v_tangent.w = In.tangent.w;
+
+    // UV 座標
+    v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+    
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+    #endif
+
+    #if USE_VERTEX_COLOR
+      v_color = a_color;
+    #endif
+
+    return cc_matProj * (cc_matView * matWorld) * In.position;
+  }
+}%
+
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output-standard>
+  #include <builtin/uniforms/cc-global>
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  in vec2 v_uv;
+  in vec3 v_worldNormal;
+  in vec3 v_worldPos;
+  in vec3 v_viewNormal;
+  in mediump vec4 v_tangent;
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D lightTextureBody;
+  uniform sampler2D maskTexture;
+  uniform sampler2D lightTexture;
+  uniform sampler2D mouthMaskTexture;
+  uniform sampler2D matcapTexture;
+  uniform sampler2D normalMap;
+
+  uniform Constant {
+    vec4 mainColor;
+    vec4 multColor;
+    vec4 bleachColor;        // 🆕 邊緣泛光顏色
+    float mixBrightness;
+    float breathSpeed;
+    float breathIntensity;
+    float maskWeight;
+    float maskWeight2;
+    float lightRange;
+    float lightSpeed;
+    float grayScaleFactor;
+    float contrast;
+    float reflectivity;
+    float reflectivity2;
+    float brightnessFactor;
+    float normalStrength;
+    float alphaThreshold;
+  };
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 v_color;
+  #endif
+
+  // 🆕 Bleach 邊緣泛光函數（菲涅爾效果）
+  #if USE_BLEACH_COLOR
+    vec3 bleach(vec3 oldColor, float lerpValue, vec3 normal) {
+      vec3 worldNor = normalize(normal);
+      vec3 viewDir = normalize(cc_cameraPos.xyz - v_worldPos);
+      
+      // 計算視角與法線的夾角，邊緣處 theta 接近 1
+      float theta = 1.0 - clamp(dot(worldNor, viewDir), 0.0, 1.0);
+      
+      // 泛光亮度增強係數
+      float scalar = 1.7;
+      
+      // 使用 pow 讓邊緣效果更集中（指數越大，邊緣越銳利）
+      float edgeFactor = pow(theta, 2.7);
+      
+      // 混合原色與泛光色
+      return mix(oldColor, bleachColor.rgb * scalar, lerpValue * edgeFactor);
+    }
+  #endif
+
+  vec4 frag () {
+    // ============================================================
+    // 步驟 1: 基礎紋理混合（身體發光效果 - 呼吸燈）
+    // ============================================================
+    vec4 maskColor_mix = texture(maskTexture, v_uv);
+    float maskValue_mix = maskColor_mix.g + maskColor_mix.b;
+    
+    vec4 texture_og = texture(mainTexture, v_uv);
+    texture_og.rgb = SRGBToLinear(texture_og.rgb);
+    
+    vec4 texture_lightBody = texture(lightTextureBody, v_uv);
+    texture_lightBody.rgb = SRGBToLinear(texture_lightBody.rgb);
+    
+    // 呼吸燈效果
+    float breathCycle = sin(cc_time.x * breathSpeed) * 0.5 + 0.5;
+    float dynamicBrightness = mixBrightness * (1.0 - breathIntensity + breathCycle * breathIntensity * 2.0);
+    texture_lightBody *= dynamicBrightness;
+    
+    vec4 blendedColor = mix(texture_og, texture_lightBody, maskValue_mix);
+    vec4 tempColor1 = blendedColor;
+
+    // ============================================================
+    // 步驟 2: 刷光效果（動態光線掃過）
+    // ============================================================
+    vec4 addColor = vec4(1.0) - mainColor;
+    vec4 textureColor = tempColor1 * multColor;
+    
+    if (mainColor.r < 0.99 || mainColor.g < 0.99 || mainColor.b < 0.99) {
+        textureColor += addColor;
+    }
+    
+    vec3 maskColor = texture(maskTexture, v_uv).rgb;
+
+    float t = mod(cc_time.x * lightSpeed, 1.0);
+    float offset = abs(mod(maskColor.g - t, 1.0));
+    float lightColor = texture(lightTexture, vec2(0.5, offset * lightRange)).r;
+    
+    float maskAdd = maskWeight * maskWeight2 * maskColor.r + maskWeight * maskColor.b * lightColor;
+
+    vec4 finalColor = textureColor * (1.0 + maskAdd);
+    finalColor.a = textureColor.a;
+
+    // ============================================================
+    // 步驟 3: 灰階與對比度調整
+    // ============================================================
+    float gray = dot(textureColor.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 grayColor = vec3(gray);
+    vec3 mixedColor = mix(textureColor.rgb, grayColor, grayScaleFactor);
+
+    if (grayScaleFactor > 0.0) {
+        mixedColor = ((mixedColor - 0.5) * contrast + 0.5);
+    }
+
+    finalColor.rgb = mixedColor * (1.0 + maskAdd);
+
+    // ============================================================
+    // 步驟 4: 法線貼圖處理
+    // ============================================================
+    vec3 nmmp = texture(normalMap, v_uv).xyz - vec3(0.5);
+    vec3 tangent = normalize(v_tangent.xyz);
+    vec3 bitangent = cross(v_worldNormal, tangent) * (v_tangent.w > 0.0 ? 1.0 : -1.0);
+    
+    vec3 normal = 
+        (nmmp.x * normalStrength) * tangent + 
+        (nmmp.y * normalStrength) * normalize(bitangent) + 
+        nmmp.z * normalize(v_worldNormal);
+    
+    normal = normalize(normal);
+
+    // ============================================================
+    // 步驟 5: Matcap 金屬反射效果
+    // ============================================================
+    vec3 viewNormal = normalize(mat3(cc_matView) * normal);
+    vec2 muv = viewNormal.xy * 0.5 + 0.5;
+
+    vec4 matcapColor = texture(matcapTexture, vec2(muv.x, 1.0 - muv.y));
+    matcapColor.rgb = SRGBToLinear(matcapColor.rgb);
+    
+    vec3 metalEffect = matcapColor.rgb * reflectivity * 0.5;
+    finalColor.rgb = finalColor.rgb + metalEffect;
+
+    // ============================================================
+    // 🆕 步驟 6: Bleach 邊緣泛光效果
+    // ============================================================
+    #if USE_BLEACH_COLOR
+      // 只有當 bleachColor.w (alpha) > 0 時才套用邊緣泛光
+      if (bleachColor.w > 0.0) {
+          finalColor.rgb = bleach(finalColor.rgb, bleachColor.w, normal);
+      }
+    #endif
+
+    // ============================================================
+    // 步驟 7: 最終處理
+    // ============================================================
+    finalColor = clamp(finalColor, 0.0, 1.0);
+    finalColor.a = mainColor.a;
+
+    #if USE_VERTEX_COLOR
+      finalColor.rgb *= SRGBToLinear(v_color.rgb);
+      finalColor.a *= v_color.a;
+    #endif
+
+    #if USE_ALPHA_TEST
+      if (finalColor.ALPHA_TEST_CHANNEL < alphaThreshold) discard;
+    #endif
+
+    return CCFragOutput(finalColor);
+  }
+}%

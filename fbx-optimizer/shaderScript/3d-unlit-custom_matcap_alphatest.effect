@@ -1,0 +1,406 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture:    { value: grey }
+        matcapTexture:  { value: grey }
+        matcapProgress: { value: 0.0, range: [0.0, 1.0], editor: { type: slider, parent: USE_MATCAP } }
+        normalMap:      { value: normal }
+        normalStrength: { value: 1.0, range: [0.0, 5.0], editor: { type: slider, parent: USE_NORMAL_MAP } }
+        tilingOffset:   { value: [1, 1, 0, 0] }
+        mainColor:      { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        bleachColor:    { value: [1, 1, 1, 0], linear: true, editor: { type: color } }
+        colorScale:     { value: [1, 1, 1], target: colorScaleAndCutoff.xyz }
+        alphaThreshold: { value: 0.5, target: colorScaleAndCutoff.w, editor: { parent: USE_ALPHA_TEST } }
+        # 🔥 新增：自定義霧效果參數
+        fogColor:       { value: [0.5, 0.5, 0.5, 1.0], linear: true, editor: { type: color, parent: USE_CUSTOM_FOG } }
+        customCameraPos: { value: [0, 0, 0, 0], editor: { parent: USE_CUSTOM_FOG } }
+        fogStart:       { value: 10.0, editor: { parent: USE_CUSTOM_FOG } }
+        fogEnd:         { value: 50.0, editor: { parent: USE_CUSTOM_FOG } }
+        fogDensity:     { value: 1.0, range: [0.0, 2.0], editor: { type: slider, parent: USE_CUSTOM_FOG } }
+        color:          { target: mainColor, linear: true, editor: { visible: false } }
+      migrations: &migs
+        properties:
+          mainColor:    { formerlySerializedAs: color }
+    - &shadow-caster
+      vert: shadow-caster-vs:vert
+      frag: shadow-caster-fs:frag
+      phase: shadow-caster
+      propertyIndex: 0
+      rasterizerState:
+        cullMode: front
+      properties:
+        tilingOffset:   { value: [1, 1, 0, 0] }
+        mainColor:      { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        colorScale:     { value: [1, 1, 1], target: colorScaleAndCutoff.xyz }
+        alphaThreshold: { value: 0.5, target: colorScaleAndCutoff.w, editor: { parent: USE_ALPHA_TEST } }
+        mainTexture:    { value: grey }
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      depthStencilState: &d1
+        depthTest: true
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+      migrations: *migs
+  - name: add
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      rasterizerState: &r1 { cullMode: none }
+      depthStencilState: *d1
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one
+      properties: *props
+      migrations: *migs
+  - name: alpha-blend
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+      migrations: *migs
+}%
+
+
+CCProgram unlit-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+  #include <legacy/fog-vs>
+
+  #if USE_INSTANCING
+    #pragma format(RG32F)
+    in vec2 a_custom_color_ctrl;
+    out vec2 v_custom_color_ctrl;
+  #endif
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 a_color;
+    out lowp vec4 v_color;
+  #endif
+
+  #if USE_TEXTURE
+    out vec2 v_uv;
+    uniform TexCoords {
+      vec4 tilingOffset;
+    };
+  #endif
+
+  out vec3 v_worldNormal;
+  out vec3 v_worldPos;
+
+  #if USE_NORMAL_MAP
+    out mediump vec4 v_tangent;
+  #endif
+
+  vec4 vert () {
+    StandardVertInput In; 
+    CCVertInput(In);
+
+    #if USE_INSTANCING
+      v_custom_color_ctrl = a_custom_color_ctrl;
+    #endif
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.)).xyz);
+    v_worldPos = (matWorld * In.position).xyz;
+
+    #if USE_NORMAL_MAP
+      v_tangent.xyz = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+      v_tangent.w = In.tangent.w;
+    #endif
+
+    #if USE_TEXTURE
+      v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+      #if SAMPLE_FROM_RT
+        CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+      #endif
+    #endif
+
+    #if USE_VERTEX_COLOR
+      v_color = a_color;
+    #endif
+
+    CC_TRANSFER_FOG(matWorld * In.position);
+    return cc_matProj * (cc_matView * matWorld) * In.position;
+  }
+}%
+
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output-standard>
+  #include <legacy/fog-fs>
+
+  #if USE_INSTANCING
+    in vec2 v_custom_color_ctrl;
+  #endif
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  #if USE_TEXTURE
+    in vec2 v_uv;
+    uniform sampler2D mainTexture;
+  #endif
+
+  #if USE_MATCAP
+    uniform sampler2D matcapTexture;
+  #endif
+
+  #if USE_NORMAL_MAP
+    uniform sampler2D normalMap;
+    in mediump vec4 v_tangent;
+  #endif
+
+  uniform Constant {
+    vec4 mainColor;
+    vec4 colorScaleAndCutoff;
+    float matcapProgress;
+    float normalStrength;
+  };
+
+  in vec3 v_worldPos;
+  in vec3 v_worldNormal;
+
+  #if USE_BLEACH_COLOR || USE_MATCAP || USE_NORMAL_MAP
+    uniform BleachValue {
+      vec4 bleachColor;
+    };
+  #endif
+
+  // 🔥 新增：自定義霧效果 uniform
+  #if USE_CUSTOM_FOG
+    uniform FogParams {
+      vec4 fogColor;
+      vec4 customCameraPos;  // 自定義相機位置 (xyz=位置, w未使用)
+      float fogStart;
+      float fogEnd;
+      float fogDensity;
+    };
+  #endif
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 v_color;
+  #endif
+
+  #if USE_BLEACH_COLOR
+    vec3 bleach(vec3 oldColor, float lerpValue, vec3 normal) {
+      vec3 worldNor = normalize(normal);
+      vec3 viewDir = normalize(cc_cameraPos.xyz - v_worldPos);
+      float theta = 1. - clamp(0., 1., dot(worldNor, viewDir));
+      float scalar = 1.7;
+      return mix(oldColor, bleachColor.rgb * scalar, lerpValue * pow(theta, 2.7));
+    }
+  #endif
+
+  // 🔥 新增：計算自定義霧效果
+  #if USE_CUSTOM_FOG
+    vec3 applyCustomFog(vec3 color, vec3 worldPos, vec4 cameraPosVec4) {
+      // 計算到自定義相機的距離 (只使用 xyz)
+      vec3 cameraPos = cameraPosVec4.xyz;
+      float dist = length(cameraPos - worldPos);
+      
+      // 線性霧效果：根據 fogStart 和 fogEnd 計算混合因子
+      float fogFactor = clamp((fogEnd - dist) / (fogEnd - fogStart), 0.0, 1.0);
+      
+      // 可選：指數霧效果（更自然的過渡）
+      // float fogFactor = exp(-fogDensity * dist);
+      // fogFactor = clamp(fogFactor, 0.0, 1.0);
+      
+      // 混合原色與霧色
+      return mix(fogColor.rgb, color, fogFactor * fogDensity);
+    }
+  #endif
+
+  vec4 frag () {
+    vec4 o = mainColor;
+    o.rgb *= colorScaleAndCutoff.xyz;
+
+    #if USE_INSTANCING
+      o.a *= (1. - v_custom_color_ctrl.x);  
+    #endif
+
+    #if USE_VERTEX_COLOR
+      o.rgb *= SRGBToLinear(v_color.rgb);
+      o.a *= v_color.a;
+    #endif
+
+    #if USE_TEXTURE
+      vec4 rawTexColor = texture(mainTexture, v_uv);
+      rawTexColor.rgb = SRGBToLinear(rawTexColor.rgb);
+      o *= rawTexColor;
+    #endif
+
+    vec3 finalNormal = normalize(v_worldNormal);
+    
+    #if USE_NORMAL_MAP
+      vec3 nmmp = texture(normalMap, v_uv).xyz - vec3(0.5);
+      vec3 bitangent = cross(v_worldNormal, v_tangent.xyz) * (v_tangent.w > 0.0 ? 1.0 : -1.0);
+      finalNormal = normalize(
+        (nmmp.x * normalStrength) * normalize(v_tangent.xyz) +
+        (nmmp.y * normalStrength) * normalize(bitangent) +
+        nmmp.z * normalize(v_worldNormal)
+      );
+    #endif
+
+    #if USE_MATCAP
+      vec3 sn = normalize(finalNormal);
+      vec2 tc = vec2(cc_matView * vec4(sn, 0.0)) * 0.49 + vec2(0.5, 0.5);
+      vec2 muv = vec2(tc.x, 1.0 - tc.y);
+      vec3 matcapColor = SRGBToLinear(texture(matcapTexture, muv).rgb);
+
+      vec3 viewDir = normalize(cc_cameraPos.xyz - v_worldPos);
+      float edgeValue = 1.0 - clamp(dot(viewDir, sn), 0.0, 1.0);
+      float envStrength = 3.0;
+      float blendFactor = clamp(edgeValue * matcapProgress * envStrength, 0.0, 1.0);
+      o.rgb = mix(o.rgb, matcapColor, blendFactor);
+    #endif
+
+    #if USE_ALPHA_TEST
+      if (o.ALPHA_TEST_CHANNEL < colorScaleAndCutoff.w) discard;
+    #endif
+
+    #if USE_BLEACH_COLOR
+      #if USE_INSTANCING
+        if (v_custom_color_ctrl.y > 0.) o.rgb = bleach(o.rgb, v_custom_color_ctrl.y, finalNormal);
+      #else
+        if (bleachColor.w > 0.) o.rgb = bleach(o.rgb, bleachColor.w, finalNormal);
+      #endif
+    #endif
+
+    // 🔥 應用自定義霧效果（使用自定義相機位置）
+    #if USE_CUSTOM_FOG
+      o.rgb = applyCustomFog(o.rgb, v_worldPos, customCameraPos);
+    #endif
+
+    #if CC_USE_FOG != CC_FOG_NONE
+      #if CC_USE_HDR
+        o.rgb = ACESToneMap(o.rgb);
+      #endif
+      o.rgb = LinearToSRGB(o.rgb);
+      CC_APPLY_FOG(o, v_worldPos.xyz);
+      return o;
+    #else
+      return CCFragOutput(o);
+    #endif
+  }
+}%
+
+
+CCProgram shadow-caster-vs %{
+  precision highp float;
+  #include <legacy/input>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+  #include <builtin/uniforms/cc-shadow>
+
+  #if USE_TEXTURE
+    out vec2 v_uv;
+    uniform TexCoords {
+      vec4 tilingOffset;
+    };
+  #endif
+  out vec4 v_worldPos;
+  out highp vec2 v_clip_depth;
+
+  vec4 vert () {
+    vec4 position;
+    CCVertInput(position);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    v_worldPos = matWorld * position;
+    vec4 clipPos = cc_matLightViewProj * v_worldPos;
+
+    #if USE_TEXTURE
+      v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+      #if SAMPLE_FROM_RT
+        CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+      #endif
+    #endif
+
+    v_clip_depth = clipPos.zw;
+
+    return clipPos;
+  }
+}%
+
+
+CCProgram shadow-caster-fs %{
+  precision highp float;
+  #include <legacy/output-standard>
+  #include <common/data/packing>
+  #include <legacy/shadow-map-base>
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  #if USE_TEXTURE
+    in vec2 v_uv;
+    uniform sampler2D mainTexture;
+  #endif
+  in vec4 v_worldPos;
+  in highp vec2 v_clip_depth;
+
+  uniform Constant {
+    vec4 mainColor;
+    vec4 colorScaleAndCutoff;
+  };
+
+  vec4 frag () {
+    vec4 o = mainColor;
+
+    #if USE_ALPHA_TEST
+      #if USE_TEXTURE
+        o *= texture(mainTexture, v_uv);
+      #endif
+      if (o.ALPHA_TEST_CHANNEL < colorScaleAndCutoff.w) discard;
+    #endif
+
+    highp float clipDepth = v_clip_depth.x / v_clip_depth.y * 0.5 + 0.5;
+    if(cc_shadowLPNNInfo.x > 0.000001 && cc_shadowLPNNInfo.x < 1.999999) {
+      #if CC_SHADOWMAP_USE_LINEAR_DEPTH
+        clipDepth = CCGetLinearDepth(v_worldPos.xyz);
+      #endif
+    }
+
+    #if CC_SHADOWMAP_FORMAT == SHADOWMAP_FORMAT_RGBA8
+      return packDepthToRGBA(clipDepth);
+    #else
+      return vec4(clipDepth, 1.0, 1.0, 1.0);
+    #endif
+  }
+}%

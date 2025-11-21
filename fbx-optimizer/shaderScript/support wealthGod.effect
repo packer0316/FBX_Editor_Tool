@@ -1,0 +1,284 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: god-of-wealth-vs:vert
+      frag: god-of-wealth-fs:frag
+      properties: &props
+        mainTexture:        { value: grey }      # 主要貼圖
+        maskTexture:        { value: grey }      # 遮罩貼圖 (RGB分別控制不同材質)
+        normalMap:          { value: normal }    # 法線貼圖
+        matcapGoldTexture:  { value: grey }      # 金色 Matcap
+        matcapGreenTexture: { value: grey }      # 綠色 Matcap
+        matcapRedTexture:   { value: grey }      # 紅色 Matcap
+        
+        # 基礎顏色
+        mainColor:          { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        
+        # 混合係數
+        mixFactorR:         { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        mixFactorG:         { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        mixFactorB:         { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        
+        # 反射強度
+        reflectivityGold:   { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        reflectivityGreen:  { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        reflectivityRed:    { value: 1.0, range: [0.0, 2.0], editor: { type: slider } }
+        
+        # 法線強度
+        normalMapStrength:  { value: 1.0, range: [0.0, 5.0], editor: { type: slider } }
+        
+        # 顯示模式 (0: 正常, 1: 混合+Matcap, 2: 只顯示遮罩, 3: 只顯示法線)
+        displayType:        { value: 1.0, range: [0.0, 3.0], editor: { type: slider } }
+        
+        # Mesh 索引 (用於選擇不同的金色 Matcap 區域)
+        meshIndex:          { value: 0.0, range: [0.0, 10.0], editor: { type: slider } }
+        
+        tilingOffset:       { value: [1, 1, 0, 0] }
+        alphaThreshold:     { value: 0.5, editor: { parent: USE_ALPHA_TEST } }
+        
+  - name: transparent
+    passes:
+    - vert: god-of-wealth-vs:vert
+      frag: god-of-wealth-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+
+CCProgram god-of-wealth-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 a_color;
+    out lowp vec4 v_color;
+  #endif
+
+  out vec2 v_uv;
+  out vec2 v_uv_normal;         // 法線貼圖專用 UV
+  out vec3 v_worldNormal;
+  out vec3 v_worldPos;
+  out mediump vec4 v_tangent;
+
+  uniform TexCoords {
+    vec4 tilingOffset;
+  };
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+    
+    // 世界空間法線與位置
+    v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.0)).xyz);
+    v_worldPos = (matWorld * In.position).xyz;
+    
+    // 切線空間
+    v_tangent.xyz = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+    v_tangent.w = In.tangent.w;
+
+    // 主要 UV 座標
+    v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+    
+    // 法線貼圖使用不同的 UV 變換 (對應原本的 TextureCoordOut1)
+    // 原始: vec2(TextureCoordOut1.x * 0.5 + 0.5, TextureCoordOut1.y * 0.5)
+    v_uv_normal = vec2(a_texCoord.x * 0.5 + 0.5, a_texCoord.y * 0.5);
+    
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+      CC_HANDLE_RT_SAMPLE_FLIP(v_uv_normal);
+    #endif
+
+    #if USE_VERTEX_COLOR
+      v_color = a_color;
+    #endif
+
+    return cc_matProj * (cc_matView * matWorld) * In.position;
+  }
+}%
+
+
+CCProgram god-of-wealth-fs %{
+  precision highp float;
+  #include <legacy/output-standard>
+  #include <builtin/uniforms/cc-global>
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  in vec2 v_uv;
+  in vec2 v_uv_normal;
+  in vec3 v_worldNormal;
+  in vec3 v_worldPos;
+  in mediump vec4 v_tangent;
+
+  uniform sampler2D mainTexture;
+  uniform sampler2D maskTexture;
+  uniform sampler2D normalMap;
+  uniform sampler2D matcapGoldTexture;
+  uniform sampler2D matcapGreenTexture;
+  uniform sampler2D matcapRedTexture;
+
+  uniform Constant {
+    vec4 mainColor;
+    float mixFactorR;
+    float mixFactorG;
+    float mixFactorB;
+    float reflectivityGold;
+    float reflectivityGreen;
+    float reflectivityRed;
+    float normalMapStrength;
+    float displayType;
+    float meshIndex;
+    float alphaThreshold;
+  };
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 v_color;
+  #endif
+
+  // 顏色標準化
+  vec4 ColorStandardization(vec4 tempColor) { 
+    vec4 rtColor = tempColor;
+    rtColor = clamp(rtColor, 0.0, 1.0);
+    return rtColor;
+  }
+
+  // 計算法線（從法線貼圖）
+  vec3 GetNormalFromMap() {
+    // 使用專用的法線 UV
+    vec3 nmmp = texture(normalMap, v_uv_normal).xyz - vec3(0.5);
+
+    vec3 tangent = normalize(v_tangent.xyz);
+    vec3 bitangent = cross(v_worldNormal, tangent);
+    
+    vec3 normal = 
+        (nmmp.x * normalMapStrength) * tangent + 
+        (nmmp.y * normalMapStrength) * normalize(bitangent) + 
+        nmmp.z * normalize(v_worldNormal);
+
+    return normalize(normal);
+  }
+
+  // 計算 Matcap UV
+  vec2 GetMatcapUV(vec3 worldNormal) {
+    vec3 viewNormal = normalize(mat3(cc_matView) * worldNormal);
+    vec2 muv = viewNormal.xy * 0.5 + 0.5;
+    return muv;
+  }
+
+  vec4 frag () {
+    // ============================================================
+    // 步驟 1: 取得基礎顏色
+    // ============================================================
+    vec4 baseColor = texture(mainTexture, v_uv);
+    baseColor.rgb = SRGBToLinear(baseColor.rgb);
+
+    // ============================================================
+    // 步驟 2: 取得遮罩 (RGB 分別控制不同材質)
+    // ============================================================
+    vec4 maskColor = texture(maskTexture, v_uv);
+    vec3 matcapColorType = maskColor.rgb;
+
+    // ============================================================
+    // 步驟 3: 計算法線
+    // ============================================================
+    vec3 finalNormal = GetNormalFromMap();
+    
+    // 計算 Matcap UV
+    vec2 matcap_uv = GetMatcapUV(finalNormal);
+    vec2 matcap_uv_flipped = vec2(matcap_uv.x, 1.0 - matcap_uv.y);
+
+    // ============================================================
+    // 步驟 4: 根據遮罩混合不同的 Matcap
+    // ============================================================
+    vec4 matcapColor = vec4(0.0, 0.0, 0.0, 1.0);
+
+    // 紅色通道 - 紅色 Matcap
+    if (matcapColorType.r > 0.0) {
+      vec4 redMatcap = texture(matcapRedTexture, matcap_uv_flipped);
+      redMatcap.rgb = SRGBToLinear(redMatcap.rgb);
+      matcapColor.rgb += redMatcap.rgb * reflectivityRed * matcapColorType.r;
+    }
+
+    // 綠色通道 - 綠色 Matcap
+    if (matcapColorType.g > 0.0) {
+      vec4 greenMatcap = texture(matcapGreenTexture, matcap_uv_flipped);
+      greenMatcap.rgb = SRGBToLinear(greenMatcap.rgb);
+      matcapColor.rgb += greenMatcap.rgb * reflectivityGreen * matcapColorType.g;
+    }
+
+    // 藍色通道 - 金色 Matcap (根據 meshIndex 可能使用不同區域)
+    if (matcapColorType.b > 0.0) {
+      vec4 goldMatcap = texture(matcapGoldTexture, matcap_uv_flipped);
+      goldMatcap.rgb = SRGBToLinear(goldMatcap.rgb);
+      matcapColor.rgb += goldMatcap.rgb * reflectivityGold * matcapColorType.b;
+    }
+
+    // ============================================================
+    // 步驟 5: 根據顯示模式輸出最終顏色
+    // ============================================================
+    vec4 finalColor = vec4(baseColor.rgb, baseColor.a);
+
+    if (displayType >= 0.0 && displayType < 1.0) {
+      // 模式 0: 只顯示基礎貼圖
+      finalColor = baseColor;
+      
+    } else if (displayType >= 1.0 && displayType < 2.0) {
+      // 模式 1: 混合模式 (一般貼圖 * 遮罩 * mixFactor + matcap 效果)
+      float totalMask = matcapColorType.r + matcapColorType.g + matcapColorType.b;
+      
+      finalColor.rgb = 
+        baseColor.rgb * matcapColorType.r * mixFactorR + 
+        baseColor.rgb * matcapColorType.g * mixFactorG + 
+        baseColor.rgb * matcapColorType.b * mixFactorB + 
+        baseColor.rgb * (1.0 - totalMask) +  // 沒有遮罩的部分維持原色
+        matcapColor.rgb;
+      finalColor.a = 1.0;
+      
+    } else if (displayType >= 2.0 && displayType < 3.0) {
+      // 模式 2: 只顯示遮罩
+      finalColor.rgb = matcapColorType;
+      finalColor.a = 1.0;
+      
+    } else if (displayType >= 3.0) {
+      // 模式 3: 只顯示法線
+      vec3 nmmp = texture(normalMap, v_uv_normal).xyz - vec3(0.5);
+      finalColor.rgb = nmmp * 0.5 + 0.5;  // 將 -0.5~0.5 映射到 0~1
+      finalColor.a = 1.0;
+    }
+
+    // ============================================================
+    // 步驟 6: 最終處理
+    // ============================================================
+    finalColor = ColorStandardization(finalColor);
+    finalColor.a = mainColor.a * baseColor.a;
+
+    #if USE_VERTEX_COLOR
+      finalColor.rgb *= SRGBToLinear(v_color.rgb);
+      finalColor.a *= v_color.a;
+    #endif
+
+    #if USE_ALPHA_TEST
+      if (finalColor.ALPHA_TEST_CHANNEL < alphaThreshold) discard;
+    #endif
+
+    return CCFragOutput(finalColor);
+  }
+}%

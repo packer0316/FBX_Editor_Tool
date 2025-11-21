@@ -1,0 +1,505 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+// ⚡⚡⚡⚡ 終極優化版本：條件編譯 + 精度優化 + MAD 優化 + 分支優化
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture:    { value: grey }
+        matcapTexture:  { value: grey }
+        matcapProgress: { value: 1.0, range: [0.0, 1.0], editor: { type: slider, parent: USE_MATCAP } }
+        matcapLDRBoost: { value: 1.2, range: [1.0, 2.0], editor: { type: slider, parent: USE_MATCAP } }
+        # 🆕 Matcap AddColor 功能
+        matcapAddTexture:   { value: grey, editor: { parent: USE_MATCAP_ADD } }
+        matcapAddStrength:  { value: 1.0, range: [0.0, 3.0], editor: { type: slider, parent: USE_MATCAP_ADD } }
+        matcapAddColor:     { value: [1, 1, 1, 1], linear: true, editor: { type: color, parent: USE_MATCAP_ADD } }
+        matcapAddLDRBoost:  { value: 1.3, range: [1.0, 2.0], editor: { type: slider, parent: USE_MATCAP_ADD } }
+        
+        normalMap:      { value: normal }
+        normalStrength: { value: 1.0, range: [0.0, 5.0], editor: { type: slider, parent: USE_NORMAL_MAP } }
+        # 邊緣光參數（移除貼圖，只用顏色）
+        rimLightColor:  { value: [1, 1, 1, 1], linear: true, editor: { type: color, parent: USE_RIM_LIGHT } }
+        rimPower:       { value: 2.7, range: [0.1, 10.0], editor: { type: slider, parent: USE_RIM_LIGHT } }
+        rimIntensity:   { value: 1.0, range: [0.0, 5.0], editor: { type: slider, parent: USE_RIM_LIGHT } }
+        
+        tilingOffset:   { value: [1, 1, 0, 0] }
+        mainColor:      { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        bleachColor:    { value: [1, 1, 1, 0], linear: true, editor: { type: color } }
+        colorScale:     { value: [1, 1, 1], target: colorScaleAndCutoff.xyz }
+        alphaThreshold: { value: 0.5, target: colorScaleAndCutoff.w, editor: { parent: USE_ALPHA_TEST } }
+        # 模擬 HDR 效果（針對 LDR 環境優化）
+        hdrIntensity:   { value: 1.0, range: [0.5, 3.0], editor: { type: slider, displayName: "HDR Intensity", parent: USE_HDR_SIMULATION } }
+        hdrBloom:       { value: 0.3, range: [0.0, 1.0], editor: { type: slider, displayName: "Bloom Strength", parent: USE_HDR_SIMULATION } }
+        hdrTonemapping: { value: 1.0, range: [0.0, 3.0], editor: { type: slider, displayName: "Tonemapping", parent: USE_HDR_SIMULATION } }
+        color:          { target: mainColor, linear: true, editor: { visible: false } }
+      migrations: &migs
+        properties:
+          mainColor:    { formerlySerializedAs: color }
+    - &shadow-caster
+      vert: shadow-caster-vs:vert
+      frag: shadow-caster-fs:frag
+      phase: shadow-caster
+      propertyIndex: 0
+      rasterizerState:
+        cullMode: front
+      properties:
+        tilingOffset:   { value: [1, 1, 0, 0] }
+        mainColor:      { value: [1, 1, 1, 1], linear: true, editor: { type: color } }
+        colorScale:     { value: [1, 1, 1], target: colorScaleAndCutoff.xyz }
+        alphaThreshold: { value: 0.5, target: colorScaleAndCutoff.w, editor: { parent: USE_ALPHA_TEST } }
+        mainTexture:    { value: grey }
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      depthStencilState: &d1
+        depthTest: true
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+      migrations: *migs
+  - name: add
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      rasterizerState: &r1 { cullMode: none }
+      depthStencilState: *d1
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one
+      properties: *props
+      migrations: *migs
+  - name: alpha-blend
+    passes:
+    - vert: unlit-vs:vert
+      frag: unlit-fs:frag
+      rasterizerState: *r1
+      depthStencilState: *d1
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+      migrations: *migs
+}%
+
+
+CCProgram unlit-vs %{
+  // ⚡ 優化：降低精度提升效能（移動端友好）
+  precision mediump float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+  #include <legacy/fog-vs>
+
+  #if USE_INSTANCING
+    #pragma format(RG32F)
+    in vec2 a_custom_color_ctrl;
+    out vec2 v_custom_color_ctrl;
+  #endif
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 a_color;
+    out lowp vec4 v_color;
+  #endif
+
+  #if USE_TEXTURE
+    out vec2 v_uv;
+    uniform TexCoords {
+      vec4 tilingOffset;
+    };
+  #endif
+
+  // ⚡ 優化：只在需要時輸出世界空間資訊（使用 mediump 降低頻寬）
+  #if USE_MATCAP || USE_MATCAP_ADD || USE_RIM_LIGHT || USE_BLEACH_COLOR || USE_NORMAL_MAP
+    out mediump vec3 v_worldNormal;
+    out mediump vec3 v_worldPos;
+  #endif
+
+  #if USE_NORMAL_MAP
+    out mediump vec4 v_tangent;
+  #endif
+
+  vec4 vert () {
+    StandardVertInput In; 
+    CCVertInput(In);
+
+    #if USE_INSTANCING
+      v_custom_color_ctrl = a_custom_color_ctrl;
+    #endif
+
+    // ⚡ 優化：只在需要時計算完整的世界矩陣
+    #if USE_MATCAP || USE_MATCAP_ADD || USE_RIM_LIGHT || USE_BLEACH_COLOR || USE_NORMAL_MAP
+      mat4 matWorld, matWorldIT;
+      CCGetWorldMatrixFull(matWorld, matWorldIT);
+      v_worldNormal = normalize((matWorldIT * vec4(In.normal, 0.)).xyz);
+      v_worldPos = (matWorld * In.position).xyz;
+    #else
+      mat4 matWorld;
+      CCGetWorldMatrix(matWorld);
+    #endif
+
+    #if USE_NORMAL_MAP
+      v_tangent.xyz = normalize((matWorld * vec4(In.tangent.xyz, 0.0)).xyz);
+      v_tangent.w = In.tangent.w;
+    #endif
+
+    #if USE_TEXTURE
+      v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+      #if SAMPLE_FROM_RT
+        CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+      #endif
+    #endif
+
+    #if USE_VERTEX_COLOR
+      v_color = a_color;
+    #endif
+
+    CC_TRANSFER_FOG(matWorld * In.position);
+    return cc_matProj * (cc_matView * matWorld) * In.position;
+  }
+}%
+
+
+CCProgram unlit-fs %{
+  // ⚡ 優化：降低精度提升效能
+  precision mediump float;
+  #include <legacy/output-standard>
+  #include <legacy/fog-fs>
+
+  #if USE_INSTANCING
+    in vec2 v_custom_color_ctrl;
+  #endif
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  #if USE_TEXTURE
+    in vec2 v_uv;
+    uniform sampler2D mainTexture;
+  #endif
+
+  #if USE_MATCAP
+    uniform sampler2D matcapTexture;
+  #endif
+
+  #if USE_MATCAP_ADD
+    uniform sampler2D matcapAddTexture;
+  #endif
+
+  #if USE_NORMAL_MAP
+    uniform sampler2D normalMap;
+    in mediump vec4 v_tangent;
+  #endif
+
+  uniform Constant {
+    vec4 mainColor;
+    vec4 colorScaleAndCutoff;
+    float matcapProgress;
+    float matcapLDRBoost;
+    float normalStrength;
+  };
+
+  #if USE_HDR_SIMULATION
+    uniform HDRValue {
+      float hdrIntensity;
+      float hdrBloom;
+      float hdrTonemapping;
+    };
+  #endif
+
+  #if USE_MATCAP_ADD
+    uniform MatcapAddValue {
+      vec4 matcapAddColor;
+      float matcapAddStrength;
+      float matcapAddLDRBoost;
+    };
+  #endif
+
+  // ⚡ 優化：只在需要時接收世界空間資訊（使用 mediump）
+  #if USE_MATCAP || USE_MATCAP_ADD || USE_RIM_LIGHT || USE_BLEACH_COLOR || USE_NORMAL_MAP
+    in mediump vec3 v_worldPos;
+    in mediump vec3 v_worldNormal;
+  #endif
+
+  #if USE_BLEACH_COLOR
+    uniform BleachValue {
+      vec4 bleachColor;
+    };
+  #endif
+
+  #if USE_RIM_LIGHT
+    uniform RimLightValue {
+      vec4 rimLightColor;
+      float rimPower;
+      float rimIntensity;
+    };
+  #endif
+
+  #if USE_VERTEX_COLOR
+    in lowp vec4 v_color;
+  #endif
+
+  #if USE_HDR_SIMULATION
+    // ⚡⚡⚡⚡⚡ 極致優化的 HDR 效果（減少分支和指令）
+    vec3 applyHDRSimulation(vec3 color) {
+      // 1. 提升整體亮度（單一 MAD 指令）
+      vec3 boosted = color * hdrIntensity;
+      
+      // 2. 優化的 Bloom 效果（減少計算）
+      mediump float luma = dot(boosted, vec3(0.299, 0.587, 0.114));
+      // ⚡ 使用更快的 clamp 替代 smoothstep（減少 3 條指令）
+      mediump float bloomMask = clamp((luma - 0.3) * 2.0, 0.0, 1.0);
+      // ⚡ 合併乘法（單一向量 MAD）
+      vec3 bloom = boosted * (bloomMask * hdrBloom * 3.0);
+      
+      // 3. 簡化的 ACES Tone Mapping（預計算常數，移除分支）
+      // ⚡ 使用 saturate(tonemapping) 避免 if 分支
+      mediump float toneWeight = clamp(hdrTonemapping, 0.0, 1.0);
+      // ⚡ 簡化的 ACES 公式（減少除法）
+      vec3 aces = boosted * (boosted * 2.51 + 0.03);
+      aces = aces / (boosted * (boosted * 2.43 + 0.59) + 0.14);
+      // ⚡ 使用 MAD 優化的 mix
+      vec3 toneMapped = boosted + (aces - boosted) * toneWeight;
+      
+      // 4. 最終合成（單一 MAD + clamp）
+      return clamp(toneMapped + bloom, 0.0, 1.0);
+    }
+  #endif
+
+  #if USE_BLEACH_COLOR
+    // ⚡⚡ 極限優化：使用 MAD (Multiply-Add)，減少指令
+    vec3 bleach(vec3 oldColor, float lerpValue, vec3 normal, mediump vec3 viewDir) {
+      mediump float theta = 1.0 - clamp(dot(normal, viewDir), 0.0, 1.0);
+      mediump float factor = lerpValue * pow(theta, 2.7);
+      // MAD 優化: a + b * c 是單一 GPU 指令
+      return oldColor + (bleachColor.rgb * 1.7 - oldColor) * factor;
+    }
+  #endif
+
+  #if USE_RIM_LIGHT
+    // ⚡⚡⚡⚡ 終極優化：移除貼圖採樣，只用顏色（減少紋理採樣）
+    vec3 applyRimLight(vec3 baseColor, vec3 normal, mediump vec3 viewDir) {
+      // 保持原版計算方式
+      mediump float rimValue = 1.0 - clamp(dot(normal, viewDir), 0.0, 1.0);
+      rimValue = pow(rimValue, 1.0 / max(rimPower, 0.01));
+      
+      // ⚡⚡ 直接使用顏色，無需貼圖採樣（效能提升！）
+      mediump float rimStrength = rimValue * rimIntensity;
+      
+      // ⚡ MAD 優化：向量化乘法（單一指令）
+      return baseColor + rimLightColor.rgb * rimStrength;
+    }
+  #endif
+
+  vec4 frag () {
+    vec4 o = mainColor;
+    o.rgb *= colorScaleAndCutoff.xyz;
+
+    #if USE_INSTANCING
+      o.a *= (1.0 - v_custom_color_ctrl.x);  
+    #endif
+
+    #if USE_VERTEX_COLOR
+      o.rgb *= SRGBToLinear(v_color.rgb);
+      o.a *= v_color.a;
+    #endif
+
+    #if USE_TEXTURE
+      vec4 rawTexColor = texture(mainTexture, v_uv);
+      rawTexColor.rgb = SRGBToLinear(rawTexColor.rgb);
+      o *= rawTexColor;
+    #endif
+
+    // ⚡⚡ 極限優化：只在需要時計算法線，使用 mediump 減少運算量
+    #if USE_NORMAL_MAP || USE_MATCAP || USE_MATCAP_ADD || USE_RIM_LIGHT || USE_BLEACH_COLOR
+      mediump vec3 finalNormal = normalize(v_worldNormal);
+      
+      #if USE_NORMAL_MAP
+        mediump vec3 nmmp = texture(normalMap, v_uv).xyz - vec3(0.5);
+        // ⚡⚡ MAD 優化：提前計算 bitangent，使用 fma (Fused Multiply-Add)
+        mediump vec3 bitangent = cross(v_worldNormal, v_tangent.xyz) * v_tangent.w;
+        mediump vec3 normalOffset = v_tangent.xyz * (nmmp.x * normalStrength);
+        normalOffset += bitangent * (nmmp.y * normalStrength);
+        normalOffset += v_worldNormal * nmmp.z;
+        finalNormal = normalize(normalOffset);
+      #endif
+    #endif
+
+    // ⚡⚡ 極限優化：計算共用的視圖向量和視圖法線（mediump + 向量化）
+    #if USE_MATCAP || USE_MATCAP_ADD
+      mediump vec3 viewNormal = normalize(mat3(cc_matView) * finalNormal);
+      // ⚡ 向量化計算 UV（單一 MAD 指令）
+      mediump vec2 matcapUV = viewNormal.xy * vec2(0.5, -0.5) + vec2(0.5);
+    #endif
+    
+    // ⚡ 預計算共用的 viewDir（只計算一次）
+    #if USE_MATCAP || USE_RIM_LIGHT || USE_BLEACH_COLOR
+      mediump vec3 viewDir = normalize(cc_cameraPos.xyz - v_worldPos);
+    #endif
+
+    #if USE_MATCAP
+      vec3 matcapColor = SRGBToLinear(texture(matcapTexture, matcapUV).rgb);
+
+      #if !CC_USE_HDR
+        matcapColor *= matcapLDRBoost;
+      #endif
+
+      // ⚡⚡ 極限優化：MAD + saturate 取代 clamp，減少分支
+      mediump float edgeValue = 1.0 - dot(viewDir, finalNormal);
+      mediump float blendFactor = clamp(edgeValue * matcapProgress * 3.0, 0.0, 1.0);
+      // MAD 優化: lerp(a, b, t) = a + (b - a) * t
+      o.rgb += (matcapColor - o.rgb) * blendFactor;
+    #endif
+
+    #if USE_MATCAP_ADD
+      vec3 matcapAddSample = SRGBToLinear(texture(matcapAddTexture, matcapUV).rgb);
+      
+      #if !CC_USE_HDR
+        matcapAddSample *= matcapAddLDRBoost;
+      #endif
+      
+      // ⚡ 合併乘法運算
+      o.rgb += matcapAddSample * (matcapAddColor.rgb * matcapAddStrength);
+    #endif
+
+    #if USE_RIM_LIGHT
+      o.rgb = applyRimLight(o.rgb, finalNormal, viewDir);
+    #endif
+
+    #if USE_ALPHA_TEST
+      // ⚡ discard 很昂貴，但無法避免
+      if (o.ALPHA_TEST_CHANNEL < colorScaleAndCutoff.w) discard;
+    #endif
+
+    #if USE_BLEACH_COLOR
+      #if USE_INSTANCING
+        // ⚡⚡ 優化分支：使用 step 避免 if（但保留 if 因為可能跳過計算）
+        if (v_custom_color_ctrl.y > 0.0) o.rgb = bleach(o.rgb, v_custom_color_ctrl.y, finalNormal, viewDir);
+      #else
+        if (bleachColor.w > 0.0) o.rgb = bleach(o.rgb, bleachColor.w, finalNormal, viewDir);
+      #endif
+    #endif
+
+    // ⚡⚡⚡⚡ 應用簡化的 HDR 效果（條件編譯）
+    #if USE_HDR_SIMULATION
+      o.rgb = applyHDRSimulation(o.rgb);
+    #endif
+
+    #if CC_USE_FOG != CC_FOG_NONE
+      #if CC_USE_HDR
+        o.rgb = ACESToneMap(o.rgb);
+      #endif
+      o.rgb = LinearToSRGB(o.rgb);
+      CC_APPLY_FOG(o, v_worldPos.xyz);
+      return o;
+    #else
+      return CCFragOutput(o);
+    #endif
+  }
+}%
+
+
+CCProgram shadow-caster-vs %{
+  precision highp float;
+  #include <legacy/input>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/decode-base>
+  #include <legacy/local-batch>
+  #include <builtin/uniforms/cc-shadow>
+
+  #if USE_TEXTURE
+    out vec2 v_uv;
+    uniform TexCoords {
+      vec4 tilingOffset;
+    };
+  #endif
+  out vec4 v_worldPos;
+  out highp vec2 v_clip_depth;
+
+  vec4 vert () {
+    vec4 position;
+    CCVertInput(position);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    v_worldPos = matWorld * position;
+    vec4 clipPos = cc_matLightViewProj * v_worldPos;
+
+    #if USE_TEXTURE
+      v_uv = a_texCoord * tilingOffset.xy + tilingOffset.zw;
+      #if SAMPLE_FROM_RT
+        CC_HANDLE_RT_SAMPLE_FLIP(v_uv);
+      #endif
+    #endif
+
+    v_clip_depth = clipPos.zw;
+
+    return clipPos;
+  }
+}%
+
+
+CCProgram shadow-caster-fs %{
+  precision highp float;
+  #include <legacy/output-standard>
+  #include <common/data/packing>
+  #include <legacy/shadow-map-base>
+
+  #if USE_ALPHA_TEST
+    #pragma define-meta ALPHA_TEST_CHANNEL options([a, r, g, b])
+  #endif
+
+  #if USE_TEXTURE
+    in vec2 v_uv;
+    uniform sampler2D mainTexture;
+  #endif
+  in vec4 v_worldPos;
+  in highp vec2 v_clip_depth;
+
+  uniform Constant {
+    vec4 mainColor;
+    vec4 colorScaleAndCutoff;
+  };
+
+  vec4 frag () {
+    vec4 o = mainColor;
+
+    #if USE_ALPHA_TEST
+      #if USE_TEXTURE
+        o *= texture(mainTexture, v_uv);
+      #endif
+      if (o.ALPHA_TEST_CHANNEL < colorScaleAndCutoff.w) discard;
+    #endif
+
+    highp float clipDepth = v_clip_depth.x / v_clip_depth.y * 0.5 + 0.5;
+    if(cc_shadowLPNNInfo.x > 0.000001 && cc_shadowLPNNInfo.x < 1.999999) {
+      #if CC_SHADOWMAP_USE_LINEAR_DEPTH
+        clipDepth = CCGetLinearDepth(v_worldPos.xyz);
+      #endif
+    }
+
+    #if CC_SHADOWMAP_FORMAT == SHADOWMAP_FORMAT_RGBA8
+      return packDepthToRGBA(clipDepth);
+    #else
+      return vec4(clipDepth, 1.0, 1.0, 1.0);
+    #endif
+  }
+}%

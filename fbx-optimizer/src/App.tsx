@@ -5,9 +5,11 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
 import { TGALoader } from 'three/examples/jsm/loaders/TGALoader';
 import SceneViewer, { type SceneViewerRef } from './components/SceneViewer';
 import OptimizationControls from './components/OptimizationControls';
+import MaterialShaderTool from './components/MaterialShaderTool';
 import ModelInspector from './components/ModelInspector';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { Loader2 } from 'lucide-react';
+import type { ShaderFeature } from './types/shaderTypes';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -28,6 +30,16 @@ function App() {
   // 面板高度控制
   const [panelHeight, setPanelHeight] = useState(384); // 預設 384px (h-96)
   const [isDragging, setIsDragging] = useState(false);
+
+  // 右側面板寬度控制
+  const [rightPanelWidth, setRightPanelWidth] = useState(320); // 預設 320px (w-80)
+  const [isResizingRight, setIsResizingRight] = useState(false);
+
+  // 右側面板分頁
+  const [activeTab, setActiveTab] = useState<'optimization' | 'shader'>('optimization');
+
+  // Shader 功能狀態
+  const [shaderFeatures, setShaderFeatures] = useState<ShaderFeature[]>([]);
 
   // 處理檔案上傳
   const handleFileUpload = async (files: FileList) => {
@@ -358,6 +370,37 @@ function App() {
     };
   }, [isDragging]);
 
+  // 右側面板拖拉調整寬度
+  const handleRightPanelMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsResizingRight(true);
+  };
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isResizingRight) return;
+
+      const newWidth = window.innerWidth - e.clientX;
+      // 限制最小和最大寬度
+      const clampedWidth = Math.max(280, Math.min(newWidth, 600));
+      setRightPanelWidth(clampedWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizingRight(false);
+    };
+
+    if (isResizingRight) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizingRight]);
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsFileDragging(false);
@@ -394,6 +437,7 @@ function App() {
                 model={model}
                 playingClip={optimizedClip}
                 onTimeUpdate={handleTimeUpdate}
+                shaderFeatures={shaderFeatures}
               />
             </div>
 
@@ -434,20 +478,64 @@ function App() {
           </div>
         </div>
 
-        {/* 右側：優化控制面板 */}
-        <div className="w-80 bg-gray-800 border-l border-gray-700 p-4 overflow-y-auto">
-          <OptimizationControls
-            fileName={file?.name || null}
-            onFileUpload={handleFileUpload}
-            tolerance={tolerance}
-            setTolerance={setTolerance}
-            originalKeyframeCount={countKeyframes(originalClip)}
-            optimizedKeyframeCount={countKeyframes(optimizedClip)}
-            onExport={handleExport}
-            isExporting={exporting}
-          />
+        {/* 右側：控制面板 */}
+        <div className="relative bg-gray-800 border-l border-gray-700 flex flex-col" style={{ width: `${rightPanelWidth}px` }}>
+          {/* 左側調整寬度的把手 */}
+          <div
+            className="absolute top-0 left-0 bottom-0 w-1 bg-gray-700 hover:bg-blue-500 cursor-ew-resize transition-colors z-10"
+            onMouseDown={handleRightPanelMouseDown}
+          >
+            <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 h-12 w-1 bg-gray-500 rounded-full"></div>
+          </div>
 
-          <div className="mt-8 text-center opacity-30 hover:opacity-100 transition-opacity">
+          {/* 分頁切換 */}
+          <div className="flex border-b border-gray-700 bg-gray-900/30">
+            <button
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'optimization'
+                ? 'bg-gray-800 text-white border-b-2 border-blue-500'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                }`}
+              onClick={() => setActiveTab('optimization')}
+            >
+              關鍵幀優化
+            </button>
+            <button
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'shader'
+                ? 'bg-gray-800 text-white border-b-2 border-purple-500'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                }`}
+              onClick={() => setActiveTab('shader')}
+            >
+              Material Shader
+            </button>
+          </div>
+
+          {/* 分頁內容 */}
+          <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === 'optimization' && (
+              <OptimizationControls
+                fileName={file?.name || null}
+                onFileUpload={handleFileUpload}
+                tolerance={tolerance}
+                setTolerance={setTolerance}
+                originalKeyframeCount={countKeyframes(originalClip)}
+                optimizedKeyframeCount={countKeyframes(optimizedClip)}
+                onExport={handleExport}
+                isExporting={exporting}
+              />
+            )}
+
+            {activeTab === 'shader' && (
+              <MaterialShaderTool
+                fileName={file?.name || null}
+                features={shaderFeatures}
+                onFeaturesChange={setShaderFeatures}
+              />
+            )}
+          </div>
+
+          {/* 底部標籤 */}
+          <div className="p-4 text-center opacity-30 hover:opacity-100 transition-opacity border-t border-gray-700">
             <p className="text-[10px] text-gray-400">
               Designed for Game Developers
             </p>

@@ -28,3 +28,36 @@ body {
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
 }
+
+/* 自定義滑桿樣式 */
+.slider-purple::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #a855f7;
+  cursor: pointer;
+  border: 2px solid #1f2937;
+  transition: all 0.2s;
+}
+
+.slider-purple::-webkit-slider-thumb:hover {
+  background: #c084fc;
+  transform: scale(1.1);
+}
+
+.slider-purple::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #a855f7;
+  cursor: pointer;
+  border: 2px solid #1f2937;
+  transition: all 0.2s;
+}
+
+.slider-purple::-moz-range-thumb:hover {
+  background: #c084fc;
+  transform: scale(1.1);
+}
