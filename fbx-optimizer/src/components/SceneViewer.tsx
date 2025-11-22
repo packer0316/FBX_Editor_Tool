@@ -111,24 +111,39 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     child.userData.originalMaterial = child.material;
                 }
 
-                const matcapFeature = shaderFeatures.find(
-                    (f) => (f.type === 'matcap' || f.type === 'matcap_add') && f.params.texture
+                // Separate Base Matcap and Additive Matcap
+                const baseMatcapFeature = shaderFeatures.find(
+                    (f) => f.type === 'matcap' && f.params.texture
                 );
+                const addMatcapFeature = shaderFeatures.find(
+                    (f) => f.type === 'matcap_add' && f.params.texture
+                );
+
                 const rimLightFeature = shaderFeatures.find(f => f.type === 'rim_light');
                 const flashFeature = shaderFeatures.find(f => f.type === 'flash');
                 const dissolveFeature = shaderFeatures.find(f => f.type === 'dissolve');
                 const alphaTestFeature = shaderFeatures.find(f => f.type === 'alpha_test');
                 const normalMapFeature = shaderFeatures.find(f => f.type === 'normal_map');
 
-                const shouldUseShader = matcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
+                const shouldUseShader = baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
 
                 if (shouldUseShader) {
-                    let matcapTex = null;
-                    if (matcapFeature) {
-                        const texUrl = typeof matcapFeature.params.texture === 'string'
-                            ? matcapFeature.params.texture
-                            : URL.createObjectURL(matcapFeature.params.texture);
-                        matcapTex = textureLoader.load(texUrl);
+                    // Load Base Matcap Texture
+                    let baseMatcapTex = null;
+                    if (baseMatcapFeature) {
+                        const texUrl = typeof baseMatcapFeature.params.texture === 'string'
+                            ? baseMatcapFeature.params.texture
+                            : URL.createObjectURL(baseMatcapFeature.params.texture);
+                        baseMatcapTex = textureLoader.load(texUrl);
+                    }
+
+                    // Load Additive Matcap Texture
+                    let addMatcapTex = null;
+                    if (addMatcapFeature) {
+                        const texUrl = typeof addMatcapFeature.params.texture === 'string'
+                            ? addMatcapFeature.params.texture
+                            : URL.createObjectURL(addMatcapFeature.params.texture);
+                        addMatcapTex = textureLoader.load(texUrl);
                     }
 
                     let dissolveTex = null;
@@ -166,13 +181,18 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 baseColor: { value: baseColor },
                                 uTime: { value: 0 },
 
-                                // Matcap
+                                // Base Matcap
                                 matcapTexture: { value: null },
                                 matcapProgress: { value: 0 },
                                 matcapLdrBoost: { value: 1.2 },
-                                matcapStrength: { value: 1.0 },
-                                matcapIsAdd: { value: 0.0 },
                                 useMatcap: { value: 0.0 },
+
+                                // Additive Matcap
+                                matcapAddTexture: { value: null },
+                                matcapAddStrength: { value: 1.0 },
+                                matcapAddColor: { value: new THREE.Color(0xffffff) },
+                                matcapAddLdrBoost: { value: 1.3 },
+                                useMatcapAdd: { value: 0.0 },
 
                                 // Rim Light
                                 rimColor: { value: new THREE.Color(0xffffff) },
@@ -222,13 +242,18 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 uniform vec3 baseColor;
                                 uniform float uTime;
 
-                                // Matcap
+                                // Base Matcap
                                 uniform sampler2D matcapTexture;
                                 uniform float matcapProgress;
                                 uniform float matcapLdrBoost;
-                                uniform float matcapStrength;
-                                uniform float matcapIsAdd;
                                 uniform float useMatcap;
+
+                                // Additive Matcap
+                                uniform sampler2D matcapAddTexture;
+                                uniform float matcapAddStrength;
+                                uniform vec3 matcapAddColor;
+                                uniform float matcapAddLdrBoost;
+                                uniform float useMatcapAdd;
 
                                 // Rim Light
                                 uniform vec3 rimColor;
@@ -328,7 +353,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, vUv, normalScale );
                                     }
 
-                                    // --- Matcap ---
+                                    // --- Base Matcap (Mix) ---
                                     if (useMatcap > 0.5) {
                                         vec2 matcapUv;
                                         matcapUv.x = viewNormal.x * 0.49 + 0.5;
@@ -337,18 +362,25 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
                                         matcapCol *= matcapLdrBoost;
 
-                                        if (matcapIsAdd > 0.5) {
-                                            // Matcap Add
-                                            float dotNV = dot(viewDir, viewNormal);
-                                            dotNV = clamp(dotNV, 0.0, 1.0);
-                                            float edgeValue = 1.0 - dotNV;
-                                            float blendFactor = edgeValue * matcapProgress * 3.0;
-                                            blendFactor = clamp(blendFactor, 0.0, 1.0);
-                                            finalColor += matcapCol * matcapStrength * blendFactor;
-                                        } else {
-                                            // Matcap Mix
-                                            finalColor = mix(finalColor, matcapCol, matcapProgress);
-                                        }
+                                        finalColor = mix(finalColor, matcapCol, matcapProgress);
+                                    }
+
+                                    // --- Additive Matcap (Add) ---
+                                    if (useMatcapAdd > 0.5) {
+                                        vec2 matcapAddUv;
+                                        matcapAddUv.x = viewNormal.x * 0.49 + 0.5;
+                                        matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
+
+                                        vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
+                                        matcapAddCol *= matcapAddLdrBoost;
+                                        matcapAddCol *= matcapAddColor; // Apply tint
+
+                                        // Additive blending logic
+                                        float dotNV = dot(viewDir, viewNormal);
+                                        dotNV = clamp(dotNV, 0.0, 1.0);
+                                        
+                                        // Simple additive for now, controlled by strength
+                                        finalColor += matcapAddCol * matcapAddStrength;
                                     }
 
                                     // --- Rim Light ---
@@ -385,15 +417,26 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     }
 
                     // Update Uniforms
-                    if (matcapFeature && matcapTex) {
+
+                    // Base Matcap
+                    if (baseMatcapFeature && baseMatcapTex) {
                         shaderMat.uniforms.useMatcap.value = 1.0;
-                        shaderMat.uniforms.matcapTexture.value = matcapTex;
-                        shaderMat.uniforms.matcapProgress.value = matcapFeature.params.progress ?? 0.5;
-                        shaderMat.uniforms.matcapLdrBoost.value = matcapFeature.params.ldrBoost || 1.2;
-                        shaderMat.uniforms.matcapStrength.value = matcapFeature.params.strength || 1.0;
-                        shaderMat.uniforms.matcapIsAdd.value = matcapFeature.type === 'matcap_add' ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
+                        shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
+                        shaderMat.uniforms.matcapLdrBoost.value = baseMatcapFeature.params.ldrBoost || 1.2;
                     } else {
                         shaderMat.uniforms.useMatcap.value = 0.0;
+                    }
+
+                    // Additive Matcap
+                    if (addMatcapFeature && addMatcapTex) {
+                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
+                        shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
+                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
+                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                        shaderMat.uniforms.matcapAddLdrBoost.value = addMatcapFeature.params.ldrBoost || 1.3;
+                    } else {
+                        shaderMat.uniforms.useMatcapAdd.value = 0.0;
                     }
 
                     if (rimLightFeature) {
