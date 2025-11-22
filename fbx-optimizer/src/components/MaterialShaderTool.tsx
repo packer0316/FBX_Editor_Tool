@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders } from 'lucide-react';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Lock, GripVertical } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType } from '../types/shaderTypes';
 
 interface MaterialShaderToolProps {
@@ -121,6 +121,7 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
 
 export default function MaterialShaderTool({ fileName: _fileName, features, onFeaturesChange }: MaterialShaderToolProps) {
     const [showFeatureMenu, setShowFeatureMenu] = useState(false);
+    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
     // 添加功能
     const addFeature = (featureTemplate: typeof AVAILABLE_FEATURES[0]) => {
@@ -130,7 +131,26 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
             expanded: true,
             params: getDefaultParams(featureTemplate.type),
         };
-        onFeaturesChange([...features, newFeature]);
+
+        let newFeatures = [...features];
+
+        if (newFeature.type === 'normal_map') {
+            // Remove existing normal map if any (though UI should probably prevent adding duplicate)
+            newFeatures = newFeatures.filter(f => f.type !== 'normal_map');
+            // Always add Normal Map to the beginning
+            newFeatures.unshift(newFeature);
+        } else {
+            newFeatures.push(newFeature);
+        }
+
+        // Ensure Normal Map is always first if it exists (double check)
+        const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
+        if (normalMapIndex > 0) {
+            const [normalMap] = newFeatures.splice(normalMapIndex, 1);
+            newFeatures.unshift(normalMap);
+        }
+
+        onFeaturesChange(newFeatures);
         setShowFeatureMenu(false);
     };
 
@@ -153,6 +173,52 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                 ? { ...f, params: { ...f.params, [paramName]: value } }
                 : f
         ));
+    };
+
+    // Drag and Drop Handlers
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        if (features[index].type === 'normal_map') {
+            e.preventDefault();
+            return;
+        }
+        setDraggedIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+        // Set a transparent drag image or custom one if needed, default is fine for now
+    };
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === index) return;
+
+        // Prevent dropping BEFORE Normal Map if it exists at index 0
+        if (index === 0 && features[0].type === 'normal_map') {
+            e.dataTransfer.dropEffect = 'none';
+            return;
+        }
+
+        e.dataTransfer.dropEffect = 'move';
+    };
+
+    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+        e.preventDefault();
+        if (draggedIndex === null || draggedIndex === dropIndex) return;
+
+        // Prevent dropping onto Normal Map (index 0)
+        if (dropIndex === 0 && features[0].type === 'normal_map') return;
+
+        const newFeatures = [...features];
+        const [draggedItem] = newFeatures.splice(draggedIndex, 1);
+        newFeatures.splice(dropIndex, 0, draggedItem);
+
+        // Enforce Normal Map at index 0
+        const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
+        if (normalMapIndex > 0) {
+            const [normalMap] = newFeatures.splice(normalMapIndex, 1);
+            newFeatures.unshift(normalMap);
+        }
+
+        onFeaturesChange(newFeatures);
+        setDraggedIndex(null);
     };
 
     // 渲染參數控制項
@@ -284,11 +350,26 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                     features.map((feature, index) => (
                         <div
                             key={feature.id}
-                            className="bg-gray-900/50 border border-gray-700 rounded-lg overflow-hidden hover:border-purple-500/50 transition-colors"
+                            draggable={feature.type !== 'normal_map'}
+                            onDragStart={(e) => handleDragStart(e, index)}
+                            onDragOver={(e) => handleDragOver(e, index)}
+                            onDrop={(e) => handleDrop(e, index)}
+                            className={`
+                                bg-gray-900/50 border rounded-lg overflow-hidden transition-colors
+                                ${draggedIndex === index ? 'opacity-50 border-dashed border-purple-500' : 'border-gray-700 hover:border-purple-500/50'}
+                                ${feature.type === 'normal_map' ? 'border-l-4 border-l-blue-500' : ''}
+                            `}
                         >
                             {/* 字卡標題 */}
-                            <div className="flex items-center justify-between p-3 bg-gray-800/50">
+                            <div className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move">
                                 <div className="flex items-center gap-2 flex-1">
+                                    {/* Drag Handle / Lock Icon */}
+                                    {feature.type === 'normal_map' ? (
+                                        <Lock size={14} className="text-blue-400 mr-1" />
+                                    ) : (
+                                        <GripVertical size={16} className="text-gray-600 cursor-grab active:cursor-grabbing mr-1" />
+                                    )}
+
                                     <button
                                         onClick={() => toggleExpanded(feature.id)}
                                         className="text-gray-400 hover:text-white transition-colors"
@@ -297,7 +378,12 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                                     </button>
                                     <span className="text-xl">{feature.icon}</span>
                                     <div className="flex-1">
-                                        <div className="font-medium text-white">{feature.name}</div>
+                                        <div className="font-medium text-white flex items-center gap-2">
+                                            {feature.name}
+                                            {feature.type === 'normal_map' && (
+                                                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Fixed</span>
+                                            )}
+                                        </div>
                                         {!feature.expanded && (
                                             <div className="text-xs text-gray-500">{feature.description}</div>
                                         )}

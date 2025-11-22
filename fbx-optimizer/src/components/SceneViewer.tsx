@@ -118,8 +118,9 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 const flashFeature = shaderFeatures.find(f => f.type === 'flash');
                 const dissolveFeature = shaderFeatures.find(f => f.type === 'dissolve');
                 const alphaTestFeature = shaderFeatures.find(f => f.type === 'alpha_test');
+                const normalMapFeature = shaderFeatures.find(f => f.type === 'normal_map');
 
-                const shouldUseShader = matcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature;
+                const shouldUseShader = matcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
 
                 if (shouldUseShader) {
                     let matcapTex = null;
@@ -136,6 +137,14 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             ? dissolveFeature.params.texture
                             : URL.createObjectURL(dissolveFeature.params.texture);
                         dissolveTex = textureLoader.load(texUrl);
+                    }
+
+                    let normalMapTex = null;
+                    if (normalMapFeature && normalMapFeature.params.texture) {
+                        const texUrl = typeof normalMapFeature.params.texture === 'string'
+                            ? normalMapFeature.params.texture
+                            : URL.createObjectURL(normalMapFeature.params.texture);
+                        normalMapTex = textureLoader.load(texUrl);
                     }
 
                     const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
@@ -189,6 +198,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 // Alpha Test
                                 alphaTestThreshold: { value: 0.5 },
                                 useAlphaTest: { value: 0.0 },
+
+                                // Normal Map
+                                normalMap: { value: null },
+                                normalScale: { value: new THREE.Vector2(1, 1) },
+                                useNormalMap: { value: 0.0 },
                             },
                             vertexShader: `
                                 varying vec3 vNormal;
@@ -240,10 +254,40 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 // Alpha Test
                                 uniform float alphaTestThreshold;
                                 uniform float useAlphaTest;
+
+                                // Normal Map
+                                uniform sampler2D normalMap;
+                                uniform vec2 normalScale;
+                                uniform float useNormalMap;
                                 
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
+
+                                // Function to perturb normal based on normal map
+                                vec3 perturbNormal2Arb( vec3 eye_pos, vec3 surf_norm, vec2 uv, vec2 scale ) {
+                                    vec3 q0 = dFdx( eye_pos.xyz );
+                                    vec3 q1 = dFdy( eye_pos.xyz );
+                                    vec2 st0 = dFdx( uv.st );
+                                    vec2 st1 = dFdy( uv.st );
+
+                                    vec3 N = surf_norm; // normalized
+
+                                    vec3 q1perp = cross( q1, N );
+                                    vec3 q0perp = cross( N, q0 );
+
+                                    vec3 T = q1perp * st0.x + q0perp * st1.x;
+                                    vec3 B = q1perp * st0.y + q0perp * st1.y;
+
+                                    float det = max( dot( T, T ), dot( B, B ) );
+                                    float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
+                                    float scaleFactor = ( det == 0.0 ) ? 0.0 : faceDirection * inversesqrt( det );
+
+                                    vec3 mapN = texture2D( normalMap, uv ).xyz * 2.0 - 1.0;
+                                    mapN.xy *= scale;
+                                    
+                                    return normalize( T * ( mapN.x * scaleFactor ) + B * ( mapN.y * scaleFactor ) + N * mapN.z );
+                                }
                                 
                                 void main() {
                                     vec3 finalColor = baseColor;
@@ -278,6 +322,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     
                                     vec3 viewNormal = normalize(vNormal);
                                     vec3 viewDir = normalize(vViewPosition);
+
+                                    // --- Normal Map ---
+                                    if (useNormalMap > 0.5) {
+                                        viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, vUv, normalScale );
+                                    }
 
                                     // --- Matcap ---
                                     if (useMatcap > 0.5) {
@@ -326,7 +375,10 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     gl_FragColor = vec4(finalColor, 1.0);
                                 }
                             `,
-                            defines: baseTexture ? { USE_MAP: '' } : {}
+                            defines: baseTexture ? { USE_MAP: '' } : {},
+                            extensions: {
+                                derivatives: true
+                            }
                         });
                         (shaderMat as any).isCustomShader = true;
                         child.material = shaderMat;
@@ -380,6 +432,17 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.alphaTestThreshold.value = alphaTestFeature.params.threshold ?? 0.5;
                     } else {
                         shaderMat.uniforms.useAlphaTest.value = 0.0;
+                    }
+
+                    if (normalMapFeature && normalMapTex) {
+                        shaderMat.uniforms.useNormalMap.value = 1.0;
+                        shaderMat.uniforms.normalMap.value = normalMapTex;
+                        shaderMat.uniforms.normalScale.value = new THREE.Vector2(
+                            normalMapFeature.params.strength ?? 1.0,
+                            normalMapFeature.params.strength ?? 1.0
+                        );
+                    } else {
+                        shaderMat.uniforms.useNormalMap.value = 0.0;
                     }
 
                     materialsRef.current.push(shaderMat);
