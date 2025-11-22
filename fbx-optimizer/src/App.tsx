@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter';
@@ -79,7 +79,7 @@ function App() {
       manager.addHandler(/\.tga$/i, new TGALoader(manager));
 
       manager.setURLModifier((url) => {
-        console.log(`[Texture Request] Original URL: ${url}`);
+        console.log(`[Texture Request] Original URL: ${url} `);
 
         // 1. 如果是 data URI 或 blob URI，直接回傳
         if (url.startsWith('data:') || url.startsWith('blob:')) {
@@ -99,18 +99,18 @@ function App() {
         fileName = fileName.split('/').pop() || '';
         fileName = fileName.toLowerCase();
 
-        console.log(`[Texture Request] Extracted FileName: ${fileName}`);
+        console.log(`[Texture Request] Extracted FileName: ${fileName} `);
 
         // 3. 在上傳的檔案中尋找
         if (textureFiles.has(fileName)) {
           const textureFile = textureFiles.get(fileName)!;
           const blobUrl = URL.createObjectURL(textureFile);
-          console.log(`[Texture Match] Found: ${fileName} -> ${blobUrl}`);
+          console.log(`[Texture Match]Found: ${fileName} -> ${blobUrl} `);
           return blobUrl;
         }
 
-        console.warn(`[Texture Missing] Could not find: ${fileName}`);
-        console.warn(`[Available Textures]:`, Array.from(textureFiles.keys()));
+        console.warn(`[Texture Missing] Could not find: ${fileName} `);
+        console.warn(`[Available Textures]: `, Array.from(textureFiles.keys()));
 
         // 回傳一個假的 URL (會載入失敗，但不會中斷整個流程)
         return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -129,7 +129,7 @@ function App() {
           const mesh = child as THREE.Mesh;
           const material = mesh.material as THREE.MeshStandardMaterial | THREE.MeshPhongMaterial;
 
-          console.log(`[Mesh: ${mesh.name}] Material:`, material);
+          console.log(`[Mesh: ${mesh.name}]Material: `, material);
 
           if (material) {
             // 1. 關閉頂點顏色 (Vertex Colors)
@@ -138,7 +138,7 @@ function App() {
 
             // 2. 確保有貼圖時，基礎顏色是白色的
             if (material.map) {
-              console.log(`  - Has Texture: ${material.map.name || 'Unnamed'}`);
+              console.log(`  - Has Texture: ${material.map.name || 'Unnamed'} `);
               material.color.setHex(0xffffff);
 
               // 確保貼圖編碼正確
@@ -147,7 +147,7 @@ function App() {
 
             // 3. 嘗試修復全黑問題：如果沒有貼圖，給一個預設顏色
             if (!material.map && material.color.getHex() === 0x000000) {
-              console.warn(`  - Black color detected without texture. Resetting to gray.`);
+              console.warn(`  - Black color detected without texture.Resetting to gray.`);
               material.color.setHex(0x888888);
             }
 
@@ -265,9 +265,9 @@ function App() {
     setCurrentTime(time);
   };
 
-  const handleTimeUpdate = (time: number) => {
+  const handleTimeUpdate = useCallback((time: number) => {
     setCurrentTime(time);
-  };
+  }, []);
 
   const handleSelectClip = (clip: THREE.AnimationClip) => {
     setOriginalClip(clip);
@@ -340,15 +340,20 @@ function App() {
     if (isPlaylistPlaying) {
       const nextIndex = currentPlaylistIndex + 1;
       if (nextIndex < playlist.length) {
-        setCurrentPlaylistIndex(nextIndex);
-        setOptimizedClip(playlist[nextIndex]);
-        setDuration(playlist[nextIndex].duration);
-        // SceneViewer will automatically play the new clip via useEffect
+        // Use requestAnimationFrame to make the transition smoother
+        requestAnimationFrame(() => {
+          setCurrentPlaylistIndex(nextIndex);
+          setOptimizedClip(playlist[nextIndex]);
+          setDuration(playlist[nextIndex].duration);
+          setCurrentTime(0); // Reset time to avoid progress bar glitch
+          // SceneViewer will automatically play the new clip via useEffect
+        });
       } else {
-        // End of playlist
+        // End of playlist - keep currentPlaylistIndex at the last item
+        // so that all items show as completed
         setIsPlaylistPlaying(false);
-        setCurrentPlaylistIndex(0);
         setIsPlaying(false);
+        sceneViewerRef.current?.pause();
       }
     }
   };
@@ -397,13 +402,17 @@ function App() {
 
     const newClip = new THREE.AnimationClip(name, duration, newTracks);
 
+    // Store frame metadata on the clip for display purposes
+    (newClip as any).startFrame = startFrame;
+    (newClip as any).endFrame = endFrame;
+
     // 新增到列表
     setCreatedClips(prev => [...prev, newClip]);
 
     // 自動播放新片段
     handleSelectClip(newClip);
 
-    // alert(`已建立新片段: ${name}`); // 移除 alert，避免打斷體驗
+    // alert(`已建立新片段: ${ name } `); // 移除 alert，避免打斷體驗
   };
 
   const handleDeleteCreatedClip = (index: number) => {

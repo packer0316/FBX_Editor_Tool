@@ -59,7 +59,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     if (onFinishRef.current) onFinishRef.current();
                 };
 
-                mixerRef.current.stopAllAction();
+                // Stop only the current action instead of all actions for smoother transition
+                if (actionRef.current) {
+                    actionRef.current.stop();
+                }
+
                 const action = mixerRef.current.clipAction(clip);
 
                 if (!loop) {

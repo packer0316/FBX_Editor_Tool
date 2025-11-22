@@ -312,11 +312,19 @@ export default function ModelInspector({
                                     className={`flex items-center justify-between p-2 rounded transition-colors ${clip === c ? 'bg-blue-900/50 border border-blue-500/30' : 'hover:bg-gray-700'}`}
                                 >
                                     <div
-                                        className="flex items-center gap-2 flex-1 cursor-pointer"
+                                        className="flex flex-col gap-0.5 flex-1 cursor-pointer"
                                         onClick={() => onSelectClip(c)}
                                     >
-                                        <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
-                                        <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                        <div className="flex items-center gap-2">
+                                            <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
+                                            <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                        </div>
+                                        {/* Display frame range if available */}
+                                        {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
+                                            <span className="text-xs text-gray-500 ml-5">
+                                                {(c as any).startFrame}-{(c as any).endFrame}幀
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
@@ -369,11 +377,18 @@ export default function ModelInspector({
                             </div>
                         ) : (
                             playlist.map((c, idx) => {
-                                const isCurrent = isPlaylistPlaying && currentPlaylistIndex === idx;
+                                const isCurrent = (isPlaylistPlaying && currentPlaylistIndex === idx) || (!isPlaylistPlaying && clip === c);
+                                // A clip is completed if:
+                                // 1. Its index is less than current index, OR
+                                // 2. Playlist has finished (!isPlaylistPlaying) and this clip was in the playlist (idx <= currentPlaylistIndex)
+                                const isCompleted = idx < currentPlaylistIndex || (!isPlaylistPlaying && idx <= currentPlaylistIndex && currentPlaylistIndex > 0);
                                 let progress = 0;
-                                if (isCurrent && c.duration > 0) {
-                                    // If playlist is playing, we don't want modulo wrapping for the progress bar
-                                    // We want it to fill up to 100% and stay there until the next clip starts
+
+                                if (isCompleted) {
+                                    // Clips that have already finished playing should stay at 100%
+                                    progress = 100;
+                                } else if (isCurrent && c.duration > 0) {
+                                    // Current playing clip shows actual progress
                                     progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
                                 }
 
@@ -390,14 +405,25 @@ export default function ModelInspector({
                                             } ${draggedItemIndex === idx ? 'opacity-50' : ''}`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500 font-mono w-4">{idx + 1}.</span>
-                                                <span className={`text-sm font-medium ${isCurrent ? 'text-blue-300' : 'text-gray-300'}`}>
-                                                    {c.name}
-                                                </span>
+                                            <div className="flex flex-col gap-0.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs text-gray-500 font-mono w-4">{idx + 1}.</span>
+                                                    <span className={`text-sm font-medium ${isCurrent ? 'text-blue-300' : 'text-gray-300'}`}>
+                                                        {c.name}
+                                                    </span>
+                                                </div>
+                                                {/* Display frame range if available */}
+                                                {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
+                                                    <span className="text-xs text-gray-500 ml-6">
+                                                        {(c as any).startFrame}-{(c as any).endFrame}幀
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <span className="text-xs text-gray-500">{c.duration.toFixed(1)}s</span>
+                                                {isCurrent && (
+                                                    <span className="text-xs text-blue-400 font-mono">{Math.round(progress)}%</span>
+                                                )}
                                                 <button
                                                     onClick={() => onRemoveFromPlaylist(idx)}
                                                     className="text-gray-500 hover:text-red-400 p-1"
@@ -408,10 +434,10 @@ export default function ModelInspector({
                                         </div>
 
                                         {/* Progress Bar */}
-                                        <div className="w-full h-1 bg-gray-900 rounded-full overflow-hidden">
+                                        <div className="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full transition-all duration-100 ${isCurrent ? 'bg-blue-500' : 'bg-gray-600'}`}
-                                                style={{ width: `${isCurrent ? progress : 0}%` }}
+                                                className={`h-full ${isCompleted ? 'bg-green-500' : (isCurrent ? 'bg-blue-500' : 'bg-gray-600')}`}
+                                                style={{ width: `${progress}%` }}
                                             />
                                         </div>
                                     </div>
