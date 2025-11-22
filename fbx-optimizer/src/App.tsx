@@ -406,6 +406,23 @@ function App() {
     // alert(`已建立新片段: ${name}`); // 移除 alert，避免打斷體驗
   };
 
+  const handleDeleteCreatedClip = (index: number) => {
+    setCreatedClips(prev => {
+      const newClips = prev.filter((_, i) => i !== index);
+
+      // If all clips are deleted, revert to master clip
+      if (newClips.length === 0 && masterClip) {
+        setOriginalClip(masterClip);
+        setDuration(masterClip.duration);
+        setOptimizedClip(optimizeAnimationClip(masterClip, tolerance));
+        handleSeek(0);
+        if (!isPlaying) handlePlayPause();
+      }
+
+      return newClips;
+    });
+  };
+
   // 拖放處理
   const [isFileDragging, setIsFileDragging] = useState(false);
 
@@ -556,6 +573,7 @@ function App() {
               onCreateClip={handleCreateClip}
               createdClips={createdClips}
               onSelectClip={handleSelectClip}
+              onDeleteCreatedClip={handleDeleteCreatedClip}
               playlist={playlist}
               isPlaylistPlaying={isPlaylistPlaying}
               currentPlaylistIndex={currentPlaylistIndex}

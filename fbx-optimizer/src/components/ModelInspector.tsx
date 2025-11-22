@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square } from 'lucide-react';
+import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2 } from 'lucide-react';
 
 interface ModelInspectorProps {
     model: THREE.Group | null;
@@ -21,6 +21,7 @@ interface ModelInspectorProps {
     onReorderPlaylist: (from: number, to: number) => void;
     onPlayPlaylist: () => void;
     onPausePlaylist: () => void;
+    onDeleteCreatedClip: (index: number) => void;
 }
 
 // 遞迴渲染骨架樹狀圖
@@ -90,7 +91,8 @@ export default function ModelInspector({
     onRemoveFromPlaylist,
     onReorderPlaylist,
     onPlayPlaylist,
-    onPausePlaylist
+    onPausePlaylist,
+    onDeleteCreatedClip
 }: ModelInspectorProps) {
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
@@ -108,10 +110,38 @@ export default function ModelInspector({
     // Drag and Drop state for playlist
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
-    // ... useEffect for model traversal ...
+    // 遍歷模型獲取 Mesh 和骨架資訊
+    useEffect(() => {
+        if (model) {
+            const meshList: THREE.Mesh[] = [];
+            let root: THREE.Object3D | null = null;
+
+            model.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                    meshList.push(child as THREE.Mesh);
+                }
+                if (child.type === 'Bone' && !root) {
+                    // 找到最上層的骨架 (通常是 RootNode 的子節點)
+                    // 往上找直到 parent 不是 Bone
+                    let current = child;
+                    while (current.parent && current.parent.type === 'Bone') {
+                        current = current.parent;
+                    }
+                    root = current;
+                }
+            });
+
+            setMeshes(meshList);
+            setRootBone(root);
+        } else {
+            setMeshes([]);
+            setRootBone(null);
+        }
+    }, [model]);
 
     const toggleMeshVisibility = (mesh: THREE.Mesh) => {
-        // ... existing logic ...
+        // 如果沒有 userData.isDimmed，初始化為 false (預設是顯示的，所以 dimmed 是 false)
+        // 這裡我們反轉邏輯：isDimmed = true 代表半透明
         const isDimmed = mesh.userData.isDimmed || false;
         const newDimmed = !isDimmed;
 
@@ -145,7 +175,7 @@ export default function ModelInspector({
         setNewClipName('');
     };
 
-    // ... slider handlers ...
+    // 播放條拖動處理
     const handleSliderMouseDown = () => {
         setIsDraggingSlider(true);
         setWasPlayingBeforeDrag(isPlaying);
@@ -161,7 +191,7 @@ export default function ModelInspector({
         }
     };
 
-    // ... frame calculation ...
+    // 計算當前幀數
     const currentFrame = duration > 0 ? Math.floor((currentTime % duration) * 30) : 0;
     const totalFrames = Math.floor(duration * 30);
 
@@ -297,6 +327,16 @@ export default function ModelInspector({
                                         >
                                             <Plus size={14} />
                                         </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                onDeleteCreatedClip(idx);
+                                            }}
+                                            className="text-gray-400 hover:text-red-400 p-1"
+                                            title="刪除動作"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                     </div>
                                 </div>
                             ))
@@ -331,10 +371,10 @@ export default function ModelInspector({
                             playlist.map((c, idx) => {
                                 const isCurrent = isPlaylistPlaying && currentPlaylistIndex === idx;
                                 let progress = 0;
-                                if (isCurrent && duration > 0) {
+                                if (isCurrent && c.duration > 0) {
                                     // If playlist is playing, we don't want modulo wrapping for the progress bar
                                     // We want it to fill up to 100% and stay there until the next clip starts
-                                    progress = (Math.min(currentTime, duration) / duration) * 100;
+                                    progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
                                 }
 
                                 return (
@@ -345,8 +385,8 @@ export default function ModelInspector({
                                         onDragOver={(e) => handleDragOver(e, idx)}
                                         onDragEnd={handleDragEnd}
                                         className={`relative flex flex-col p-2 rounded border transition-colors ${isCurrent
-                                                ? 'bg-blue-900/30 border-blue-500'
-                                                : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
+                                            ? 'bg-blue-900/30 border-blue-500'
+                                            : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
                                             } ${draggedItemIndex === idx ? 'opacity-50' : ''}`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
