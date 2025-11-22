@@ -16,7 +16,7 @@ function App() {
   const [model, setModel] = useState<THREE.Group | null>(null);
   const [originalClip, setOriginalClip] = useState<THREE.AnimationClip | null>(null);
   const [optimizedClip, setOptimizedClip] = useState<THREE.AnimationClip | null>(null);
-  const [tolerance, setTolerance] = useState<number>(0.01);
+  const [tolerance, setTolerance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
 

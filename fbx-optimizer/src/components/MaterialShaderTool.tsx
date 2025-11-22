@@ -372,12 +372,9 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                     localFeatures.map((feature, index) => (
                         <div
                             key={feature.id}
-                            draggable={feature.type !== 'normal_map'}
-                            onDragStart={(e) => handleDragStart(e, index)}
                             onDragEnter={(e) => handleDragEnter(e, index)}
                             onDragOver={handleDragOver}
                             onDrop={handleDrop}
-                            onDragEnd={handleDragEnd}
                             className={`
                                 bg-gray-900/50 border rounded-lg overflow-hidden transition-all duration-200
                                 ${draggedIndex === index ? 'border-2 border-dashed border-gray-600 bg-transparent opacity-50' : 'border-gray-700 hover:border-purple-500/50'}
@@ -387,7 +384,12 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                             {/* Hide content if dragged to simulate "hole" */}
                             <div className={draggedIndex === index ? 'opacity-0' : ''}>
                                 {/* 字卡標題 */}
-                                <div className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move">
+                                <div
+                                    draggable={feature.type !== 'normal_map'}
+                                    onDragStart={(e) => handleDragStart(e, index)}
+                                    onDragEnd={handleDragEnd}
+                                    className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move"
+                                >
                                     <div className="flex items-center gap-2 flex-1">
                                         {/* Drag Handle / Lock Icon */}
                                         {feature.type === 'normal_map' ? (

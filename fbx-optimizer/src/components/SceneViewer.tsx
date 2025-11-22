@@ -173,6 +173,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
                         const baseTexture = originalMaterial.map || null;
                         const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
+                        const isSkinnedMesh = (child as any).isSkinnedMesh;
 
                         shaderMat = new THREE.ShaderMaterial({
                             uniforms: {
@@ -229,10 +230,23 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
                                 
+                                #include <common>
+                                #include <skinning_pars_vertex>
+                                
                                 void main() {
                                     vUv = uv;
-                                    vNormal = normalize(normalMatrix * normal);
-                                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                                    
+                                    #include <skinbase_vertex>
+                                    #include <begin_vertex>
+                                    #include <skinning_vertex>
+                                    
+                                    // Handle Normal with Skinning
+                                    vec3 objectNormal = normal;
+                                    #include <skinnormal_vertex>
+                                    vNormal = normalize(normalMatrix * objectNormal);
+
+                                    // Handle Position with Skinning
+                                    vec4 mvPosition = modelViewMatrix * vec4(transformed, 1.0);
                                     vViewPosition = -mvPosition.xyz;
                                     gl_Position = projectionMatrix * mvPosition;
                                 }
@@ -410,7 +424,8 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             defines: baseTexture ? { USE_MAP: '' } : {},
                             extensions: {
                                 derivatives: true
-                            }
+                            },
+                            skinning: isSkinnedMesh
                         });
                         (shaderMat as any).isCustomShader = true;
                         child.material = shaderMat;
