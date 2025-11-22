@@ -88,10 +88,21 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
             }
         });
 
+        const materialsRef = useRef<THREE.ShaderMaterial[]>([]);
+
+        useFrame((state) => {
+            materialsRef.current.forEach(mat => {
+                if (mat.uniforms.uTime) {
+                    mat.uniforms.uTime.value = state.clock.elapsedTime;
+                }
+            });
+        });
+
         useEffect(() => {
             if (!model) return;
 
             const textureLoader = new THREE.TextureLoader();
+            materialsRef.current = [];
 
             model.traverse((child: any) => {
                 if (!child.isMesh) return;
@@ -103,38 +114,81 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 const matcapFeature = shaderFeatures.find(
                     (f) => (f.type === 'matcap' || f.type === 'matcap_add') && f.params.texture
                 );
+                const rimLightFeature = shaderFeatures.find(f => f.type === 'rim_light');
+                const flashFeature = shaderFeatures.find(f => f.type === 'flash');
+                const dissolveFeature = shaderFeatures.find(f => f.type === 'dissolve');
+                const alphaTestFeature = shaderFeatures.find(f => f.type === 'alpha_test');
 
-                if (matcapFeature) {
-                    const texUrl =
-                        typeof matcapFeature.params.texture === 'string'
+                const shouldUseShader = matcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature;
+
+                if (shouldUseShader) {
+                    let matcapTex = null;
+                    if (matcapFeature) {
+                        const texUrl = typeof matcapFeature.params.texture === 'string'
                             ? matcapFeature.params.texture
                             : URL.createObjectURL(matcapFeature.params.texture);
-                    const matcapTex = textureLoader.load(texUrl);
+                        matcapTex = textureLoader.load(texUrl);
+                    }
 
-                    const isMatcapShader = child.material instanceof THREE.ShaderMaterial &&
-                        (child.material as any).isMatcapShader;
+                    let dissolveTex = null;
+                    if (dissolveFeature && dissolveFeature.params.texture) {
+                        const texUrl = typeof dissolveFeature.params.texture === 'string'
+                            ? dissolveFeature.params.texture
+                            : URL.createObjectURL(dissolveFeature.params.texture);
+                        dissolveTex = textureLoader.load(texUrl);
+                    }
 
-                    if (isMatcapShader) {
-                        const mat = child.material as THREE.ShaderMaterial;
-                        mat.uniforms.matcapTexture.value = matcapTex;
-                        mat.uniforms.progress.value = matcapFeature.params.progress !== undefined ? matcapFeature.params.progress : 0.5;
-                        mat.uniforms.ldrBoost.value = matcapFeature.params.ldrBoost || 1.2;
-                        mat.uniforms.strength.value = matcapFeature.params.strength || 1.0;
-                        mat.uniforms.isAdd.value = matcapFeature.type === 'matcap_add' ? 1.0 : 0.0;
+                    const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
+                        (child.material as any).isCustomShader;
+
+                    let shaderMat: THREE.ShaderMaterial;
+
+                    if (isCustomShader) {
+                        shaderMat = child.material as THREE.ShaderMaterial;
                     } else {
                         const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
                         const baseTexture = originalMaterial.map || null;
                         const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
 
-                        const shaderMat = new THREE.ShaderMaterial({
+                        shaderMat = new THREE.ShaderMaterial({
                             uniforms: {
-                                matcapTexture: { value: matcapTex },
+                                // Base
                                 baseTexture: { value: baseTexture },
                                 baseColor: { value: baseColor },
-                                progress: { value: matcapFeature.params.progress !== undefined ? matcapFeature.params.progress : 0.5 },
-                                ldrBoost: { value: matcapFeature.params.ldrBoost || 1.2 },
-                                strength: { value: matcapFeature.params.strength || 1.0 },
-                                isAdd: { value: matcapFeature.type === 'matcap_add' ? 1.0 : 0.0 }
+                                uTime: { value: 0 },
+
+                                // Matcap
+                                matcapTexture: { value: null },
+                                matcapProgress: { value: 0 },
+                                matcapLdrBoost: { value: 1.2 },
+                                matcapStrength: { value: 1.0 },
+                                matcapIsAdd: { value: 0.0 },
+                                useMatcap: { value: 0.0 },
+
+                                // Rim Light
+                                rimColor: { value: new THREE.Color(0xffffff) },
+                                rimIntensity: { value: 0.0 },
+                                rimPower: { value: 3.0 },
+                                useRimLight: { value: 0.0 },
+
+                                // Flash
+                                flashColor: { value: new THREE.Color(0xffffff) },
+                                flashIntensity: { value: 0.0 },
+                                flashSpeed: { value: 1.0 },
+                                flashWidth: { value: 0.5 },
+                                useFlash: { value: 0.0 },
+
+                                // Dissolve
+                                dissolveTexture: { value: null },
+                                dissolveThreshold: { value: 0.0 },
+                                dissolveEdgeWidth: { value: 0.1 },
+                                dissolveColor1: { value: new THREE.Color(0xffff00) },
+                                dissolveColor2: { value: new THREE.Color(0xff0000) },
+                                useDissolve: { value: 0.0 },
+
+                                // Alpha Test
+                                alphaTestThreshold: { value: 0.5 },
+                                useAlphaTest: { value: 0.0 },
                             },
                             vertexShader: `
                                 varying vec3 vNormal;
@@ -150,45 +204,123 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 }
                             `,
                             fragmentShader: `
-                                uniform sampler2D matcapTexture;
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
-                                uniform float progress;
-                                uniform float ldrBoost;
-                                uniform float strength;
-                                uniform float isAdd;
+                                uniform float uTime;
+
+                                // Matcap
+                                uniform sampler2D matcapTexture;
+                                uniform float matcapProgress;
+                                uniform float matcapLdrBoost;
+                                uniform float matcapStrength;
+                                uniform float matcapIsAdd;
+                                uniform float useMatcap;
+
+                                // Rim Light
+                                uniform vec3 rimColor;
+                                uniform float rimIntensity;
+                                uniform float rimPower;
+                                uniform float useRimLight;
+
+                                // Flash
+                                uniform vec3 flashColor;
+                                uniform float flashIntensity;
+                                uniform float flashSpeed;
+                                uniform float flashWidth;
+                                uniform float useFlash;
+
+                                // Dissolve
+                                uniform sampler2D dissolveTexture;
+                                uniform float dissolveThreshold;
+                                uniform float dissolveEdgeWidth;
+                                uniform vec3 dissolveColor1;
+                                uniform vec3 dissolveColor2;
+                                uniform float useDissolve;
+
+                                // Alpha Test
+                                uniform float alphaTestThreshold;
+                                uniform float useAlphaTest;
                                 
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
                                 
                                 void main() {
-                                    vec3 baseCol = baseColor;
+                                    vec3 finalColor = baseColor;
+                                    vec4 baseTexColor = vec4(1.0);
                                     #ifdef USE_MAP
-                                        baseCol *= texture2D(baseTexture, vUv).rgb;
+                                        baseTexColor = texture2D(baseTexture, vUv);
+                                        finalColor *= baseTexColor.rgb;
                                     #endif
+
+                                    // --- Alpha Test ---
+                                    if (useAlphaTest > 0.5) {
+                                        if (baseTexColor.a < alphaTestThreshold) discard;
+                                    }
+
+                                    // --- Dissolve Effect ---
+                                    if (useDissolve > 0.5) {
+                                        float noiseValue = texture2D(dissolveTexture, vUv).r;
+                                        
+                                        if (noiseValue < dissolveThreshold) {
+                                            discard;
+                                        }
+
+                                        float edge = smoothstep(dissolveThreshold, dissolveThreshold + dissolveEdgeWidth, noiseValue);
+                                        // Invert edge to get the glowing rim part
+                                        float edgeFactor = 1.0 - edge;
+                                        
+                                        if (edgeFactor > 0.0) {
+                                            vec3 edgeColor = mix(dissolveColor2, dissolveColor1, edgeFactor); // Gradient edge
+                                            finalColor = mix(finalColor, edgeColor, edgeFactor * 2.0); // Boost intensity
+                                        }
+                                    }
                                     
                                     vec3 viewNormal = normalize(vNormal);
-                                    vec2 matcapUv;
-                                    matcapUv.x = viewNormal.x * 0.49 + 0.5;
-                                    matcapUv.y = -viewNormal.y * 0.49 + 0.5;
-                                    
-                                    vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
-                                    matcapCol *= ldrBoost;
-                                    
-                                    vec3 finalColor;
-                                    if (isAdd > 0.5) {
-                                        // Matcap Add: edge-based additive blending
-                                        vec3 viewDir = normalize(vViewPosition);
+                                    vec3 viewDir = normalize(vViewPosition);
+
+                                    // --- Matcap ---
+                                    if (useMatcap > 0.5) {
+                                        vec2 matcapUv;
+                                        matcapUv.x = viewNormal.x * 0.49 + 0.5;
+                                        matcapUv.y = -viewNormal.y * 0.49 + 0.5;
+                                        
+                                        vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
+                                        matcapCol *= matcapLdrBoost;
+
+                                        if (matcapIsAdd > 0.5) {
+                                            // Matcap Add
+                                            float dotNV = dot(viewDir, viewNormal);
+                                            dotNV = clamp(dotNV, 0.0, 1.0);
+                                            float edgeValue = 1.0 - dotNV;
+                                            float blendFactor = edgeValue * matcapProgress * 3.0;
+                                            blendFactor = clamp(blendFactor, 0.0, 1.0);
+                                            finalColor += matcapCol * matcapStrength * blendFactor;
+                                        } else {
+                                            // Matcap Mix
+                                            finalColor = mix(finalColor, matcapCol, matcapProgress);
+                                        }
+                                    }
+
+                                    // --- Rim Light ---
+                                    if (useRimLight > 0.5) {
                                         float dotNV = dot(viewDir, viewNormal);
-                                        dotNV = clamp(dotNV, 0.0, 1.0);
-                                        float edgeValue = 1.0 - dotNV;
-                                        float blendFactor = edgeValue * progress * 3.0;
-                                        blendFactor = clamp(blendFactor, 0.0, 1.0);
-                                        finalColor = baseCol + matcapCol * strength * blendFactor;
-                                    } else {
-                                        // Matcap: direct material replacement based on progress
-                                        finalColor = mix(baseCol, matcapCol, progress);
+                                        float rim = 1.0 - clamp(dotNV, 0.0, 1.0);
+                                        rim = pow(rim, rimPower);
+                                        finalColor += rimColor * rim * rimIntensity;
+                                    }
+
+                                    // --- Flash Effect ---
+                                    if (useFlash > 0.5) {
+                                        float flashPos = mod(uTime * flashSpeed, 2.0) - 0.5; 
+                                        vec2 rotatedUv = vec2(
+                                            vUv.x * 0.707 - vUv.y * 0.707,
+                                            vUv.x * 0.707 + vUv.y * 0.707
+                                        );
+                                        
+                                        float dist = abs(rotatedUv.x - flashPos);
+                                        float flash = 1.0 - smoothstep(0.0, flashWidth, dist);
+                                        finalColor += flashColor * flash * flashIntensity;
                                     }
                                     
                                     gl_FragColor = vec4(finalColor, 1.0);
@@ -196,61 +328,97 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             `,
                             defines: baseTexture ? { USE_MAP: '' } : {}
                         });
-
-                        (shaderMat as any).isMatcapShader = true;
+                        (shaderMat as any).isCustomShader = true;
                         child.material = shaderMat;
                     }
-                    return;
-                }
 
-                if (child.material instanceof THREE.ShaderMaterial && (child.material as any).isMatcapShader) {
-                    if (child.userData.originalMaterial) {
-                        child.material = child.userData.originalMaterial.clone();
+                    // Update Uniforms
+                    if (matcapFeature && matcapTex) {
+                        shaderMat.uniforms.useMatcap.value = 1.0;
+                        shaderMat.uniforms.matcapTexture.value = matcapTex;
+                        shaderMat.uniforms.matcapProgress.value = matcapFeature.params.progress ?? 0.5;
+                        shaderMat.uniforms.matcapLdrBoost.value = matcapFeature.params.ldrBoost || 1.2;
+                        shaderMat.uniforms.matcapStrength.value = matcapFeature.params.strength || 1.0;
+                        shaderMat.uniforms.matcapIsAdd.value = matcapFeature.type === 'matcap_add' ? 1.0 : 0.0;
+                    } else {
+                        shaderMat.uniforms.useMatcap.value = 0.0;
                     }
-                }
 
-                const material = child.material as THREE.MeshStandardMaterial;
+                    if (rimLightFeature) {
+                        shaderMat.uniforms.useRimLight.value = 1.0;
+                        shaderMat.uniforms.rimColor.value = new THREE.Color(rimLightFeature.params.color || '#ffffff');
+                        shaderMat.uniforms.rimIntensity.value = rimLightFeature.params.intensity ?? 1.0;
+                        shaderMat.uniforms.rimPower.value = rimLightFeature.params.power ?? 3.0;
+                    } else {
+                        shaderMat.uniforms.useRimLight.value = 0.0;
+                    }
 
-                if (material.isMeshStandardMaterial) {
-                    material.emissive = new THREE.Color(0x000000);
-                    material.emissiveIntensity = 0;
-                    material.transparent = false;
-                    material.opacity = 1;
-                    material.alphaTest = 0;
+                    if (flashFeature) {
+                        shaderMat.uniforms.useFlash.value = 1.0;
+                        shaderMat.uniforms.flashColor.value = new THREE.Color(flashFeature.params.color || '#ffffff');
+                        shaderMat.uniforms.flashIntensity.value = flashFeature.params.intensity ?? 1.0;
+                        shaderMat.uniforms.flashSpeed.value = flashFeature.params.speed ?? 1.0;
+                        shaderMat.uniforms.flashWidth.value = flashFeature.params.width ?? 0.5;
+                    } else {
+                        shaderMat.uniforms.useFlash.value = 0.0;
+                    }
 
-                    shaderFeatures.forEach((feature) => {
-                        switch (feature.type) {
-                            case 'rim_light':
-                                if (feature.params.intensity > 0) {
-                                    material.emissive = new THREE.Color(feature.params.color);
-                                    material.emissiveIntensity = feature.params.intensity * 0.3;
-                                }
-                                break;
-                            case 'bleach':
-                                if (feature.params.intensity > 0) {
-                                    material.color.lerp(new THREE.Color(feature.params.color), feature.params.intensity);
-                                }
-                                break;
-                            case 'dissolve':
-                                if (feature.params.threshold > 0) {
-                                    material.transparent = true;
-                                    material.opacity = 1 - feature.params.threshold;
-                                }
-                                break;
-                            case 'alpha_test':
-                                material.alphaTest = feature.params.threshold;
-                                break;
-                            case 'normal_map':
-                                if (material.normalMap && feature.params.strength) {
-                                    material.normalScale = new THREE.Vector2(
-                                        feature.params.strength,
-                                        feature.params.strength
-                                    );
-                                }
-                                break;
+                    if (dissolveFeature) {
+                        shaderMat.uniforms.useDissolve.value = 1.0;
+                        if (dissolveTex) shaderMat.uniforms.dissolveTexture.value = dissolveTex;
+                        shaderMat.uniforms.dissolveThreshold.value = dissolveFeature.params.threshold ?? 0.0;
+                        shaderMat.uniforms.dissolveEdgeWidth.value = dissolveFeature.params.edgeWidth ?? 0.1;
+                        shaderMat.uniforms.dissolveColor1.value = new THREE.Color(dissolveFeature.params.color1 || '#ffff00');
+                        shaderMat.uniforms.dissolveColor2.value = new THREE.Color(dissolveFeature.params.color2 || '#ff0000');
+                        shaderMat.transparent = true;
+                    } else {
+                        shaderMat.uniforms.useDissolve.value = 0.0;
+                    }
+
+                    if (alphaTestFeature) {
+                        shaderMat.uniforms.useAlphaTest.value = 1.0;
+                        shaderMat.uniforms.alphaTestThreshold.value = alphaTestFeature.params.threshold ?? 0.5;
+                    } else {
+                        shaderMat.uniforms.useAlphaTest.value = 0.0;
+                    }
+
+                    materialsRef.current.push(shaderMat);
+
+                } else {
+                    // Revert to original material if no shader features are active
+                    if (child.material instanceof THREE.ShaderMaterial && (child.material as any).isCustomShader) {
+                        if (child.userData.originalMaterial) {
+                            child.material = child.userData.originalMaterial.clone();
                         }
-                    });
-                    material.needsUpdate = true;
+                    }
+
+                    // Handle standard material properties (dissolve, bleach, etc. - existing logic)
+                    const material = child.material as THREE.MeshStandardMaterial;
+                    if (material.isMeshStandardMaterial) {
+                        // Reset standard props
+                        material.emissive = new THREE.Color(0x000000);
+                        material.emissiveIntensity = 0;
+                        material.transparent = false;
+                        material.opacity = 1;
+                        material.alphaTest = 0;
+                        if (material.normalMap) material.normalScale.set(1, 1);
+
+                        shaderFeatures.forEach((feature) => {
+                            switch (feature.type) {
+                                case 'bleach':
+                                    if (feature.params.intensity > 0) {
+                                        material.color.lerp(new THREE.Color(feature.params.color), feature.params.intensity);
+                                    }
+                                    break;
+                                case 'normal_map':
+                                    if (material.normalMap && feature.params.strength) {
+                                        material.normalScale.set(feature.params.strength, feature.params.strength);
+                                    }
+                                    break;
+                            }
+                        });
+                        material.needsUpdate = true;
+                    }
                 }
             });
         }, [model, shaderFeatures]);

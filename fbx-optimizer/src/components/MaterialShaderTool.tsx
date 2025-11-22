@@ -105,9 +105,10 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
             return {
                 texture: null,
                 maskTexture: null,
-                tintColor: '#ffffff',
+                color: '#ffffff',
+                intensity: 1.0,
                 speed: 1.5,
-                rotateDelta: 0.0,
+                width: 0.5,
             };
         case 'alpha_test':
             return {
@@ -228,6 +229,9 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
             else if (paramName === 'intensity' || paramName === 'strength') { min = 0; max = 5; step = 0.1; }
             else if (paramName === 'ldrBoost') { min = 1; max = 2; step = 0.1; }
             else if (paramName === 'speed') { min = 0; max = 5; step = 0.1; }
+            else if (paramName === 'width') { min = 0.1; max = 1.0; step = 0.05; }
+            else if (paramName === 'threshold') { min = 0; max = 1; step = 0.01; }
+            else if (paramName === 'edgeWidth') { min = 0; max = 0.5; step = 0.01; }
             else if (paramName === 'rotateDelta') { min = 0; max = 6.28; step = 0.1; }
 
             return (
