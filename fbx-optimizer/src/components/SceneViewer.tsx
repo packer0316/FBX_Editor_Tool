@@ -17,6 +17,8 @@ interface SceneViewerProps {
     playingClip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
     shaderFeatures: ShaderFeature[];
+    loop?: boolean;
+    onFinish?: () => void;
 }
 
 type ModelProps = {
@@ -24,10 +26,12 @@ type ModelProps = {
     clip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
     shaderFeatures: ShaderFeature[];
+    loop?: boolean;
+    onFinish?: () => void;
 };
 
 const Model = forwardRef<SceneViewerRef, ModelProps>(
-    ({ model, clip, onTimeUpdate, shaderFeatures }, ref) => {
+    ({ model, clip, onTimeUpdate, shaderFeatures, loop = true, onFinish }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
@@ -42,14 +46,41 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
             };
         }, [model]);
 
+        const onFinishRef = useRef(onFinish);
+
+        useEffect(() => {
+            onFinishRef.current = onFinish;
+        }, [onFinish]);
+
         useEffect(() => {
             if (mixerRef.current && clip) {
+                // Clean up previous listeners
+                const handleFinish = () => {
+                    if (onFinishRef.current) onFinishRef.current();
+                };
+
                 mixerRef.current.stopAllAction();
                 const action = mixerRef.current.clipAction(clip);
+
+                if (!loop) {
+                    action.setLoop(THREE.LoopOnce, 1);
+                    action.clampWhenFinished = true;
+                    mixerRef.current.addEventListener('finished', handleFinish);
+                } else {
+                    action.setLoop(THREE.LoopRepeat, Infinity);
+                }
+
+                action.reset();
                 action.play();
                 actionRef.current = action;
+
+                return () => {
+                    if (mixerRef.current) {
+                        mixerRef.current.removeEventListener('finished', handleFinish);
+                    }
+                };
             }
-        }, [clip, model]);
+        }, [clip, model, loop]);
 
         useImperativeHandle(ref, () => ({
             play: () => {
@@ -550,7 +581,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderFeatures }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderFeatures, loop, onFinish }, ref) => {
         return (
             <div className="w-full h-full bg-gray-900 rounded-lg overflow-hidden shadow-xl border border-gray-700">
                 <Canvas camera={{ position: [0, 2, 5], fov: 50 }}>
@@ -567,6 +598,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             clip={playingClip}
                             onTimeUpdate={onTimeUpdate}
                             shaderFeatures={shaderFeatures}
+                            loop={loop}
+                            onFinish={onFinish}
                         />
                     )}
                     <OrbitControls makeDefault />

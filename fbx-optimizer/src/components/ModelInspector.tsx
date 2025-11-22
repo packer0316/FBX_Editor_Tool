@@ -13,6 +13,14 @@ interface ModelInspectorProps {
     onCreateClip: (name: string, start: number, end: number) => void;
     createdClips: THREE.AnimationClip[];
     onSelectClip: (clip: THREE.AnimationClip) => void;
+    playlist: THREE.AnimationClip[];
+    isPlaylistPlaying: boolean;
+    currentPlaylistIndex: number;
+    onAddToPlaylist: (clip: THREE.AnimationClip) => void;
+    onRemoveFromPlaylist: (index: number) => void;
+    onReorderPlaylist: (from: number, to: number) => void;
+    onPlayPlaylist: () => void;
+    onPausePlaylist: () => void;
 }
 
 // 遞迴渲染骨架樹狀圖
@@ -74,9 +82,17 @@ export default function ModelInspector({
     onSeek,
     onCreateClip,
     createdClips,
-    onSelectClip
+    onSelectClip,
+    playlist,
+    isPlaylistPlaying,
+    currentPlaylistIndex,
+    onAddToPlaylist,
+    onRemoveFromPlaylist,
+    onReorderPlaylist,
+    onPlayPlaylist,
+    onPausePlaylist
 }: ModelInspectorProps) {
-    const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip'>('mesh');
+    const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
     const [rootBone, setRootBone] = useState<THREE.Object3D | null>(null);
     const [updateCounter, setUpdateCounter] = useState(0); // 用於強制重繪
@@ -89,71 +105,13 @@ export default function ModelInspector({
     const [startFrame, setStartFrame] = useState(0);
     const [endFrame, setEndFrame] = useState(0);
 
-    // 初始化 Mesh 和 Bone 列表
-    useEffect(() => {
-        if (!model) {
-            setMeshes([]);
-            setRootBone(null);
-            return;
-        }
+    // Drag and Drop state for playlist
+    const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
-        const meshList: THREE.Mesh[] = [];
-        const allBones: THREE.Object3D[] = [];
-
-        model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-                const mesh = child as THREE.Mesh;
-
-                // 重要：克隆 material 以避免多個 mesh 共享同一個 material 實例
-                if (Array.isArray(mesh.material)) {
-                    mesh.material = mesh.material.map(m => m.clone());
-                } else if (mesh.material) {
-                    mesh.material = mesh.material.clone();
-                }
-
-                meshList.push(mesh);
-
-                // 預設開啟顯示，並重置透明度
-                child.visible = true;
-                if (Array.isArray(mesh.material)) {
-                    mesh.material.forEach(m => {
-                        m.transparent = false;
-                        m.opacity = 1.0;
-                        m.needsUpdate = true;
-                    });
-                } else if (mesh.material) {
-                    (mesh.material as THREE.Material).transparent = false;
-                    (mesh.material as THREE.Material).opacity = 1.0;
-                    (mesh.material as THREE.Material).needsUpdate = true;
-                }
-                mesh.userData.isDimmed = false; // Initialize dimmed state
-            }
-
-            // 收集所有骨骼
-            if (child.type === 'Bone') {
-                allBones.push(child);
-            }
-        });
-
-        console.log('[ModelInspector] Found meshes:', meshList.length);
-        console.log('[ModelInspector] Found bones:', allBones.length);
-
-        // 找到根骨骼（parent 不是 Bone 的骨骼）
-        let foundRootBone: THREE.Object3D | null = null;
-        for (const bone of allBones) {
-            if (bone.parent && bone.parent.type !== 'Bone') {
-                foundRootBone = bone;
-                console.log('[ModelInspector] Root bone found:', bone.name);
-                break;
-            }
-        }
-
-        setMeshes(meshList);
-        setRootBone(foundRootBone);
-    }, [model]);
+    // ... useEffect for model traversal ...
 
     const toggleMeshVisibility = (mesh: THREE.Mesh) => {
-        // 實現 "變暗" 效果：切換透明度而不是 visible
+        // ... existing logic ...
         const isDimmed = mesh.userData.isDimmed || false;
         const newDimmed = !isDimmed;
 
@@ -171,7 +129,6 @@ export default function ModelInspector({
             applyOpacity(mesh.material as THREE.Material);
         }
 
-        // 使用 counter 強制重繪，而不是修改 meshes 陣列
         setUpdateCounter(prev => prev + 1);
     };
 
@@ -188,7 +145,7 @@ export default function ModelInspector({
         setNewClipName('');
     };
 
-    // 處理播放條拖動開始
+    // ... slider handlers ...
     const handleSliderMouseDown = () => {
         setIsDraggingSlider(true);
         setWasPlayingBeforeDrag(isPlaying);
@@ -197,7 +154,6 @@ export default function ModelInspector({
         }
     };
 
-    // 處理播放條拖動結束
     const handleSliderMouseUp = () => {
         setIsDraggingSlider(false);
         if (wasPlayingBeforeDrag) {
@@ -205,32 +161,54 @@ export default function ModelInspector({
         }
     };
 
-    // 將時間轉換為幀數 (假設 30fps)
-    // 使用 modulo 確保幀數不會超過總幀數
+    // ... frame calculation ...
     const currentFrame = duration > 0 ? Math.floor((currentTime % duration) * 30) : 0;
     const totalFrames = Math.floor(duration * 30);
+
+    // Playlist Drag Handlers
+    const handleDragStart = (e: React.DragEvent, index: number) => {
+        setDraggedItemIndex(index);
+        e.dataTransfer.effectAllowed = 'move';
+    };
+
+    const handleDragOver = (e: React.DragEvent, index: number) => {
+        e.preventDefault();
+        if (draggedItemIndex === null || draggedItemIndex === index) return;
+        onReorderPlaylist(draggedItemIndex, index);
+        setDraggedItemIndex(index);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedItemIndex(null);
+    };
 
     return (
         <div className="bg-gray-800 rounded-lg p-4 pt-6 flex flex-col h-full border border-gray-700">
             {/* 上半部：列表切換 */}
-            <div className="flex space-x-2 mb-3 border-b border-gray-700 pb-2">
+            <div className="flex space-x-2 mb-3 border-b border-gray-700 pb-2 overflow-x-auto">
                 <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${activeTab === 'mesh' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'mesh' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                     onClick={() => setActiveTab('mesh')}
                 >
-                    Mesh 列表 ({meshes.length})
+                    Mesh
                 </button>
                 <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${activeTab === 'bone' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'bone' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                     onClick={() => setActiveTab('bone')}
                 >
-                    骨架列表
+                    骨架
                 </button>
                 <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors ${activeTab === 'clip' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'clip' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                     onClick={() => setActiveTab('clip')}
                 >
-                    動作清單 ({createdClips.length})
+                    動作 ({createdClips.length})
+                </button>
+                <button
+                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'playlist' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
+                    onClick={() => setActiveTab('playlist')}
+                >
+                    播放清單 ({playlist.length})
                 </button>
             </div>
 
@@ -301,16 +279,104 @@ export default function ModelInspector({
                             createdClips.map((c, idx) => (
                                 <div
                                     key={idx}
-                                    className={`flex items-center justify-between p-2 rounded cursor-pointer transition-colors ${clip === c ? 'bg-blue-900/50 border border-blue-500/30' : 'hover:bg-gray-700'}`}
-                                    onClick={() => onSelectClip(c)}
+                                    className={`flex items-center justify-between p-2 rounded transition-colors ${clip === c ? 'bg-blue-900/50 border border-blue-500/30' : 'hover:bg-gray-700'}`}
                                 >
-                                    <div className="flex items-center gap-2">
+                                    <div
+                                        className="flex items-center gap-2 flex-1 cursor-pointer"
+                                        onClick={() => onSelectClip(c)}
+                                    >
                                         <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
                                         <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
                                     </div>
-                                    <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onAddToPlaylist(c); }}
+                                            className="text-gray-400 hover:text-green-400 p-1"
+                                            title="加入播放清單"
+                                        >
+                                            <Plus size={14} />
+                                        </button>
+                                    </div>
                                 </div>
                             ))
+                        )}
+                    </div>
+                )}
+
+                {activeTab === 'playlist' && (
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center mb-2">
+                            <span className="text-xs text-gray-400">拖拉可排序</span>
+                            <button
+                                onClick={isPlaylistPlaying ? onPausePlaylist : onPlayPlaylist}
+                                className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-bold transition-colors ${isPlaylistPlaying
+                                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
+                                    : 'bg-green-600 hover:bg-green-500 text-white'
+                                    }`}
+                                disabled={playlist.length === 0}
+                            >
+                                {isPlaylistPlaying ? <Pause size={12} /> : <Play size={12} />}
+                                {isPlaylistPlaying ? '暫停播放' : '全部播放'}
+                            </button>
+                        </div>
+
+                        {playlist.length === 0 ? (
+                            <div className="text-gray-500 text-sm text-center mt-4 border-2 border-dashed border-gray-700 rounded p-4">
+                                尚未加入任何動作
+                                <br />
+                                <span className="text-xs">請從「動作」分頁加入</span>
+                            </div>
+                        ) : (
+                            playlist.map((c, idx) => {
+                                const isCurrent = isPlaylistPlaying && currentPlaylistIndex === idx;
+                                let progress = 0;
+                                if (isCurrent && duration > 0) {
+                                    // If playlist is playing, we don't want modulo wrapping for the progress bar
+                                    // We want it to fill up to 100% and stay there until the next clip starts
+                                    progress = (Math.min(currentTime, duration) / duration) * 100;
+                                }
+
+                                return (
+                                    <div
+                                        key={`${c.uuid}-${idx}`}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, idx)}
+                                        onDragOver={(e) => handleDragOver(e, idx)}
+                                        onDragEnd={handleDragEnd}
+                                        className={`relative flex flex-col p-2 rounded border transition-colors ${isCurrent
+                                                ? 'bg-blue-900/30 border-blue-500'
+                                                : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
+                                            } ${draggedItemIndex === idx ? 'opacity-50' : ''}`}
+                                    >
+                                        <div className="flex items-center justify-between mb-1">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-gray-500 font-mono w-4">{idx + 1}.</span>
+                                                <span className={`text-sm font-medium ${isCurrent ? 'text-blue-300' : 'text-gray-300'}`}>
+                                                    {c.name}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-gray-500">{c.duration.toFixed(1)}s</span>
+                                                <button
+                                                    onClick={() => onRemoveFromPlaylist(idx)}
+                                                    className="text-gray-500 hover:text-red-400 p-1"
+                                                >
+                                                    <Plus size={14} className="rotate-45" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Progress Bar */}
+                                        <div className="w-full h-1 bg-gray-900 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-100 ${isCurrent ? 'bg-blue-500' : 'bg-gray-600'}`}
+                                                style={{ width: `${isCurrent ? progress : 0}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 )}

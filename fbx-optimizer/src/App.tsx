@@ -15,6 +15,7 @@ function App() {
   const [file, setFile] = useState<File | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
   const [originalClip, setOriginalClip] = useState<THREE.AnimationClip | null>(null);
+  const [masterClip, setMasterClip] = useState<THREE.AnimationClip | null>(null);
   const [optimizedClip, setOptimizedClip] = useState<THREE.AnimationClip | null>(null);
   const [tolerance, setTolerance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -172,11 +173,13 @@ function App() {
 
       if (object.animations && object.animations.length > 0) {
         const clip = object.animations[0];
+        setMasterClip(clip);
         setOriginalClip(clip);
         setDuration(clip.duration);
         setOptimizedClip(optimizeAnimationClip(clip, tolerance));
         setCreatedClips([]); // Clear created clips when a new model is loaded
       } else {
+        setMasterClip(null);
         setOriginalClip(null);
         setOptimizedClip(null);
         setDuration(0);
@@ -274,8 +277,85 @@ function App() {
     if (!isPlaying) handlePlayPause();
   };
 
+  // Playlist State
+  const [playlist, setPlaylist] = useState<THREE.AnimationClip[]>([]);
+  const [isPlaylistPlaying, setIsPlaylistPlaying] = useState(false);
+  const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(0);
+
+  // Add clip to playlist
+  const handleAddToPlaylist = (clip: THREE.AnimationClip) => {
+    setPlaylist(prev => [...prev, clip]);
+  };
+
+  // Remove clip from playlist
+  const handleRemoveFromPlaylist = (index: number) => {
+    setPlaylist(prev => prev.filter((_, i) => i !== index));
+    // Adjust current index if needed
+    if (index < currentPlaylistIndex) {
+      setCurrentPlaylistIndex(prev => prev - 1);
+    } else if (index === currentPlaylistIndex && isPlaylistPlaying) {
+      // If removing currently playing clip, stop or move to next?
+      // For simplicity, let's just stop playlist playback if current is removed
+      setIsPlaylistPlaying(false);
+      setCurrentPlaylistIndex(0);
+    }
+  };
+
+  // Reorder playlist
+  const handleReorderPlaylist = (fromIndex: number, toIndex: number) => {
+    setPlaylist(prev => {
+      const newPlaylist = [...prev];
+      const [movedItem] = newPlaylist.splice(fromIndex, 1);
+      newPlaylist.splice(toIndex, 0, movedItem);
+      return newPlaylist;
+    });
+
+    // Adjust current index if needed (complex, maybe just stop playback for safety)
+    if (isPlaylistPlaying) {
+      setIsPlaylistPlaying(false);
+      setCurrentPlaylistIndex(0);
+    }
+  };
+
+  // Play Playlist
+  const handlePlayPlaylist = () => {
+    if (playlist.length === 0) return;
+    setIsPlaylistPlaying(true);
+    setCurrentPlaylistIndex(0);
+    setOptimizedClip(playlist[0]);
+    setDuration(playlist[0].duration);
+    setIsPlaying(true);
+    sceneViewerRef.current?.play();
+  };
+
+  // Pause Playlist
+  const handlePausePlaylist = () => {
+    setIsPlaylistPlaying(false);
+    setIsPlaying(false);
+    sceneViewerRef.current?.pause();
+  };
+
+  // Handle Clip Finish (Next in Playlist)
+  const handleClipFinish = () => {
+    if (isPlaylistPlaying) {
+      const nextIndex = currentPlaylistIndex + 1;
+      if (nextIndex < playlist.length) {
+        setCurrentPlaylistIndex(nextIndex);
+        setOptimizedClip(playlist[nextIndex]);
+        setDuration(playlist[nextIndex].duration);
+        // SceneViewer will automatically play the new clip via useEffect
+      } else {
+        // End of playlist
+        setIsPlaylistPlaying(false);
+        setCurrentPlaylistIndex(0);
+        setIsPlaying(false);
+      }
+    }
+  };
+
   const handleCreateClip = (name: string, startFrame: number, endFrame: number) => {
-    if (!originalClip) return;
+    const sourceClip = masterClip || originalClip;
+    if (!sourceClip) return;
 
     const fps = 30; // 假設 30fps，理想情況下應該從 clip 讀取或讓使用者設定
     const startTime = startFrame / fps;
@@ -291,7 +371,7 @@ function App() {
     // 這裡使用 AnimationUtils.subclip 會比較方便，但 Three.js 核心沒有直接暴露，我們手動切
     const newTracks: THREE.KeyframeTrack[] = [];
 
-    originalClip.tracks.forEach(track => {
+    sourceClip.tracks.forEach(track => {
       const times: number[] = [];
       const values: number[] = [];
       const itemSize = track.getValueSize();
@@ -438,6 +518,8 @@ function App() {
                 playingClip={optimizedClip}
                 onTimeUpdate={handleTimeUpdate}
                 shaderFeatures={shaderFeatures}
+                loop={!isPlaylistPlaying}
+                onFinish={handleClipFinish}
               />
             </div>
 
@@ -474,6 +556,14 @@ function App() {
               onCreateClip={handleCreateClip}
               createdClips={createdClips}
               onSelectClip={handleSelectClip}
+              playlist={playlist}
+              isPlaylistPlaying={isPlaylistPlaying}
+              currentPlaylistIndex={currentPlaylistIndex}
+              onAddToPlaylist={handleAddToPlaylist}
+              onRemoveFromPlaylist={handleRemoveFromPlaylist}
+              onReorderPlaylist={handleReorderPlaylist}
+              onPlayPlaylist={handlePlayPlaylist}
+              onPausePlaylist={handlePausePlaylist}
             />
           </div>
         </div>
