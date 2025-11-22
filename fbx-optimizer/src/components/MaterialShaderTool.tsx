@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Lock, GripVertical } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType } from '../types/shaderTypes';
 
@@ -121,7 +121,18 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
 
 export default function MaterialShaderTool({ fileName: _fileName, features, onFeaturesChange }: MaterialShaderToolProps) {
     const [showFeatureMenu, setShowFeatureMenu] = useState(false);
+
+    // Local state for drag and drop to support live reordering without committing to parent
+    const [localFeatures, setLocalFeatures] = useState<ShaderFeature[]>(features);
     const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+    const dragNodeRef = useRef<HTMLDivElement | null>(null);
+
+    // Sync local features with props when not dragging
+    useEffect(() => {
+        if (draggedIndex === null) {
+            setLocalFeatures(features);
+        }
+    }, [features, draggedIndex]);
 
     // 添加功能
     const addFeature = (featureTemplate: typeof AVAILABLE_FEATURES[0]) => {
@@ -135,15 +146,12 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
         let newFeatures = [...features];
 
         if (newFeature.type === 'normal_map') {
-            // Remove existing normal map if any (though UI should probably prevent adding duplicate)
             newFeatures = newFeatures.filter(f => f.type !== 'normal_map');
-            // Always add Normal Map to the beginning
             newFeatures.unshift(newFeature);
         } else {
             newFeatures.push(newFeature);
         }
 
-        // Ensure Normal Map is always first if it exists (double check)
         const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
         if (normalMapIndex > 0) {
             const [normalMap] = newFeatures.splice(normalMapIndex, 1);
@@ -175,50 +183,64 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
         ));
     };
 
-    // Drag and Drop Handlers
+    // --- Drag and Drop Logic ---
+
     const handleDragStart = (e: React.DragEvent, index: number) => {
-        if (features[index].type === 'normal_map') {
+        e.stopPropagation(); // Prevent triggering global drag handlers
+        if (localFeatures[index].type === 'normal_map') {
             e.preventDefault();
             return;
         }
-        setDraggedIndex(index);
+
         e.dataTransfer.effectAllowed = 'move';
-        // Set a transparent drag image or custom one if needed, default is fine for now
+        // We rely on default browser behavior for the drag image (snapshot of the element)
+        // But we delay setting the state to ensure the snapshot is taken BEFORE we turn it into a placeholder
+        setTimeout(() => {
+            setDraggedIndex(index);
+        }, 0);
     };
 
-    const handleDragOver = (e: React.DragEvent, index: number) => {
+    const handleDragEnter = (e: React.DragEvent, targetIndex: number) => {
         e.preventDefault();
-        if (draggedIndex === null || draggedIndex === index) return;
+        e.stopPropagation();
+        if (draggedIndex === null || draggedIndex === targetIndex) return;
 
-        // Prevent dropping BEFORE Normal Map if it exists at index 0
-        if (index === 0 && features[0].type === 'normal_map') {
-            e.dataTransfer.dropEffect = 'none';
-            return;
-        }
+        // Prevent interacting with Normal Map at index 0
+        if (targetIndex === 0 && localFeatures[0].type === 'normal_map') return;
 
+        // Perform the swap in local state
+        const newLocalFeatures = [...localFeatures];
+        const draggedItem = newLocalFeatures[draggedIndex];
+
+        // Remove from old position
+        newLocalFeatures.splice(draggedIndex, 1);
+        // Insert at new position
+        newLocalFeatures.splice(targetIndex, 0, draggedItem);
+
+        setLocalFeatures(newLocalFeatures);
+        setDraggedIndex(targetIndex); // Update dragged index to track the item
+    };
+
+    const handleDragOver = (e: React.DragEvent) => {
+        e.preventDefault(); // Necessary to allow dropping
+        e.stopPropagation();
         e.dataTransfer.dropEffect = 'move';
     };
 
-    const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
-        if (draggedIndex === null || draggedIndex === dropIndex) return;
-
-        // Prevent dropping onto Normal Map (index 0)
-        if (dropIndex === 0 && features[0].type === 'normal_map') return;
-
-        const newFeatures = [...features];
-        const [draggedItem] = newFeatures.splice(draggedIndex, 1);
-        newFeatures.splice(dropIndex, 0, draggedItem);
-
-        // Enforce Normal Map at index 0
-        const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
-        if (normalMapIndex > 0) {
-            const [normalMap] = newFeatures.splice(normalMapIndex, 1);
-            newFeatures.unshift(normalMap);
+        e.stopPropagation();
+        if (draggedIndex !== null) {
+            // Commit the final order to the parent
+            onFeaturesChange(localFeatures);
+            setDraggedIndex(null);
         }
+    };
 
-        onFeaturesChange(newFeatures);
+    const handleDragEnd = (e: React.DragEvent) => {
+        e.stopPropagation();
         setDraggedIndex(null);
+        // If cancelled, localFeatures will sync back to props via useEffect
     };
 
     // 渲染參數控制項
@@ -340,75 +362,80 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
 
             {/* 功能字卡列表 */}
             <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                {features.length === 0 ? (
+                {localFeatures.length === 0 ? (
                     <div className="bg-gray-900/50 rounded-lg p-8 border border-gray-700 text-center">
                         <Palette size={48} className="text-purple-400 opacity-50 mx-auto mb-4" />
                         <p className="text-gray-400 mb-2">尚未添加任何功能</p>
                         <p className="text-sm text-gray-500">點擊下方 + 按鈕開始添加</p>
                     </div>
                 ) : (
-                    features.map((feature, index) => (
+                    localFeatures.map((feature, index) => (
                         <div
                             key={feature.id}
                             draggable={feature.type !== 'normal_map'}
                             onDragStart={(e) => handleDragStart(e, index)}
-                            onDragOver={(e) => handleDragOver(e, index)}
-                            onDrop={(e) => handleDrop(e, index)}
+                            onDragEnter={(e) => handleDragEnter(e, index)}
+                            onDragOver={handleDragOver}
+                            onDrop={handleDrop}
+                            onDragEnd={handleDragEnd}
                             className={`
-                                bg-gray-900/50 border rounded-lg overflow-hidden transition-colors
-                                ${draggedIndex === index ? 'opacity-50 border-dashed border-purple-500' : 'border-gray-700 hover:border-purple-500/50'}
+                                bg-gray-900/50 border rounded-lg overflow-hidden transition-all duration-200
+                                ${draggedIndex === index ? 'border-2 border-dashed border-gray-600 bg-transparent opacity-50' : 'border-gray-700 hover:border-purple-500/50'}
                                 ${feature.type === 'normal_map' ? 'border-l-4 border-l-blue-500' : ''}
                             `}
                         >
-                            {/* 字卡標題 */}
-                            <div className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move">
-                                <div className="flex items-center gap-2 flex-1">
-                                    {/* Drag Handle / Lock Icon */}
-                                    {feature.type === 'normal_map' ? (
-                                        <Lock size={14} className="text-blue-400 mr-1" />
-                                    ) : (
-                                        <GripVertical size={16} className="text-gray-600 cursor-grab active:cursor-grabbing mr-1" />
-                                    )}
+                            {/* Hide content if dragged to simulate "hole" */}
+                            <div className={draggedIndex === index ? 'opacity-0' : ''}>
+                                {/* 字卡標題 */}
+                                <div className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move">
+                                    <div className="flex items-center gap-2 flex-1">
+                                        {/* Drag Handle / Lock Icon */}
+                                        {feature.type === 'normal_map' ? (
+                                            <Lock size={14} className="text-blue-400 mr-1" />
+                                        ) : (
+                                            <GripVertical size={16} className="text-gray-600 cursor-grab active:cursor-grabbing mr-1" />
+                                        )}
 
-                                    <button
-                                        onClick={() => toggleExpanded(feature.id)}
-                                        className="text-gray-400 hover:text-white transition-colors"
-                                    >
-                                        {feature.expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                                    </button>
-                                    <span className="text-xl">{feature.icon}</span>
-                                    <div className="flex-1">
-                                        <div className="font-medium text-white flex items-center gap-2">
-                                            {feature.name}
-                                            {feature.type === 'normal_map' && (
-                                                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Fixed</span>
+                                        <button
+                                            onClick={() => toggleExpanded(feature.id)}
+                                            className="text-gray-400 hover:text-white transition-colors"
+                                        >
+                                            {feature.expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                                        </button>
+                                        <span className="text-xl">{feature.icon}</span>
+                                        <div className="flex-1">
+                                            <div className="font-medium text-white flex items-center gap-2">
+                                                {feature.name}
+                                                {feature.type === 'normal_map' && (
+                                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Fixed</span>
+                                                )}
+                                            </div>
+                                            {!feature.expanded && (
+                                                <div className="text-xs text-gray-500">{feature.description}</div>
                                             )}
                                         </div>
-                                        {!feature.expanded && (
-                                            <div className="text-xs text-gray-500">{feature.description}</div>
+                                        <div className="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
+                                            #{index + 1}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => removeFeature(feature.id)}
+                                        className="ml-2 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+
+                                {/* 展開的參數區域 */}
+                                {feature.expanded && (
+                                    <div className="p-3 space-y-3 border-t border-gray-700">
+                                        <p className="text-xs text-gray-400 italic">{feature.description}</p>
+                                        {Object.entries(feature.params).map(([paramName, value]) =>
+                                            renderParamControl(feature, paramName, value)
                                         )}
                                     </div>
-                                    <div className="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
-                                        #{index + 1}
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => removeFeature(feature.id)}
-                                    className="ml-2 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                >
-                                    <X size={16} />
-                                </button>
+                                )}
                             </div>
-
-                            {/* 展開的參數區域 */}
-                            {feature.expanded && (
-                                <div className="p-3 space-y-3 border-t border-gray-700">
-                                    <p className="text-xs text-gray-400 italic">{feature.description}</p>
-                                    {Object.entries(feature.params).map(([paramName, value]) =>
-                                        renderParamControl(feature, paramName, value)
-                                    )}
-                                </div>
-                            )}
                         </div>
                     ))
                 )}
