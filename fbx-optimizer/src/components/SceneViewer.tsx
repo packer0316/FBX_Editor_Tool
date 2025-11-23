@@ -28,6 +28,8 @@ interface SceneViewerProps {
     boundBone?: THREE.Bone | null;
     isCameraBound?: boolean;
     showGroundPlane?: boolean;
+    groundPlaneColor?: string;
+    groundPlaneOpacity?: number;
 }
 
 // Camera Controller Component to update camera settings dynamically
@@ -730,7 +732,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0 }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -754,7 +756,12 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     {showGroundPlane && (
                         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
                             <planeGeometry args={[100, 100]} />
-                            <meshStandardMaterial color="#444444" />
+                            <meshStandardMaterial
+                                key={`ground-${groundPlaneColor}-${groundPlaneOpacity}`}
+                                color={groundPlaneColor}
+                                transparent={groundPlaneOpacity < 1.0}
+                                opacity={groundPlaneOpacity}
+                            />
                         </mesh>
                     )}
                     {model && (

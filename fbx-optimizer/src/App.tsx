@@ -48,7 +48,9 @@ function App() {
 
   // Camera Settings
   const [showCameraSettings, setShowCameraSettings] = useState(false);
+  const [showGroundSettings, setShowGroundSettings] = useState(false);
   const cameraSettingsRef = useRef<HTMLDivElement>(null);
+  const groundSettingsRef = useRef<HTMLDivElement>(null);
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
     near: 0.1,
@@ -61,6 +63,8 @@ function App() {
   const [selectedBoneUuid, setSelectedBoneUuid] = useState<string | null>(null);
   const [isCameraBound, setIsCameraBound] = useState(false);
   const [showGroundPlane, setShowGroundPlane] = useState(false);
+  const [groundPlaneColor, setGroundPlaneColor] = useState('#444444');
+  const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
 
   // Extract bones from model
   useEffect(() => {
@@ -96,6 +100,9 @@ function App() {
     const handleClickOutside = (event: MouseEvent) => {
       if (cameraSettingsRef.current && !cameraSettingsRef.current.contains(event.target as Node)) {
         setShowCameraSettings(false);
+      }
+      if (groundSettingsRef.current && !groundSettingsRef.current.contains(event.target as Node)) {
+        setShowGroundSettings(false);
       }
     };
 
@@ -837,19 +844,73 @@ function App() {
             )}
           </div>
           {/* Tool: Ground Plane Toggle */}
-          <div className="group relative">
+          <div className="group relative" ref={groundSettingsRef}>
             <button
-              className={`p-3 rounded-lg transition-colors ${showGroundPlane
+              className={`p-3 rounded-lg transition-colors ${showGroundPlane || showGroundSettings
                 ? 'bg-gray-800 text-white'
                 : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                 }`}
-              onClick={() => setShowGroundPlane(!showGroundPlane)}
+              onClick={() => setShowGroundSettings(!showGroundSettings)}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              地面開關
+              地面設定
             </div>
+
+            {/* Ground Settings Popover */}
+            {showGroundSettings && (
+              <div className="absolute left-full top-0 ml-4 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
+                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
+                  地面設定
+                </h3>
+
+                {/* Show Ground Plane Toggle */}
+                <div className="mb-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showGroundPlane}
+                      onChange={(e) => setShowGroundPlane(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+                    />
+                    <span className="text-sm text-gray-300">顯示地面</span>
+                  </label>
+                </div>
+
+                {/* Color Picker */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs text-gray-400">顏色</label>
+                    <span className="text-xs text-gray-500">{groundPlaneColor}</span>
+                  </div>
+                  <input
+                    type="color"
+                    value={groundPlaneColor}
+                    onChange={(e) => setGroundPlaneColor(e.target.value)}
+                    className="w-full h-8 rounded border border-gray-600 bg-gray-700 cursor-pointer"
+                  />
+                </div>
+
+                {/* Opacity Slider */}
+                <div className="mb-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs text-gray-400">透明度</label>
+                    <span className="text-xs text-gray-500">{groundPlaneOpacity.toFixed(2)}</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={groundPlaneOpacity}
+                    onChange={(e) => setGroundPlaneOpacity(parseFloat(e.target.value))}
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -871,6 +932,8 @@ function App() {
                 boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
                 isCameraBound={isCameraBound}
                 showGroundPlane={showGroundPlane}
+                groundPlaneColor={groundPlaneColor}
+                groundPlaneOpacity={groundPlaneOpacity}
               />
             </div>
 
