@@ -39,6 +39,9 @@ function App() {
   // 右側面板分頁
   const [activeTab, setActiveTab] = useState<'optimization' | 'shader'>('optimization');
 
+  // Theme Mode
+  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+
   // Shader 功能狀態
   const [shaderFeatures, setShaderFeatures] = useState<ShaderFeature[]>([]);
 
@@ -533,6 +536,68 @@ function App() {
       )}
 
       <div className="flex-1 flex overflow-hidden">
+        {/* Left Toolbar (Photoshop Style) */}
+        <div className="w-16 bg-gray-900 border-r border-gray-700 flex flex-col items-center py-4 space-y-4 z-20 shadow-lg">
+          {/* Tool: Select / Move */}
+          <div className="group relative">
+            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /><path d="M13 13l6 6" /></svg>
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              選取工具 (V)
+            </div>
+          </div>
+
+          {/* Tool: Rotate */}
+          <div className="group relative">
+            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              旋轉工具 (R)
+            </div>
+          </div>
+
+          {/* Tool: Scale */}
+          <div className="group relative">
+            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3l-6 6" /><path d="M21 3v6" /><path d="M21 3h-6" /><path d="M3 21l6-6" /><path d="M3 21v-6" /><path d="M3 21h6" /><path d="M14.5 9.5L9.5 14.5" /></svg>
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              縮放工具 (S)
+            </div>
+          </div>
+
+          <div className="w-8 h-px bg-gray-700 my-2"></div>
+
+          {/* Tool: Theme Toggle */}
+          <div className="group relative">
+            <button
+              className={`p-3 rounded-lg transition-colors ${themeMode === 'light' ? 'text-yellow-400 hover:bg-gray-800' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
+              onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+            >
+              {themeMode === 'dark' ? (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
+              ) : (
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 1v2" /><path d="M12 21v2" /><path d="M4.22 4.22l1.42 1.42" /><path d="M18.36 18.36l1.42 1.42" /><path d="M1 12h2" /><path d="M21 12h2" /><path d="M4.22 19.78l1.42-1.42" /><path d="M18.36 5.64l1.42-1.42" /></svg>
+              )}
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              切換模式 ({themeMode === 'dark' ? '深色' : '亮色'})
+            </div>
+          </div>
+
+          {/* Tool: Placeholder 1 */}
+          <div className="group relative">
+            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+              <div className="w-5 h-5 border-2 border-dashed border-gray-500 rounded"></div>
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              預留工具 1
+            </div>
+          </div>
+        </div>
+
         {/* 左側：3D 預覽區 */}
         <div className="flex-1 relative flex flex-col">
           {/* 3D Canvas */}
@@ -546,6 +611,7 @@ function App() {
                 shaderFeatures={shaderFeatures}
                 loop={!isPlaylistPlaying}
                 onFinish={handleClipFinish}
+                backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
               />
             </div>
 
@@ -659,7 +725,7 @@ function App() {
           </div>
         </div>
       </div>
-    </div >
+    </div>
   );
 }
 

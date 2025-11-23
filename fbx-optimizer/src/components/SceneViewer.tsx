@@ -19,6 +19,7 @@ interface SceneViewerProps {
     shaderFeatures: ShaderFeature[];
     loop?: boolean;
     onFinish?: () => void;
+    backgroundColor?: string;
 }
 
 type ModelProps = {
@@ -479,16 +480,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     }
 
                     // Additive Matcap
-                    if (addMatcapFeature && addMatcapTex) {
-                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
-                        shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
-                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
-                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
-                        shaderMat.uniforms.matcapAddLdrBoost.value = addMatcapFeature.params.ldrBoost || 1.3;
-                    } else {
-                        shaderMat.uniforms.useMatcapAdd.value = 0.0;
-                    }
-
+                    // Rim Light
                     if (rimLightFeature) {
                         shaderMat.uniforms.useRimLight.value = 1.0;
                         shaderMat.uniforms.rimColor.value = new THREE.Color(rimLightFeature.params.color || '#ffffff');
@@ -498,6 +490,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.useRimLight.value = 0.0;
                     }
 
+                    // Flash
                     if (flashFeature) {
                         shaderMat.uniforms.useFlash.value = 1.0;
                         shaderMat.uniforms.flashColor.value = new THREE.Color(flashFeature.params.color || '#ffffff');
@@ -508,6 +501,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.useFlash.value = 0.0;
                     }
 
+                    // Dissolve
                     if (dissolveFeature) {
                         shaderMat.uniforms.useDissolve.value = 1.0;
                         if (dissolveTex) shaderMat.uniforms.dissolveTexture.value = dissolveTex;
@@ -520,6 +514,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.useDissolve.value = 0.0;
                     }
 
+                    // Alpha Test
                     if (alphaTestFeature) {
                         shaderMat.uniforms.useAlphaTest.value = 1.0;
                         shaderMat.uniforms.alphaTestThreshold.value = alphaTestFeature.params.threshold ?? 0.5;
@@ -527,6 +522,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.useAlphaTest.value = 0.0;
                     }
 
+                    // Normal Map
                     if (normalMapFeature && normalMapTex) {
                         shaderMat.uniforms.useNormalMap.value = 1.0;
                         shaderMat.uniforms.normalMap.value = normalMapTex;
@@ -547,34 +543,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             child.material = child.userData.originalMaterial.clone();
                         }
                     }
-
-                    // Handle standard material properties (dissolve, bleach, etc. - existing logic)
-                    const material = child.material as THREE.MeshStandardMaterial;
-                    if (material.isMeshStandardMaterial) {
-                        // Reset standard props
-                        material.emissive = new THREE.Color(0x000000);
-                        material.emissiveIntensity = 0;
-                        material.transparent = false;
-                        material.opacity = 1;
-                        material.alphaTest = 0;
-                        if (material.normalMap) material.normalScale.set(1, 1);
-
-                        shaderFeatures.forEach((feature) => {
-                            switch (feature.type) {
-                                case 'bleach':
-                                    if (feature.params.intensity > 0) {
-                                        material.color.lerp(new THREE.Color(feature.params.color), feature.params.intensity);
-                                    }
-                                    break;
-                                case 'normal_map':
-                                    if (material.normalMap && feature.params.strength) {
-                                        material.normalScale.set(feature.params.strength, feature.params.strength);
-                                    }
-                                    break;
-                            }
-                        });
-                        material.needsUpdate = true;
-                    }
                 }
             });
         }, [model, shaderFeatures]);
@@ -585,9 +553,12 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderFeatures, loop, onFinish }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderFeatures, loop, onFinish, backgroundColor = '#111827' }, ref) => {
         return (
-            <div className="w-full h-full bg-gray-900 rounded-lg overflow-hidden shadow-xl border border-gray-700">
+            <div
+                className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
+                style={{ backgroundColor }}
+            >
                 <Canvas camera={{ position: [0, 2, 5], fov: 50 }}>
                     <ambientLight intensity={0.8} />
                     <hemisphereLight args={["#ffffff", "#444444", 0.6]} />
