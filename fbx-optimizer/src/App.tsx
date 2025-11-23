@@ -10,7 +10,7 @@ import ModelInspector from './components/ModelInspector';
 import AudioPanel from './components/AudioPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './utils/AudioController';
-import { Loader2, Camera, Grid } from 'lucide-react';
+import { Loader2, Camera, Grid, Zap } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 export interface AudioTrigger {
@@ -71,7 +71,51 @@ function App() {
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
 
   // Theme Mode
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
+  const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'cyberpunk'>('dark');
+
+  const themeStyles = {
+    dark: {
+      bg: 'bg-gray-900',
+      text: 'text-white',
+      toolbarBg: 'bg-gray-900',
+      toolbarBorder: 'border-gray-700',
+      panelBg: 'bg-gray-800',
+      panelBorder: 'border-gray-700',
+      button: 'text-gray-400 hover:bg-gray-800 hover:text-white',
+      activeButton: 'bg-blue-600 text-white',
+      sceneBg: '#111827',
+      gridColor: '#4a4a4a',
+      gridCellColor: '#2a2a2a'
+    },
+    light: {
+      bg: 'bg-gray-900',
+      text: 'text-white',
+      toolbarBg: 'bg-gray-900',
+      toolbarBorder: 'border-gray-700',
+      panelBg: 'bg-gray-800',
+      panelBorder: 'border-gray-700',
+      button: 'text-gray-400 hover:bg-gray-800 hover:text-white',
+      activeButton: 'bg-blue-600 text-white',
+      sceneBg: '#f0f0f0',
+      gridColor: '#cccccc',
+      gridCellColor: '#e5e5e5'
+    },
+    cyberpunk: {
+      bg: 'bg-[#050510]',
+      text: 'text-[#00f3ff]',
+      toolbarBg: 'bg-[#0a0a1a]',
+      toolbarBorder: 'border-[#ff00ff]/30',
+      panelBg: 'bg-[#0a0a1a]/90',
+      panelBorder: 'border-[#00f3ff]/30',
+      button: 'text-[#ff00ff] hover:text-[#00f3ff] hover:shadow-[0_0_10px_#00f3ff] transition-all duration-300',
+      activeButton: 'bg-[#ff00ff]/20 text-[#00f3ff] shadow-[0_0_15px_#ff00ff]',
+      sceneBg: '#020205',
+      gridColor: '#ff00ff',
+      gridCellColor: '#00f3ff'
+    }
+  };
+
+  const currentTheme = themeStyles[themeMode];
 
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
@@ -702,7 +746,7 @@ function App() {
 
   return (
     <div
-      className="h-screen overflow-hidden bg-gray-900 text-white flex flex-col"
+      className={`h-screen overflow-hidden ${currentTheme.bg} ${currentTheme.text} flex flex-col`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -719,10 +763,10 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden">
         {/* Left Toolbar (Photoshop Style) */}
-        <div className="w-16 bg-gray-900 border-r border-gray-700 flex flex-col items-center py-4 space-y-4 z-20 shadow-lg">
+        <div className={`w-16 ${currentTheme.toolbarBg} border-r ${currentTheme.toolbarBorder} flex flex-col items-center py-4 space-y-4 z-20 shadow-lg`}>
           {/* Tool: Select / Move */}
           <div className="group relative">
-            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+            <button className={`p-3 rounded-lg transition-colors ${currentTheme.button}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /><path d="M13 13l6 6" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
@@ -732,7 +776,7 @@ function App() {
 
           {/* Tool: Rotate */}
           <div className="group relative">
-            <button disabled className="p-3 rounded-lg text-gray-400 opacity-30 cursor-not-allowed">
+            <button disabled className={`p-3 rounded-lg opacity-30 cursor-not-allowed ${currentTheme.button}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
@@ -742,7 +786,7 @@ function App() {
 
           {/* Tool: Scale */}
           <div className="group relative">
-            <button disabled className="p-3 rounded-lg text-gray-400 opacity-30 cursor-not-allowed">
+            <button disabled className={`p-3 rounded-lg opacity-30 cursor-not-allowed ${currentTheme.button}`}>
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3l-6 6" /><path d="M21 3v6" /><path d="M21 3h-6" /><path d="M3 21l6-6" /><path d="M3 21v-6" /><path d="M3 21h6" /><path d="M14.5 9.5L9.5 14.5" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
@@ -754,7 +798,7 @@ function App() {
           <div className="group relative">
             <button
               onClick={() => setShowGrid(!showGrid)}
-              className={`p-3 rounded-lg transition-colors ${showGrid ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+              className={`p-3 rounded-lg transition-colors ${showGrid ? currentTheme.activeButton : currentTheme.button}`}
             >
               <Grid size={20} />
             </button>
@@ -768,17 +812,23 @@ function App() {
           {/* Tool: Theme Toggle */}
           <div className="group relative">
             <button
-              className={`p-3 rounded-lg transition-colors ${themeMode === 'light' ? 'text-yellow-400 hover:bg-gray-800' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-              onClick={() => setThemeMode(prev => prev === 'dark' ? 'light' : 'dark')}
+              className={`p-3 rounded-lg transition-colors ${currentTheme.button}`}
+              onClick={() => setThemeMode(prev => {
+                if (prev === 'dark') return 'light';
+                if (prev === 'light') return 'cyberpunk';
+                return 'dark';
+              })}
             >
               {themeMode === 'dark' ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-              ) : (
+              ) : themeMode === 'light' ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 1v2" /><path d="M12 21v2" /><path d="M4.22 4.22l1.42 1.42" /><path d="M18.36 18.36l1.42 1.42" /><path d="M1 12h2" /><path d="M21 12h2" /><path d="M4.22 19.78l1.42-1.42" /><path d="M18.36 5.64l1.42-1.42" /></svg>
+              ) : (
+                <Zap size={20} />
               )}
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              切換模式 ({themeMode === 'dark' ? '深色' : '亮色'})
+              切換模式 ({themeMode === 'dark' ? '深色' : themeMode === 'light' ? '亮色' : 'Cyberpunk'})
             </div>
           </div>
 
@@ -786,8 +836,8 @@ function App() {
           <div className="group relative" ref={cameraSettingsRef}>
             <button
               className={`p-3 rounded-lg transition-colors ${showCameraSettings
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                ? currentTheme.activeButton
+                : currentTheme.button
                 }`}
               onClick={() => setShowCameraSettings(!showCameraSettings)}
             >
@@ -799,8 +849,8 @@ function App() {
 
             {/* Camera Settings Popover */}
             {showCameraSettings && (
-              <div className="absolute left-full top-0 ml-4 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
-                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <div className={`absolute left-full top-0 ml-4 w-64 ${currentTheme.panelBg} border ${currentTheme.panelBorder} rounded-lg shadow-xl p-4 z-50`}>
+                <h3 className={`text-sm font-semibold ${currentTheme.text} mb-4 flex items-center gap-2`}>
                   <Camera size={16} className="text-blue-400" />
                   相機參數
                 </h3>
@@ -950,8 +1000,8 @@ function App() {
           <div className="group relative" ref={groundSettingsRef}>
             <button
               className={`p-3 rounded-lg transition-colors ${showGroundPlane || showGroundSettings
-                ? 'bg-gray-800 text-white'
-                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                ? currentTheme.activeButton
+                : currentTheme.button
                 }`}
               onClick={() => setShowGroundSettings(!showGroundSettings)}
             >
@@ -963,8 +1013,8 @@ function App() {
 
             {/* Ground Settings Popover */}
             {showGroundSettings && (
-              <div className="absolute left-full top-0 ml-4 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
-                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+              <div className={`absolute left-full top-0 ml-4 w-64 ${currentTheme.panelBg} border ${currentTheme.panelBorder} rounded-lg shadow-xl p-4 z-50`}>
+                <h3 className={`text-sm font-semibold ${currentTheme.text} mb-4 flex items-center gap-2`}>
                   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-blue-400"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
                   地面設定
                 </h3>
@@ -1043,7 +1093,7 @@ function App() {
                 shaderGroups={shaderGroups}
                 loop={isPlaylistPlaying ? false : isLoopEnabled}
                 onFinish={handleClipFinish}
-                backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
+                backgroundColor={currentTheme.sceneBg}
                 cameraSettings={cameraSettings}
                 boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
                 isCameraBound={isCameraBound}
@@ -1052,6 +1102,8 @@ function App() {
                 groundPlaneOpacity={groundPlaneOpacity}
                 enableShadows={enableShadows}
                 showGrid={showGrid}
+                gridColor={currentTheme.gridColor}
+                gridCellColor={currentTheme.gridCellColor}
               />
             </div>
 
@@ -1066,7 +1118,7 @@ function App() {
 
           {/* 底部：模型檢測與動畫工具 */}
           <div
-            className="bg-gray-800 border-t border-gray-700 relative"
+            className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative`}
             style={{ height: `${panelHeight}px` }}
           >
             {/* 拖拉調整高度的把手 */}
@@ -1106,7 +1158,7 @@ function App() {
         </div>
 
         {/* 右側：控制面板 */}
-        <div className="relative bg-gray-800 border-l border-gray-700 flex flex-col" style={{ width: `${rightPanelWidth}px` }}>
+        <div className={`relative ${currentTheme.panelBg} border-l ${currentTheme.panelBorder} flex flex-col`} style={{ width: `${rightPanelWidth}px` }}>
           {/* 左側調整寬度的把手 */}
           <div
             className="absolute top-0 left-0 bottom-0 w-1 bg-gray-700 hover:bg-blue-500 cursor-ew-resize transition-colors z-10"
@@ -1116,11 +1168,11 @@ function App() {
           </div>
 
           {/* 分頁切換 */}
-          <div className="flex border-b border-gray-700 bg-gray-900/30">
+          <div className={`flex border-b ${currentTheme.panelBorder} ${currentTheme.toolbarBg}/30`}>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'optimization'
-                ? 'bg-gray-800 text-white border-b-2 border-blue-500'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-blue-500`
+                : `${currentTheme.button}`
                 }`}
               onClick={() => setActiveTab('optimization')}
             >
@@ -1128,8 +1180,8 @@ function App() {
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'shader'
-                ? 'bg-gray-800 text-white border-b-2 border-purple-500'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-purple-500`
+                : `${currentTheme.button}`
                 }`}
               onClick={() => setActiveTab('shader')}
             >
@@ -1137,8 +1189,8 @@ function App() {
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'audio'
-                ? 'bg-gray-800 text-white border-b-2 border-green-500'
-                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-green-500`
+                : `${currentTheme.button}`
                 }`}
               onClick={() => setActiveTab('audio')}
             >
