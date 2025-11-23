@@ -380,7 +380,17 @@ function App() {
 
   // Add clip to playlist
   const handleAddToPlaylist = (clip: THREE.AnimationClip) => {
-    setPlaylist(prev => [...prev, clip]);
+    // Clone the clip to ensure each playlist item has a unique reference
+    // This fixes the issue where adding the same clip multiple times causes playback problems
+    const clonedClip = clip.clone();
+    // Preserve frame metadata if it exists
+    if ((clip as any).startFrame !== undefined) {
+      (clonedClip as any).startFrame = (clip as any).startFrame;
+    }
+    if ((clip as any).endFrame !== undefined) {
+      (clonedClip as any).endFrame = (clip as any).endFrame;
+    }
+    setPlaylist(prev => [...prev, clonedClip]);
   };
 
   // Remove clip from playlist
