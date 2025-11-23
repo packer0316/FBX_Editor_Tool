@@ -166,20 +166,38 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 if (shouldUseShader) {
                     // Load Base Matcap Texture
                     let baseMatcapTex = null;
-                    if (baseMatcapFeature) {
+                    if (baseMatcapFeature && baseMatcapFeature.params.texture) {
                         const texUrl = typeof baseMatcapFeature.params.texture === 'string'
                             ? baseMatcapFeature.params.texture
                             : URL.createObjectURL(baseMatcapFeature.params.texture);
                         baseMatcapTex = textureLoader.load(texUrl);
                     }
 
+                    // Load Base Matcap Mask Texture
+                    let baseMatcapMaskTex = null;
+                    if (baseMatcapFeature && baseMatcapFeature.params.maskTexture) {
+                        const texUrl = typeof baseMatcapFeature.params.maskTexture === 'string'
+                            ? baseMatcapFeature.params.maskTexture
+                            : URL.createObjectURL(baseMatcapFeature.params.maskTexture);
+                        baseMatcapMaskTex = textureLoader.load(texUrl);
+                    }
+
                     // Load Additive Matcap Texture
                     let addMatcapTex = null;
-                    if (addMatcapFeature) {
+                    if (addMatcapFeature && addMatcapFeature.params.texture) {
                         const texUrl = typeof addMatcapFeature.params.texture === 'string'
                             ? addMatcapFeature.params.texture
                             : URL.createObjectURL(addMatcapFeature.params.texture);
                         addMatcapTex = textureLoader.load(texUrl);
+                    }
+
+                    // Load Additive Matcap Mask Texture
+                    let addMatcapMaskTex = null;
+                    if (addMatcapFeature && addMatcapFeature.params.maskTexture) {
+                        const texUrl = typeof addMatcapFeature.params.maskTexture === 'string'
+                            ? addMatcapFeature.params.maskTexture
+                            : URL.createObjectURL(addMatcapFeature.params.maskTexture);
+                        addMatcapMaskTex = textureLoader.load(texUrl);
                     }
 
                     let dissolveTex = null;
@@ -252,11 +270,13 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
                             // Base Matcap
                             matcapTexture: { value: null },
+                            matcapMaskTexture: { value: null },
                             matcapProgress: { value: 0 },
                             useMatcap: { value: 0.0 },
 
                             // Additive Matcap
                             matcapAddTexture: { value: null },
+                            matcapAddMaskTexture: { value: null },
                             matcapAddStrength: { value: 1.0 },
                             matcapAddColor: { value: new THREE.Color(0xffffff) },
                             useMatcapAdd: { value: 0.0 },
@@ -327,11 +347,13 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
                                 // Base Matcap
                                 uniform sampler2D matcapTexture;
+                                uniform sampler2D matcapMaskTexture;
                                 uniform float matcapProgress;
                                 uniform float useMatcap;
 
                                 // Additive Matcap
                                 uniform sampler2D matcapAddTexture;
+                                uniform sampler2D matcapAddMaskTexture;
                                 uniform float matcapAddStrength;
                                 uniform vec3 matcapAddColor;
                                 uniform float useMatcapAdd;
@@ -445,7 +467,13 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         
                                         vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
 
-                                        finalColor = mix(finalColor, matcapCol, matcapProgress);
+                                        // Apply mask if available
+                                        float matcapMask = 1.0;
+                                        #ifdef USE_MATCAP_MASK
+                                            matcapMask = texture2D(matcapMaskTexture, vUv).r;
+                                        #endif
+
+                                        finalColor = mix(finalColor, matcapCol, matcapProgress * matcapMask);
                                     }
 
                                     // --- Additive Matcap (Add) ---
@@ -457,12 +485,18 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
                                         matcapAddCol *= matcapAddColor; // Apply tint
 
+                                        // Apply mask if available
+                                        float matcapAddMask = 1.0;
+                                        #ifdef USE_MATCAP_ADD_MASK
+                                            matcapAddMask = texture2D(matcapAddMaskTexture, vUv).r;
+                                        #endif
+
                                         // Additive blending logic
                                         float dotNV = dot(viewDir, viewNormal);
                                         dotNV = clamp(dotNV, 0.0, 1.0);
                                         
-                                        // Simple additive for now, controlled by strength
-                                        finalColor += matcapAddCol * matcapAddStrength;
+                                        // Simple additive for now, controlled by strength and mask
+                                        finalColor += matcapAddCol * matcapAddStrength * matcapAddMask;
                                     }
 
                                     // --- Rim Light ---
@@ -528,6 +562,8 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             `,
                         defines: {
                             ...(baseTexture ? { USE_MAP: '' } : {}),
+                            ...(baseMatcapMaskTex ? { USE_MATCAP_MASK: '' } : {}),
+                            ...(addMatcapMaskTex ? { USE_MATCAP_ADD_MASK: '' } : {}),
                             ...(flashTex ? { USE_FLASH_TEXTURE: '' } : {}),
                             ...(flashMaskTex ? { USE_FLASH_MASK: '' } : {}),
                         },
@@ -545,6 +581,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     if (baseMatcapFeature && baseMatcapTex) {
                         shaderMat.uniforms.useMatcap.value = 1.0;
                         shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
+                        if (baseMatcapMaskTex) shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
                         shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
                     } else {
                         shaderMat.uniforms.useMatcap.value = 0.0;
@@ -554,6 +591,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     if (addMatcapFeature && addMatcapTex) {
                         shaderMat.uniforms.useMatcapAdd.value = 1.0;
                         shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
+                        if (addMatcapMaskTex) shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
                         shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
                         shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
                     } else {

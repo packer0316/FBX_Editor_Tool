@@ -66,11 +66,13 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
         case 'matcap':
             return {
                 texture: null,
+                maskTexture: null,
                 progress: 0.5,
             };
         case 'matcap_add':
             return {
                 texture: null,
+                maskTexture: null,
                 strength: 1.0,
                 color: '#ffffff',
             };
@@ -116,6 +118,42 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
         default:
             return {};
     }
+};
+
+// 參數中文標籤映射
+const getParamLabel = (paramName: string): string => {
+    const labels: Record<string, string> = {
+        // Texture parameters
+        'texture': '貼圖',
+        'maskTexture': '遮罩貼圖',
+
+        // Matcap parameters
+        'progress': '混合程度',
+        'strength': '強度',
+
+        // Rim Light parameters
+        'power': '邊緣銳利度',
+        'intensity': '強度',
+
+        // Flash parameters
+        'speed': '速度',
+        'width': '寬度',
+        'reverse': '反向',
+
+        // Dissolve parameters
+        'threshold': '溶解閾值',
+        'edgeWidth': '邊緣寬度',
+        'color1': '顏色1',
+        'color2': '顏色2',
+
+        // Color parameters
+        'color': '顏色',
+
+        // Normal Map parameters
+        'rotateDelta': '旋轉角度',
+    };
+
+    return labels[paramName] || paramName;
 };
 
 export default function MaterialShaderTool({ fileName: _fileName, features, onFeaturesChange }: MaterialShaderToolProps) {
@@ -248,11 +286,12 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
 
         // 貼圖參數
         if (paramName.includes('texture') || paramName.includes('Texture')) {
+            const label = getParamLabel(paramName);
             return (
                 <div key={paramName} className="space-y-1">
                     <label className="text-xs text-gray-400 flex items-center gap-1">
                         <ImageIcon size={12} />
-                        {paramName}
+                        {label}
                     </label>
                     <div className="flex gap-2">
                         <input
@@ -286,9 +325,10 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
 
         // 顏色參數
         if (paramName.includes('color') || paramName.includes('Color')) {
+            const label = getParamLabel(paramName);
             return (
                 <div key={paramName} className="space-y-1">
-                    <label className="text-xs text-gray-400">{paramName}</label>
+                    <label className="text-xs text-gray-400">{label}</label>
                     <div className="flex gap-2">
                         <input
                             type="color"
@@ -321,12 +361,13 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
             else if (paramName === 'edgeWidth') { min = 0; max = 0.5; step = 0.01; }
             else if (paramName === 'rotateDelta') { min = 0; max = 6.28; step = 0.1; }
 
+            const label = getParamLabel(paramName);
             return (
                 <div key={paramName} className="space-y-1">
                     <label className="text-xs text-gray-400 flex items-center justify-between">
                         <span className="flex items-center gap-1">
                             <Sliders size={12} />
-                            {paramName}
+                            {label}
                         </span>
                         <span className="text-purple-400 font-mono">{value.toFixed(2)}</span>
                     </label>
@@ -345,6 +386,7 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
 
         // Boolean 參數（Checkbox）
         if (typeof value === 'boolean') {
+            const label = getParamLabel(paramName);
             return (
                 <div key={paramName} className="space-y-1">
                     <label className="flex items-center gap-2 cursor-pointer group">
@@ -355,7 +397,7 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                             className="w-4 h-4 bg-gray-700 border-2 border-gray-600 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
                         <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
-                            {paramName}
+                            {label}
                         </span>
                     </label>
                 </div>
