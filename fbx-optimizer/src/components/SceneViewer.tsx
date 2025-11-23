@@ -480,6 +480,16 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     }
 
                     // Additive Matcap
+                    if (addMatcapFeature && addMatcapTex) {
+                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
+                        shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
+                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
+                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                        shaderMat.uniforms.matcapAddLdrBoost.value = addMatcapFeature.params.ldrBoost || 1.3;
+                    } else {
+                        shaderMat.uniforms.useMatcapAdd.value = 0.0;
+                    }
+
                     // Rim Light
                     if (rimLightFeature) {
                         shaderMat.uniforms.useRimLight.value = 1.0;
