@@ -10,7 +10,7 @@ import ModelInspector from './components/ModelInspector';
 import AudioPanel from './components/AudioPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './utils/AudioController';
-import { Loader2, Camera, Grid, Zap } from 'lucide-react';
+import { Loader2, Camera, Grid, Zap, Terminal, Sunset, Snowflake, Ghost } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 export interface AudioTrigger {
@@ -71,7 +71,7 @@ function App() {
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
 
   // Theme Mode
-  const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'cyberpunk'>('dark');
+  const [themeMode, setThemeMode] = useState<'dark' | 'light' | 'cyberpunk' | 'matrix' | 'synthwave' | 'nord' | 'dracula'>('dark');
 
   const themeStyles = {
     dark: {
@@ -112,6 +112,58 @@ function App() {
       sceneBg: '#020205',
       gridColor: '#ff00ff',
       gridCellColor: '#00f3ff'
+    },
+    matrix: {
+      bg: 'bg-black',
+      text: 'text-[#00ff41]',
+      toolbarBg: 'bg-[#0d0d0d]',
+      toolbarBorder: 'border-[#008f11]',
+      panelBg: 'bg-[#0d0d0d]/90',
+      panelBorder: 'border-[#008f11]',
+      button: 'text-[#008f11] hover:text-[#00ff41] hover:bg-[#003b00]',
+      activeButton: 'bg-[#003b00] text-[#00ff41] shadow-[0_0_10px_#00ff41]',
+      sceneBg: '#000000',
+      gridColor: '#003b00',
+      gridCellColor: '#008f11'
+    },
+    synthwave: {
+      bg: 'bg-[#2b003b]',
+      text: 'text-[#ff9e00]',
+      toolbarBg: 'bg-[#240030]',
+      toolbarBorder: 'border-[#ff0090]',
+      panelBg: 'bg-[#240030]/90',
+      panelBorder: 'border-[#ff0090]',
+      button: 'text-[#ff0090] hover:text-[#00f3ff] hover:bg-[#ff0090]/20',
+      activeButton: 'bg-[#ff0090]/30 text-[#ff9e00] shadow-[0_0_15px_#ff0090]',
+      sceneBg: '#1a0024',
+      gridColor: '#ff0090',
+      gridCellColor: '#570a57'
+    },
+    nord: {
+      bg: 'bg-[#2e3440]',
+      text: 'text-[#eceff4]',
+      toolbarBg: 'bg-[#3b4252]',
+      toolbarBorder: 'border-[#88c0d0]',
+      panelBg: 'bg-[#3b4252]/95',
+      panelBorder: 'border-[#81a1c1]',
+      button: 'text-[#d8dee9] hover:text-[#88c0d0] hover:bg-[#4c566a]',
+      activeButton: 'bg-[#88c0d0]/20 text-[#88c0d0] border border-[#88c0d0]',
+      sceneBg: '#2e3440',
+      gridColor: '#4c566a',
+      gridCellColor: '#434c5e'
+    },
+    dracula: {
+      bg: 'bg-[#282a36]',
+      text: 'text-[#f8f8f2]',
+      toolbarBg: 'bg-[#44475a]',
+      toolbarBorder: 'border-[#bd93f9]',
+      panelBg: 'bg-[#44475a]/95',
+      panelBorder: 'border-[#ff79c6]',
+      button: 'text-[#bd93f9] hover:text-[#ff79c6] hover:bg-[#6272a4]',
+      activeButton: 'bg-[#bd93f9]/20 text-[#50fa7b] border border-[#bd93f9]',
+      sceneBg: '#282a36',
+      gridColor: '#6272a4',
+      gridCellColor: '#44475a'
     }
   };
 
@@ -816,6 +868,10 @@ function App() {
               onClick={() => setThemeMode(prev => {
                 if (prev === 'dark') return 'light';
                 if (prev === 'light') return 'cyberpunk';
+                if (prev === 'cyberpunk') return 'matrix';
+                if (prev === 'matrix') return 'synthwave';
+                if (prev === 'synthwave') return 'nord';
+                if (prev === 'nord') return 'dracula';
                 return 'dark';
               })}
             >
@@ -823,12 +879,27 @@ function App() {
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
               ) : themeMode === 'light' ? (
                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 1v2" /><path d="M12 21v2" /><path d="M4.22 4.22l1.42 1.42" /><path d="M18.36 18.36l1.42 1.42" /><path d="M1 12h2" /><path d="M21 12h2" /><path d="M4.22 19.78l1.42-1.42" /><path d="M18.36 5.64l1.42-1.42" /></svg>
-              ) : (
+              ) : themeMode === 'cyberpunk' ? (
                 <Zap size={20} />
+              ) : themeMode === 'matrix' ? (
+                <Terminal size={20} />
+              ) : themeMode === 'synthwave' ? (
+                <Sunset size={20} />
+              ) : themeMode === 'nord' ? (
+                <Snowflake size={20} />
+              ) : (
+                <Ghost size={20} />
               )}
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              切換模式 ({themeMode === 'dark' ? '深色' : themeMode === 'light' ? '亮色' : 'Cyberpunk'})
+              切換模式 ({
+                themeMode === 'dark' ? '深色' :
+                  themeMode === 'light' ? '亮色' :
+                    themeMode === 'cyberpunk' ? 'Cyberpunk' :
+                      themeMode === 'matrix' ? 'Matrix' :
+                        themeMode === 'synthwave' ? 'Synthwave' :
+                          themeMode === 'nord' ? 'Nord' : 'Dracula'
+              })
             </div>
           </div>
 
