@@ -140,25 +140,7 @@ export default function ModelInspector({
     }, [model]);
 
     const toggleMeshVisibility = (mesh: THREE.Mesh) => {
-        // 如果沒有 userData.isDimmed，初始化為 false (預設是顯示的，所以 dimmed 是 false)
-        // 這裡我們反轉邏輯：isDimmed = true 代表半透明
-        const isDimmed = mesh.userData.isDimmed || false;
-        const newDimmed = !isDimmed;
-
-        mesh.userData.isDimmed = newDimmed;
-
-        const applyOpacity = (material: THREE.Material) => {
-            material.transparent = newDimmed;
-            material.opacity = newDimmed ? 0.1 : 1.0;
-            material.needsUpdate = true;
-        };
-
-        if (Array.isArray(mesh.material)) {
-            mesh.material.forEach(applyOpacity);
-        } else if (mesh.material) {
-            applyOpacity(mesh.material as THREE.Material);
-        }
-
+        mesh.visible = !mesh.visible;
         setUpdateCounter(prev => prev + 1);
     };
 
@@ -250,17 +232,17 @@ export default function ModelInspector({
                             <div className="text-gray-500 text-sm text-center mt-4">無 Mesh 資料</div>
                         ) : (
                             meshes.map(mesh => {
-                                const isDimmed = mesh.userData.isDimmed || false;
+                                const isVisible = mesh.visible;
                                 return (
                                     <div key={mesh.uuid}
                                         className="flex items-center justify-between hover:bg-gray-700 p-2 rounded cursor-pointer"
                                         onClick={() => toggleMeshVisibility(mesh)}
                                     >
                                         <div className="flex items-center gap-2 overflow-hidden">
-                                            <button className={`text-gray-400 hover:text-white ${!isDimmed ? 'text-blue-400' : ''}`}>
-                                                {!isDimmed ? <CheckSquare size={16} /> : <Square size={16} />}
+                                            <button className={`text-gray-400 hover:text-white ${isVisible ? 'text-blue-400' : ''}`}>
+                                                {isVisible ? <CheckSquare size={16} /> : <Square size={16} />}
                                             </button>
-                                            <span className={`text-sm truncate ${isDimmed ? 'text-gray-500' : 'text-gray-300'}`} title={mesh.name}>
+                                            <span className={`text-sm truncate ${!isVisible ? 'text-gray-500' : 'text-gray-300'}`} title={mesh.name}>
                                                 {mesh.name || 'Unnamed Mesh'}
                                             </span>
                                         </div>
