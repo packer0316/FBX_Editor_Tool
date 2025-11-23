@@ -18,3 +18,11 @@ export interface ShaderFeature {
     expanded: boolean;
     params: Record<string, any>;
 }
+
+export interface ShaderGroup {
+    id: string;
+    name: string;
+    features: ShaderFeature[];
+    selectedMeshes: string[]; // mesh names
+    expanded: boolean;
+}

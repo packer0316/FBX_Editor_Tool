@@ -9,7 +9,7 @@ import MaterialShaderTool from './components/MaterialShaderTool';
 import ModelInspector from './components/ModelInspector';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { Loader2 } from 'lucide-react';
-import type { ShaderFeature } from './types/shaderTypes';
+import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -43,7 +43,8 @@ function App() {
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
 
   // Shader 功能狀態
-  const [shaderFeatures, setShaderFeatures] = useState<ShaderFeature[]>([]);
+  const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
+  const [meshNames, setMeshNames] = useState<string[]>([]);
 
   // 處理檔案上傳
   const handleFileUpload = async (files: FileList) => {
@@ -171,6 +172,28 @@ function App() {
       });
 
       console.log('[Animations]', object.animations);
+
+      // 提取所有 mesh 名稱
+      const meshes: string[] = [];
+      object.traverse((child) => {
+        if (child.type === 'SkinnedMesh' || child.type === 'Mesh') {
+          meshes.push(child.name);
+        }
+      });
+      console.log('[Meshes]', meshes);
+      setMeshNames(meshes);
+
+      // 初始化第一組 shader 配置（包含所有 mesh）
+      if (shaderGroups.length === 0 && meshes.length > 0) {
+        const defaultGroup: ShaderGroup = {
+          id: `group_${Date.now()}`,
+          name: '組合 1',
+          features: [],
+          selectedMeshes: meshes, // 預設選擇所有 mesh
+          expanded: true,
+        };
+        setShaderGroups([defaultGroup]);
+      }
 
       setModel(object);
 
@@ -608,7 +631,7 @@ function App() {
                 model={model}
                 playingClip={optimizedClip}
                 onTimeUpdate={handleTimeUpdate}
-                shaderFeatures={shaderFeatures}
+                shaderGroups={shaderGroups}
                 loop={!isPlaylistPlaying}
                 onFinish={handleClipFinish}
                 backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
@@ -711,8 +734,9 @@ function App() {
             {activeTab === 'shader' && (
               <MaterialShaderTool
                 fileName={file?.name || null}
-                features={shaderFeatures}
-                onFeaturesChange={setShaderFeatures}
+                shaderGroups={shaderGroups}
+                meshNames={meshNames}
+                onGroupsChange={setShaderGroups}
               />
             )}
           </div>

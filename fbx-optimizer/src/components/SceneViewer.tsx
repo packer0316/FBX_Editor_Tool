@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react
 import { Canvas, useFrame } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
-import type { ShaderFeature } from '../types/shaderTypes';
+import type { ShaderFeature, ShaderGroup } from '../types/shaderTypes';
 
 export interface SceneViewerRef {
     play: () => void;
@@ -16,7 +16,7 @@ interface SceneViewerProps {
     model: THREE.Group | null;
     playingClip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
-    shaderFeatures: ShaderFeature[];
+    shaderGroups: ShaderGroup[];
     loop?: boolean;
     onFinish?: () => void;
     backgroundColor?: string;
@@ -26,13 +26,13 @@ type ModelProps = {
     model: THREE.Group;
     clip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
-    shaderFeatures: ShaderFeature[];
+    shaderGroups: ShaderGroup[];
     loop?: boolean;
     onFinish?: () => void;
 };
 
 const Model = forwardRef<SceneViewerRef, ModelProps>(
-    ({ model, clip, onTimeUpdate, shaderFeatures, loop = true, onFinish }, ref) => {
+    ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
@@ -147,19 +147,33 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     child.userData.originalMaterial = child.material;
                 }
 
-                // Separate Base Matcap and Additive Matcap
-                const baseMatcapFeature = shaderFeatures.find(
-                    (f) => f.type === 'matcap' && f.params.texture
-                );
-                const addMatcapFeature = shaderFeatures.find(
-                    (f) => f.type === 'matcap_add' && f.params.texture
+                // 找到包含此 mesh 的組
+                const meshGroup = shaderGroups.find(group =>
+                    group.selectedMeshes.includes(child.name)
                 );
 
-                const rimLightFeature = shaderFeatures.find(f => f.type === 'rim_light');
-                const flashFeature = shaderFeatures.find(f => f.type === 'flash');
-                const dissolveFeature = shaderFeatures.find(f => f.type === 'dissolve');
-                const alphaTestFeature = shaderFeatures.find(f => f.type === 'alpha_test');
-                const normalMapFeature = shaderFeatures.find(f => f.type === 'normal_map');
+                // 如果沒有組包含此 mesh，恢復原始材質
+                if (!meshGroup) {
+                    child.material = child.userData.originalMaterial;
+                    return;
+                }
+
+                // 從該組的 features 中提取各種效果
+                const shaderFeatures = meshGroup.features;
+
+                // Separate Base Matcap and Additive Matcap
+                const baseMatcapFeature = shaderFeatures.find(
+                    (f: ShaderFeature) => f.type === 'matcap' && f.params.texture
+                );
+                const addMatcapFeature = shaderFeatures.find(
+                    (f: ShaderFeature) => f.type === 'matcap_add' && f.params.texture
+                );
+
+                const rimLightFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'rim_light');
+                const flashFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'flash');
+                const dissolveFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'dissolve');
+                const alphaTestFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'alpha_test');
+                const normalMapFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'normal_map');
 
                 const shouldUseShader = baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
 
@@ -666,7 +680,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     }
                 }
             });
-        }, [model, shaderFeatures]);
+        }, [model, shaderGroups]);
 
         if (!model) return null;
         return <primitive object={model} scale={0.01} />;
@@ -674,7 +688,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderFeatures, loop, onFinish, backgroundColor = '#111827' }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827' }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -693,7 +707,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             model={model}
                             clip={playingClip}
                             onTimeUpdate={onTimeUpdate}
-                            shaderFeatures={shaderFeatures}
+                            shaderGroups={shaderGroups}
                             loop={loop}
                             onFinish={onFinish}
                         />

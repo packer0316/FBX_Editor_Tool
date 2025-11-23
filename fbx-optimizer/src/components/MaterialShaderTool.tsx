@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Lock, GripVertical } from 'lucide-react';
-import type { ShaderFeature, ShaderFeatureType } from '../types/shaderTypes';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2 } from 'lucide-react';
+import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../types/shaderTypes';
 
 interface MaterialShaderToolProps {
     fileName: string | null;
-    features: ShaderFeature[];
-    onFeaturesChange: (features: ShaderFeature[]) => void;
+    shaderGroups: ShaderGroup[];
+    meshNames: string[];
+    onGroupsChange: (groups: ShaderGroup[]) => void;
 }
 
 // 可用的 Shader 功能列表
@@ -123,56 +124,78 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
 // 參數中文標籤映射
 const getParamLabel = (paramName: string): string => {
     const labels: Record<string, string> = {
-        // Texture parameters
         'texture': '貼圖',
         'maskTexture': '遮罩貼圖',
-
-        // Matcap parameters
         'progress': '混合程度',
         'strength': '強度',
-
-        // Rim Light parameters
         'power': '邊緣銳利度',
         'intensity': '強度',
-
-        // Flash parameters
         'speed': '速度',
         'width': '寬度',
         'reverse': '反向',
-
-        // Dissolve parameters
         'threshold': '溶解閾值',
         'edgeWidth': '邊緣寬度',
         'color1': '顏色1',
         'color2': '顏色2',
-
-        // Color parameters
         'color': '顏色',
-
-        // Normal Map parameters
         'rotateDelta': '旋轉角度',
     };
 
     return labels[paramName] || paramName;
 };
 
-export default function MaterialShaderTool({ fileName: _fileName, features, onFeaturesChange }: MaterialShaderToolProps) {
-    const [showFeatureMenu, setShowFeatureMenu] = useState(false);
+export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange }: MaterialShaderToolProps) {
+    const [showFeatureMenu, setShowFeatureMenu] = useState<{ groupId: string } | null>(null);
+    const [showMeshMenu, setShowMeshMenu] = useState<string | null>(null);
 
-    // Local state for drag and drop to support live reordering without committing to parent
-    const [localFeatures, setLocalFeatures] = useState<ShaderFeature[]>(features);
-    const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
-    const dragNodeRef = useRef<HTMLDivElement | null>(null);
+    const meshMenuRef = useRef<HTMLDivElement>(null);
+    const featureMenuRef = useRef<HTMLDivElement>(null);
 
-    // Sync local features with props when not dragging
+    // 點擊外部關閉選單
     useEffect(() => {
-        if (draggedIndex === null) {
-            setLocalFeatures(features);
-        }
-    }, [features, draggedIndex]);
+        const handleClickOutside = (event: MouseEvent) => {
+            // 關閉 Mesh 選單
+            if (meshMenuRef.current && !meshMenuRef.current.contains(event.target as Node)) {
+                setShowMeshMenu(null);
+            }
+            // 關閉功能選單
+            if (featureMenuRef.current && !featureMenuRef.current.contains(event.target as Node)) {
+                setShowFeatureMenu(null);
+            }
+        };
 
-    // 添加功能
-    const addFeature = (featureTemplate: typeof AVAILABLE_FEATURES[0]) => {
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, []);
+
+    // 添加新組合
+    const addGroup = () => {
+        const newGroup: ShaderGroup = {
+            id: `group_${Date.now()}`,
+            name: `組合 ${shaderGroups.length + 1}`,
+            features: [],
+            selectedMeshes: [],
+            expanded: true,
+        };
+        onGroupsChange([...shaderGroups, newGroup]);
+    };
+
+    // 刪除組合
+    const removeGroup = (groupId: string) => {
+        onGroupsChange(shaderGroups.filter(g => g.id !== groupId));
+    };
+
+    // 切換組合展開/收起
+    const toggleGroupExpanded = (groupId: string) => {
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId ? { ...g, expanded: !g.expanded } : g
+        ));
+    };
+
+    // 添加功能到組合
+    const addFeatureToGroup = (groupId: string, featureTemplate: typeof AVAILABLE_FEATURES[0]) => {
         const newFeature: ShaderFeature = {
             id: `${featureTemplate.type}_${Date.now()}`,
             ...featureTemplate,
@@ -180,108 +203,97 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
             params: getDefaultParams(featureTemplate.type),
         };
 
-        let newFeatures = [...features];
+        onGroupsChange(shaderGroups.map(g => {
+            if (g.id !== groupId) return g;
 
-        if (newFeature.type === 'normal_map') {
-            newFeatures = newFeatures.filter(f => f.type !== 'normal_map');
-            newFeatures.unshift(newFeature);
-        } else {
-            newFeatures.push(newFeature);
-        }
+            let newFeatures = [...g.features];
 
-        const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
-        if (normalMapIndex > 0) {
-            const [normalMap] = newFeatures.splice(normalMapIndex, 1);
-            newFeatures.unshift(normalMap);
-        }
+            if (newFeature.type === 'normal_map') {
+                newFeatures = newFeatures.filter(f => f.type !== 'normal_map');
+                newFeatures.unshift(newFeature);
+            } else {
+                newFeatures.push(newFeature);
+            }
 
-        onFeaturesChange(newFeatures);
-        setShowFeatureMenu(false);
+            const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
+            if (normalMapIndex > 0) {
+                const [normalMap] = newFeatures.splice(normalMapIndex, 1);
+                newFeatures.unshift(normalMap);
+            }
+
+            return { ...g, features: newFeatures };
+        }));
+
+        setShowFeatureMenu(null);
     };
 
-    // 移除功能
-    const removeFeature = (id: string) => {
-        onFeaturesChange(features.filter(f => f.id !== id));
-    };
-
-    // 切換展開/收起
-    const toggleExpanded = (id: string) => {
-        onFeaturesChange(features.map(f =>
-            f.id === id ? { ...f, expanded: !f.expanded } : f
+    // 從組合移除功能
+    const removeFeatureFromGroup = (groupId: string, featureId: string) => {
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId
+                ? { ...g, features: g.features.filter(f => f.id !== featureId) }
+                : g
         ));
     };
 
-    // 更新參數
-    const updateParam = (id: string, paramName: string, value: any) => {
-        onFeaturesChange(features.map(f =>
-            f.id === id
-                ? { ...f, params: { ...f.params, [paramName]: value } }
-                : f
+    // 切換功能展開/收起
+    const toggleFeatureExpanded = (groupId: string, featureId: string) => {
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId
+                ? {
+                    ...g,
+                    features: g.features.map(f =>
+                        f.id === featureId ? { ...f, expanded: !f.expanded } : f
+                    )
+                }
+                : g
         ));
     };
 
-    // --- Drag and Drop Logic ---
-
-    const handleDragStart = (e: React.DragEvent, index: number) => {
-        e.stopPropagation(); // Prevent triggering global drag handlers
-        if (localFeatures[index].type === 'normal_map') {
-            e.preventDefault();
-            return;
-        }
-
-        e.dataTransfer.effectAllowed = 'move';
-        // We rely on default browser behavior for the drag image (snapshot of the element)
-        // But we delay setting the state to ensure the snapshot is taken BEFORE we turn it into a placeholder
-        setTimeout(() => {
-            setDraggedIndex(index);
-        }, 0);
+    // 更新功能參數
+    const updateFeatureParam = (groupId: string, featureId: string, paramName: string, value: any) => {
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId
+                ? {
+                    ...g,
+                    features: g.features.map(f =>
+                        f.id === featureId
+                            ? { ...f, params: { ...f.params, [paramName]: value } }
+                            : f
+                    )
+                }
+                : g
+        ));
     };
 
-    const handleDragEnter = (e: React.DragEvent, targetIndex: number) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (draggedIndex === null || draggedIndex === targetIndex) return;
-
-        // Prevent interacting with Normal Map at index 0
-        if (targetIndex === 0 && localFeatures[0].type === 'normal_map') return;
-
-        // Perform the swap in local state
-        const newLocalFeatures = [...localFeatures];
-        const draggedItem = newLocalFeatures[draggedIndex];
-
-        // Remove from old position
-        newLocalFeatures.splice(draggedIndex, 1);
-        // Insert at new position
-        newLocalFeatures.splice(targetIndex, 0, draggedItem);
-
-        setLocalFeatures(newLocalFeatures);
-        setDraggedIndex(targetIndex); // Update dragged index to track the item
+    // 切換 mesh 選擇
+    const toggleMeshSelection = (groupId: string, meshName: string) => {
+        onGroupsChange(shaderGroups.map(g => {
+            if (g.id === groupId) {
+                const isSelected = g.selectedMeshes.includes(meshName);
+                return {
+                    ...g,
+                    selectedMeshes: isSelected
+                        ? g.selectedMeshes.filter(m => m !== meshName)
+                        : [...g.selectedMeshes, meshName]
+                };
+            } else {
+                // 從其他組移除這個 mesh
+                return {
+                    ...g,
+                    selectedMeshes: g.selectedMeshes.filter(m => m !== meshName)
+                };
+            }
+        }));
     };
 
-    const handleDragOver = (e: React.DragEvent) => {
-        e.preventDefault(); // Necessary to allow dropping
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (draggedIndex !== null) {
-            // Commit the final order to the parent
-            onFeaturesChange(localFeatures);
-            setDraggedIndex(null);
-        }
-    };
-
-    const handleDragEnd = (e: React.DragEvent) => {
-        e.stopPropagation();
-        setDraggedIndex(null);
-        // If cancelled, localFeatures will sync back to props via useEffect
+    // 檢查 mesh 是否被其他組使用
+    const isMeshUsedByOtherGroup = (groupId: string, meshName: string): boolean => {
+        return shaderGroups.some(g => g.id !== groupId && g.selectedMeshes.includes(meshName));
     };
 
     // 渲染參數控制項
-    const renderParamControl = (feature: ShaderFeature, paramName: string, value: any) => {
+    const renderParamControl = (groupId: string, feature: ShaderFeature, paramName: string, value: any) => {
         const commonInputClass = "w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500";
 
         // 貼圖參數
@@ -298,21 +310,21 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                             type="file"
                             accept="image/*"
                             className="hidden"
-                            id={`${feature.id}_${paramName}`}
+                            id={`${groupId}_${feature.id}_${paramName}`}
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
-                                if (file) updateParam(feature.id, paramName, file);
+                                if (file) updateFeatureParam(groupId, feature.id, paramName, file);
                             }}
                         />
                         <label
-                            htmlFor={`${feature.id}_${paramName}`}
+                            htmlFor={`${groupId}_${feature.id}_${paramName}`}
                             className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-gray-400 cursor-pointer hover:border-purple-500 transition-colors text-center"
                         >
                             {value ? value.name : '選擇貼圖...'}
                         </label>
                         {value && (
                             <button
-                                onClick={() => updateParam(feature.id, paramName, null)}
+                                onClick={() => updateFeatureParam(groupId, feature.id, paramName, null)}
                                 className="px-2 py-1 bg-red-600/20 border border-red-600 rounded text-red-400 hover:bg-red-600/30 transition-colors"
                             >
                                 <X size={14} />
@@ -333,13 +345,13 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                         <input
                             type="color"
                             value={value}
-                            onChange={(e) => updateParam(feature.id, paramName, e.target.value)}
+                            onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.value)}
                             className="w-12 h-8 bg-gray-700 border border-gray-600 rounded cursor-pointer"
                         />
                         <input
                             type="text"
                             value={value}
-                            onChange={(e) => updateParam(feature.id, paramName, e.target.value)}
+                            onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.value)}
                             className={commonInputClass}
                         />
                     </div>
@@ -351,10 +363,8 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
         if (typeof value === 'number') {
             let min = 0, max = 1, step = 0.01;
 
-            // 根據參數名稱設定範圍
             if (paramName === 'power') { min = 0.1; max = 10; step = 0.1; }
             else if (paramName === 'intensity' || paramName === 'strength') { min = 0; max = 5; step = 0.1; }
-
             else if (paramName === 'speed') { min = 0; max = 5; step = 0.1; }
             else if (paramName === 'width') { min = 0.1; max = 1.0; step = 0.05; }
             else if (paramName === 'threshold') { min = 0; max = 1; step = 0.01; }
@@ -377,7 +387,7 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                         max={max}
                         step={step}
                         value={value}
-                        onChange={(e) => updateParam(feature.id, paramName, parseFloat(e.target.value))}
+                        onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, parseFloat(e.target.value))}
                         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-purple"
                     />
                 </div>
@@ -393,7 +403,7 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                         <input
                             type="checkbox"
                             checked={value}
-                            onChange={(e) => updateParam(feature.id, paramName, e.target.checked)}
+                            onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.checked)}
                             className="w-4 h-4 bg-gray-700 border-2 border-gray-600 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
                         />
                         <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
@@ -408,135 +418,160 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
     };
 
     return (
-        <div className="space-y-4 h-full flex flex-col">
-            {/* 標題 */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-700">
-                <div className="flex items-center gap-2">
-                    <Palette className="text-purple-400" size={24} />
-                    <h2 className="text-lg font-bold text-white">Material Shader 工具</h2>
-                </div>
-                <div className="text-xs text-gray-500">
-                    {features.length} 個功能
-                </div>
+        <div className="h-full flex flex-col bg-gray-800">
+            {/* Header */}
+            <div className="p-4 border-b border-gray-700 flex items-center gap-2">
+                <Palette className="text-purple-400" size={20} />
+                <h2 className="text-white font-semibold">Material Shader 工具</h2>
             </div>
 
-            {/* 功能字卡列表 */}
-            <div className="flex-1 overflow-y-auto space-y-2 pr-1">
-                {localFeatures.length === 0 ? (
-                    <div className="bg-gray-900/50 rounded-lg p-8 border border-gray-700 text-center">
-                        <Palette size={48} className="text-purple-400 opacity-50 mx-auto mb-4" />
-                        <p className="text-gray-400 mb-2">尚未添加任何功能</p>
-                        <p className="text-sm text-gray-500">點擊下方 + 按鈕開始添加</p>
-                    </div>
-                ) : (
-                    localFeatures.map((feature, index) => (
-                        <div
-                            key={feature.id}
-                            onDragEnter={(e) => handleDragEnter(e, index)}
-                            onDragOver={handleDragOver}
-                            onDrop={handleDrop}
-                            className={`
-                                bg-gray-900/50 border rounded-lg overflow-hidden transition-all duration-200
-                                ${draggedIndex === index ? 'border-2 border-dashed border-gray-600 bg-transparent opacity-50' : 'border-gray-700 hover:border-purple-500/50'}
-                                ${feature.type === 'normal_map' ? 'border-l-4 border-l-blue-500' : ''}
-                            `}
-                        >
-                            {/* Hide content if dragged to simulate "hole" */}
-                            <div className={draggedIndex === index ? 'opacity-0' : ''}>
-                                {/* 字卡標題 */}
-                                <div
-                                    draggable={feature.type !== 'normal_map'}
-                                    onDragStart={(e) => handleDragStart(e, index)}
-                                    onDragEnd={handleDragEnd}
-                                    className="flex items-center justify-between p-3 bg-gray-800/50 cursor-move"
+            {/* Groups List */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                {shaderGroups.map((group, groupIndex) => (
+                    <div key={group.id} className="bg-gray-700/50 rounded-lg border border-gray-600">
+                        {/* Group Header */}
+                        <div className="p-3 flex items-center gap-2 border-b border-gray-600">
+                            <button
+                                onClick={() => toggleGroupExpanded(group.id)}
+                                className="text-gray-400 hover:text-white transition-colors"
+                            >
+                                {group.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                            </button>
+                            <span className="flex-1 text-white font-medium">{group.name}</span>
+                            <span className="text-xs text-gray-400">({group.selectedMeshes.length} meshes)</span>
+
+                            {/* Mesh Selection Dropdown */}
+                            <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
+                                <button
+                                    onClick={() => setShowMeshMenu(showMeshMenu === group.id ? null : group.id)}
+                                    className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition-colors"
                                 >
-                                    <div className="flex items-center gap-2 flex-1">
-                                        {/* Drag Handle / Lock Icon */}
-                                        {feature.type === 'normal_map' ? (
-                                            <Lock size={14} className="text-blue-400 mr-1" />
+                                    Mesh 選單 ▼
+                                </button>
+                                {showMeshMenu === group.id && (
+                                    <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                        {meshNames.length === 0 ? (
+                                            <div className="p-3 text-gray-400 text-sm">沒有可用的 mesh</div>
                                         ) : (
-                                            <GripVertical size={16} className="text-gray-600 cursor-grab active:cursor-grabbing mr-1" />
-                                        )}
+                                            meshNames.map(meshName => {
+                                                const isSelected = group.selectedMeshes.includes(meshName);
+                                                const isUsedByOther = isMeshUsedByOtherGroup(group.id, meshName);
 
-                                        <button
-                                            onClick={() => toggleExpanded(feature.id)}
-                                            className="text-gray-400 hover:text-white transition-colors"
-                                        >
-                                            {feature.expanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-                                        </button>
-                                        <span className="text-xl">{feature.icon}</span>
-                                        <div className="flex-1">
-                                            <div className="font-medium text-white flex items-center gap-2">
-                                                {feature.name}
-                                                {feature.type === 'normal_map' && (
-                                                    <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.5 rounded">Fixed</span>
-                                                )}
-                                            </div>
-                                            {!feature.expanded && (
-                                                <div className="text-xs text-gray-500">{feature.description}</div>
-                                            )}
-                                        </div>
-                                        <div className="text-xs text-gray-500 bg-gray-700 px-2 py-1 rounded">
-                                            #{index + 1}
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => removeFeature(feature.id)}
-                                        className="ml-2 p-1 text-gray-500 hover:text-red-400 hover:bg-red-500/10 rounded transition-colors"
-                                    >
-                                        <X size={16} />
-                                    </button>
-                                </div>
-
-                                {/* 展開的參數區域 */}
-                                {feature.expanded && (
-                                    <div className="p-3 space-y-3 border-t border-gray-700">
-                                        <p className="text-xs text-gray-400 italic">{feature.description}</p>
-                                        {Object.entries(feature.params).map(([paramName, value]) =>
-                                            renderParamControl(feature, paramName, value)
+                                                return (
+                                                    <label
+                                                        key={meshName}
+                                                        className={`flex items-center gap-2 p-2 hover:bg-gray-700 cursor-pointer ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            disabled={isUsedByOther && !isSelected}
+                                                            onChange={() => toggleMeshSelection(group.id, meshName)}
+                                                            className="w-4 h-4"
+                                                        />
+                                                        <span className="text-sm text-white flex-1">{meshName}</span>
+                                                        {isSelected && <Check size={14} className="text-green-400" />}
+                                                        {isUsedByOther && !isSelected && (
+                                                            <span className="text-xs text-gray-400">(已使用)</span>
+                                                        )}
+                                                    </label>
+                                                );
+                                            })
                                         )}
                                     </div>
                                 )}
                             </div>
+
+                            {/* Delete Group Button (except first group) */}
+                            {groupIndex > 0 && (
+                                <button
+                                    onClick={() => removeGroup(group.id)}
+                                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                >
+                                    <Trash2 size={16} />
+                                </button>
+                            )}
                         </div>
-                    ))
-                )}
+
+                        {/* Group Content */}
+                        {group.expanded && (
+                            <div className="p-3 space-y-3">
+                                {/* Features List */}
+                                {group.features.map(feature => (
+                                    <div key={feature.id} className="bg-gray-800 rounded-lg border border-gray-600">
+                                        <div className="p-2 flex items-center gap-2 border-b border-gray-600">
+                                            <button
+                                                onClick={() => toggleFeatureExpanded(group.id, feature.id)}
+                                                className="text-gray-400 hover:text-white transition-colors"
+                                            >
+                                                {feature.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                            </button>
+                                            <span className="text-lg">{feature.icon}</span>
+                                            <span className="flex-1 text-white text-sm font-medium">{feature.name}</span>
+                                            <button
+                                                onClick={() => removeFeatureFromGroup(group.id, feature.id)}
+                                                className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+
+                                        {feature.expanded && (
+                                            <div className="p-3 space-y-2">
+                                                <p className="text-xs text-gray-400 mb-2">{feature.description}</p>
+                                                {Object.entries(feature.params).map(([paramName, value]) =>
+                                                    renderParamControl(group.id, feature, paramName, value)
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))}
+
+                                {/* Add Feature Button */}
+                                <div className="relative" ref={showFeatureMenu?.groupId === group.id ? featureMenuRef : null}>
+                                    <button
+                                        onClick={() => setShowFeatureMenu(showFeatureMenu?.groupId === group.id ? null : { groupId: group.id })}
+                                        className="w-full py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600 rounded text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                    >
+                                        <Plus size={16} />
+                                        添加功能
+                                    </button>
+
+                                    {showFeatureMenu?.groupId === group.id && (
+                                        <div className="absolute left-0 top-full mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                            {AVAILABLE_FEATURES.map(feature => (
+                                                <button
+                                                    key={feature.type}
+                                                    onClick={() => addFeatureToGroup(group.id, feature)}
+                                                    className="w-full p-3 hover:bg-gray-700 text-left transition-colors border-b border-gray-700 last:border-b-0"
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xl">{feature.icon}</span>
+                                                        <div className="flex-1">
+                                                            <div className="text-white text-sm font-medium">{feature.name}</div>
+                                                            <div className="text-gray-400 text-xs">{feature.description}</div>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ))}
             </div>
 
-            {/* 添加功能按鈕 */}
-            <div className="relative pt-3 border-t border-gray-700">
+            {/* Add Group Button */}
+            <div className="p-4 border-t border-gray-700">
                 <button
-                    onClick={() => setShowFeatureMenu(!showFeatureMenu)}
-                    className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg flex items-center justify-center gap-2 transition-colors font-medium"
+                    onClick={addGroup}
+                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
                 >
                     <Plus size={20} />
-                    添加功能
+                    添加組合
                 </button>
-
-                {/* 功能選單 */}
-                {showFeatureMenu && (
-                    <>
-                        <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setShowFeatureMenu(false)}
-                        />
-                        <div className="absolute bottom-full left-0 right-0 mb-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-20 max-h-80 overflow-y-auto">
-                            {AVAILABLE_FEATURES.map((feature) => (
-                                <button
-                                    key={feature.type}
-                                    onClick={() => addFeature(feature)}
-                                    className="w-full px-4 py-3 text-left hover:bg-gray-700 transition-colors border-b border-gray-700 last:border-b-0 flex items-center gap-3"
-                                >
-                                    <span className="text-2xl">{feature.icon}</span>
-                                    <div className="flex-1">
-                                        <div className="font-medium text-white">{feature.name}</div>
-                                        <div className="text-xs text-gray-400">{feature.description}</div>
-                                    </div>
-                                </button>
-                            ))}
-                        </div>
-                    </>
-                )}
             </div>
         </div>
     );
