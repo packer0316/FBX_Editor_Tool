@@ -276,6 +276,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             flashIntensity: { value: 0.0 },
                             flashSpeed: { value: 1.0 },
                             flashWidth: { value: 0.5 },
+                            flashReverse: { value: 0.0 },
                             useFlash: { value: 0.0 },
 
                             // Dissolve
@@ -352,6 +353,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 uniform float flashIntensity;
                                 uniform float flashSpeed;
                                 uniform float flashWidth;
+                                uniform float flashReverse;
                                 uniform float useFlash;
 
                                 // Dissolve
@@ -493,6 +495,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
                                         float t = mod(uTime * flashSpeed, 1.0);
                                         
+                                        // Reverse direction if flashReverse is enabled
+                                        if (flashReverse > 0.5) {
+                                            t = 1.0 - t;
+                                        }
+                                        
                                         // Calculate offset based on Green channel (Direction/Time)
                                         // This creates the animated sweep across the model
                                         float offset = abs(mod(maskColor.g - t, 1.0));
@@ -580,6 +587,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.flashIntensity.value = flashFeature.params.intensity ?? 1.0;
                         shaderMat.uniforms.flashSpeed.value = flashFeature.params.speed ?? 1.0;
                         shaderMat.uniforms.flashWidth.value = flashFeature.params.width ?? 0.5;
+                        shaderMat.uniforms.flashReverse.value = flashFeature.params.reverse ? 1.0 : 0.0;
                     } else {
                         shaderMat.uniforms.useFlash.value = 0.0;
                     }

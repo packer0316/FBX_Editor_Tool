@@ -109,6 +109,7 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 intensity: 1.0,
                 speed: 1.5,
                 width: 0.5,
+                reverse: false,
             };
         case 'alpha_test':
             return {
@@ -340,6 +341,25 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
                         onChange={(e) => updateParam(feature.id, paramName, parseFloat(e.target.value))}
                         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-purple"
                     />
+                </div>
+            );
+        }
+
+        // Boolean 參數（Checkbox）
+        if (typeof value === 'boolean') {
+            return (
+                <div key={paramName} className="space-y-1">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                            type="checkbox"
+                            checked={value}
+                            onChange={(e) => updateParam(feature.id, paramName, e.target.checked)}
+                            className="w-4 h-4 bg-gray-700 border-2 border-gray-600 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                        />
+                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
+                            {paramName}
+                        </span>
+                    </label>
                 </div>
             );
         }
