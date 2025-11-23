@@ -28,7 +28,20 @@ interface ModelInspectorProps {
 const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?: number; expandAll?: boolean }) => {
     const [expanded, setExpanded] = useState(expandAll ?? true);
     const [visible, setVisible] = useState(bone.visible);
-    const hasChildren = bone.children.some(c => c.type === 'Bone');
+
+    // Helper to check if a child is part of the skeleton hierarchy
+    const isSkeletonNode = (child: THREE.Object3D) => {
+        return (
+            child.type === 'Bone' ||
+            child.type === 'Object3D' ||
+            child.name.toLowerCase().includes('bone') ||
+            child.name.toLowerCase().includes('root') ||
+            child.name.toLowerCase().includes('bip') ||
+            child.name.toLowerCase().includes('dummy')
+        ) && !child.isMesh && !child.isSkinnedMesh;
+    };
+
+    const hasChildren = bone.children.some(isSkeletonNode);
 
     // 當 expandAll 改變時，更新 expanded 狀態
     useEffect(() => {
@@ -65,7 +78,7 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
             {expanded && hasChildren && (
                 <div>
                     {bone.children.map(child => (
-                        child.type === 'Bone' && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
+                        isSkeletonNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
                     ))}
                 </div>
             )}
@@ -120,11 +133,28 @@ export default function ModelInspector({
                 if ((child as THREE.Mesh).isMesh) {
                     meshList.push(child as THREE.Mesh);
                 }
-                if (child.type === 'Bone' && !root) {
+                if (
+                    (child.type === 'Bone' ||
+                        child.type === 'Object3D' ||
+                        child.parent?.type === 'Bone' ||
+                        child.name.toLowerCase().includes('bone') ||
+                        child.name.toLowerCase().includes('root') ||
+                        child.name.toLowerCase().includes('bip') ||
+                        child.name.toLowerCase().includes('dummy')) &&
+                    !root &&
+                    child !== model &&
+                    !child.isMesh &&
+                    !child.isSkinnedMesh
+                ) {
                     // 找到最上層的骨架 (通常是 RootNode 的子節點)
-                    // 往上找直到 parent 不是 Bone
+                    // 往上找直到 parent 不是 Bone 且不是上述類型
                     let current = child;
-                    while (current.parent && current.parent.type === 'Bone') {
+                    while (current.parent && (
+                        current.parent.type === 'Bone' ||
+                        current.parent.type === 'Object3D' ||
+                        current.parent.name.toLowerCase().includes('root') ||
+                        current.parent.name.toLowerCase().includes('dummy')
+                    ) && current.parent !== model) {
                         current = current.parent;
                     }
                     root = current;

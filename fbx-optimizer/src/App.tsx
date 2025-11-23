@@ -55,6 +55,41 @@ function App() {
     far: 1000
   });
 
+  // Bone Binding State
+  const [bones, setBones] = useState<THREE.Bone[]>([]);
+  const [boneSearchQuery, setBoneSearchQuery] = useState('');
+  const [selectedBoneUuid, setSelectedBoneUuid] = useState<string | null>(null);
+  const [isCameraBound, setIsCameraBound] = useState(false);
+
+  // Extract bones from model
+  useEffect(() => {
+    if (model) {
+      const foundBones: THREE.Object3D[] = [];
+      model.traverse((child) => {
+        // Include all Object3D that could be part of skeleton hierarchy
+        // This includes Bone, Object3D, and Group nodes that are part of the armature
+        if (child.type === 'Bone' ||
+          child.type === 'Object3D' ||
+          child.parent?.type === 'Bone' ||
+          child.name.toLowerCase().includes('bone') ||
+          child.name.toLowerCase().includes('root') ||
+          child.name.toLowerCase().includes('bip') ||
+          child.name.toLowerCase().includes('dummy')) {
+          // Exclude the model root itself and meshes
+          if (child !== model && !child.isMesh && !child.isSkinnedMesh) {
+            foundBones.push(child);
+          }
+        }
+      });
+      setBones(foundBones as THREE.Bone[]);
+      // Reset binding state when model changes
+      setSelectedBoneUuid(null);
+      setIsCameraBound(false);
+    } else {
+      setBones([]);
+    }
+  }, [model]);
+
   // Click outside to close camera settings
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -640,8 +675,8 @@ function App() {
           <div className="group relative" ref={cameraSettingsRef}>
             <button
               className={`p-3 rounded-lg transition-colors ${showCameraSettings
-                  ? 'bg-gray-800 text-white'
-                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                ? 'bg-gray-800 text-white'
+                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
                 }`}
               onClick={() => setShowCameraSettings(!showCameraSettings)}
             >
@@ -717,6 +752,86 @@ function App() {
                 >
                   重置預設值
                 </button>
+
+                {/* Bone Binding Section */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="text-xs font-semibold text-gray-400 mb-3">骨骼綁定</h4>
+
+                  {/* Bone Search */}
+                  <div className="mb-3">
+                    <input
+                      type="text"
+                      placeholder="搜尋骨骼..."
+                      value={boneSearchQuery}
+                      onChange={(e) => setBoneSearchQuery(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white text-xs focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+
+                  {/* Bone List */}
+                  <div className="max-h-40 overflow-y-auto mb-3 bg-gray-900 rounded border border-gray-600">
+                    {bones.length === 0 ? (
+                      <div className="p-3 text-xs text-gray-500 text-center">
+                        {model ? '此模型無骨骼' : '請先載入模型'}
+                      </div>
+                    ) : (
+                      bones
+                        .filter((bone) =>
+                          bone.name.toLowerCase().includes(boneSearchQuery.toLowerCase())
+                        )
+                        .map((bone) => (
+                          <div
+                            key={bone.uuid}
+                            onClick={() => setSelectedBoneUuid(bone.uuid)}
+                            className={`px-3 py-2 text-xs cursor-pointer transition-colors ${selectedBoneUuid === bone.uuid
+                              ? 'bg-blue-600 text-white'
+                              : 'text-gray-300 hover:bg-gray-700'
+                              }`}
+                          >
+                            {bone.name || '未命名骨骼'}
+                          </div>
+                        ))
+                    )}
+                  </div>
+
+                  {/* Bind/Unbind Controls */}
+                  <div className="flex gap-2">
+                    {!isCameraBound ? (
+                      <button
+                        onClick={() => {
+                          if (selectedBoneUuid) {
+                            setIsCameraBound(true);
+                          }
+                        }}
+                        disabled={!selectedBoneUuid}
+                        className={`flex-1 py-2 text-xs rounded transition-colors ${selectedBoneUuid
+                          ? 'bg-green-600 hover:bg-green-500 text-white'
+                          : 'bg-gray-700 text-gray-500 cursor-not-allowed'
+                          }`}
+                      >
+                        開始綁定
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setIsCameraBound(false);
+                          setSelectedBoneUuid(null);
+                        }}
+                        className="flex-1 py-2 text-xs bg-red-600 hover:bg-red-500 text-white rounded transition-colors"
+                      >
+                        取消綁定
+                      </button>
+                    )}
+                  </div>
+
+                  {isCameraBound && selectedBoneUuid && (
+                    <div className="mt-2 p-2 bg-green-900/30 border border-green-700 rounded">
+                      <p className="text-xs text-green-400">
+                        ✓ 相機已綁定到: {bones.find((b) => b.uuid === selectedBoneUuid)?.name}
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -737,6 +852,8 @@ function App() {
                 onFinish={handleClipFinish}
                 backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
                 cameraSettings={cameraSettings}
+                boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
+                isCameraBound={isCameraBound}
               />
             </div>
 

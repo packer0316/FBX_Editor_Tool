@@ -25,12 +25,23 @@ interface SceneViewerProps {
         near: number;
         far: number;
     };
+    boundBone?: THREE.Bone | null;
+    isCameraBound?: boolean;
 }
 
 // Camera Controller Component to update camera settings dynamically
-function CameraController({ cameraSettings }: { cameraSettings?: { fov: number; near: number; far: number } }) {
+function CameraController({
+    cameraSettings,
+    boundBone,
+    isCameraBound
+}: {
+    cameraSettings?: { fov: number; near: number; far: number };
+    boundBone?: THREE.Bone | null;
+    isCameraBound?: boolean;
+}) {
     const { camera } = useThree();
 
+    // Update camera settings
     useEffect(() => {
         if (cameraSettings && camera instanceof THREE.PerspectiveCamera) {
             camera.fov = cameraSettings.fov;
@@ -39,6 +50,15 @@ function CameraController({ cameraSettings }: { cameraSettings?: { fov: number; 
             camera.updateProjectionMatrix();
         }
     }, [cameraSettings, camera]);
+
+    // Camera bone binding - update camera position every frame
+    useFrame(() => {
+        if (isCameraBound && boundBone && camera) {
+            const boneWorldPos = new THREE.Vector3();
+            boundBone.getWorldPosition(boneWorldPos);
+            camera.position.copy(boneWorldPos);
+        }
+    });
 
     return null;
 }
@@ -709,7 +729,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -726,7 +746,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
-                    <CameraController cameraSettings={cameraSettings} />
+                    <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
                     <Grid infiniteGrid fadeDistance={30} sectionColor="#4a4a4a" cellColor="#2a2a2a" />
                     {model && (
                         <Model
