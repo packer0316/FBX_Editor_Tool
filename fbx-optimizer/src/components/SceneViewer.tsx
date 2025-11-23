@@ -99,7 +99,9 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 model.traverse((child) => {
                     if (child instanceof THREE.Mesh) {
                         child.castShadow = !!enableShadows;
-                        child.receiveShadow = !!enableShadows;
+                        // Disable self-shadowing to prevent the model from looking darker
+                        // The user only requested shadows on the ground
+                        child.receiveShadow = false;
                     }
                 });
             }
