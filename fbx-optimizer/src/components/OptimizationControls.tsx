@@ -57,12 +57,14 @@ export default function OptimizationControls({
                 <p className="text-[10px] text-gray-500 mt-1">
                     *若模型有外部貼圖，請同時選取 FBX 與貼圖檔
                 </p>
-                {fileName && (
-                    <div className="flex items-center gap-2 text-xs text-blue-300 mt-1">
-                        <FileBox className="w-3 h-3" />
-                        <span className="truncate">{fileName}</span>
-                    </div>
-                )}
+                {
+                    fileName && (
+                        <div className="flex items-center gap-2 text-xs text-blue-300 mt-1">
+                            <FileBox className="w-3 h-3" />
+                            <span className="truncate">{fileName}</span>
+                        </div>
+                    )
+                }
             </div>
 
             {/* 優化滑桿 */}

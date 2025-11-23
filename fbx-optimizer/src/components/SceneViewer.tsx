@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
-import { Canvas, useFrame } from '@react-three/fiber';
+import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../types/shaderTypes';
@@ -20,6 +20,27 @@ interface SceneViewerProps {
     loop?: boolean;
     onFinish?: () => void;
     backgroundColor?: string;
+    cameraSettings?: {
+        fov: number;
+        near: number;
+        far: number;
+    };
+}
+
+// Camera Controller Component to update camera settings dynamically
+function CameraController({ cameraSettings }: { cameraSettings?: { fov: number; near: number; far: number } }) {
+    const { camera } = useThree();
+
+    useEffect(() => {
+        if (cameraSettings && camera instanceof THREE.PerspectiveCamera) {
+            camera.fov = cameraSettings.fov;
+            camera.near = cameraSettings.near;
+            camera.far = cameraSettings.far;
+            camera.updateProjectionMatrix();
+        }
+    }, [cameraSettings, camera]);
+
+    return null;
 }
 
 type ModelProps = {
@@ -688,18 +709,24 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827' }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
                 style={{ backgroundColor }}
             >
-                <Canvas camera={{ position: [0, 2, 5], fov: 50 }}>
+                <Canvas camera={{
+                    position: [0, 2, 5],
+                    fov: cameraSettings?.fov || 50,
+                    near: cameraSettings?.near || 0.1,
+                    far: cameraSettings?.far || 1000
+                }}>
                     <ambientLight intensity={0.8} />
                     <hemisphereLight args={["#ffffff", "#444444", 0.6]} />
                     <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
+                    <CameraController cameraSettings={cameraSettings} />
                     <Grid infiniteGrid fadeDistance={30} sectionColor="#4a4a4a" cellColor="#2a2a2a" />
                     {model && (
                         <Model

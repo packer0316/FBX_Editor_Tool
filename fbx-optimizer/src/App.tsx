@@ -8,7 +8,7 @@ import OptimizationControls from './components/OptimizationControls';
 import MaterialShaderTool from './components/MaterialShaderTool';
 import ModelInspector from './components/ModelInspector';
 import { optimizeAnimationClip } from './utils/optimizer';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Camera } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 function App() {
@@ -45,6 +45,32 @@ function App() {
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
   const [meshNames, setMeshNames] = useState<string[]>([]);
+
+  // Camera Settings
+  const [showCameraSettings, setShowCameraSettings] = useState(false);
+  const cameraSettingsRef = useRef<HTMLDivElement>(null);
+  const [cameraSettings, setCameraSettings] = useState({
+    fov: 50,
+    near: 0.1,
+    far: 1000
+  });
+
+  // Click outside to close camera settings
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cameraSettingsRef.current && !cameraSettingsRef.current.contains(event.target as Node)) {
+        setShowCameraSettings(false);
+      }
+    };
+
+    if (showCameraSettings) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showCameraSettings]);
 
   // 處理檔案上傳
   const handleFileUpload = async (files: FileList) => {
@@ -610,14 +636,89 @@ function App() {
             </div>
           </div>
 
-          {/* Tool: Placeholder 1 */}
-          <div className="group relative">
-            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
-              <div className="w-5 h-5 border-2 border-dashed border-gray-500 rounded"></div>
+          {/* Tool: Camera Settings */}
+          <div className="group relative" ref={cameraSettingsRef}>
+            <button
+              className={`p-3 rounded-lg transition-colors ${showCameraSettings
+                  ? 'bg-gray-800 text-white'
+                  : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+              onClick={() => setShowCameraSettings(!showCameraSettings)}
+            >
+              <Camera size={20} />
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              預留工具 1
+              相機參數
             </div>
+
+            {/* Camera Settings Popover */}
+            {showCameraSettings && (
+              <div className="absolute left-full top-0 ml-4 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-4 z-50">
+                <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+                  <Camera size={16} className="text-blue-400" />
+                  相機參數
+                </h3>
+
+                {/* FOV Slider */}
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="text-xs text-gray-400">FOV (視野)</label>
+                    <span className="text-xs text-blue-400 font-mono">{cameraSettings.fov}°</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="10"
+                    max="120"
+                    step="1"
+                    value={cameraSettings.fov}
+                    onChange={(e) =>
+                      setCameraSettings({ ...cameraSettings, fov: parseFloat(e.target.value) })
+                    }
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                  />
+                </div>
+
+                {/* Near Plane Input */}
+                <div className="mb-4">
+                  <label className="text-xs text-gray-400 block mb-2">Near (近裁剪面)</label>
+                  <input
+                    type="number"
+                    min="0.01"
+                    max="10"
+                    step="0.01"
+                    value={cameraSettings.near}
+                    onChange={(e) =>
+                      setCameraSettings({ ...cameraSettings, near: parseFloat(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Far Plane Input */}
+                <div className="mb-4">
+                  <label className="text-xs text-gray-400 block mb-2">Far (遠裁剪面)</label>
+                  <input
+                    type="number"
+                    min="100"
+                    max="10000"
+                    step="10"
+                    value={cameraSettings.far}
+                    onChange={(e) =>
+                      setCameraSettings({ ...cameraSettings, far: parseFloat(e.target.value) })
+                    }
+                    className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white text-sm focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+
+                {/* Reset Button */}
+                <button
+                  onClick={() => setCameraSettings({ fov: 50, near: 0.1, far: 1000 })}
+                  className="w-full py-1 text-xs text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                >
+                  重置預設值
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -635,6 +736,7 @@ function App() {
                 loop={!isPlaylistPlaying}
                 onFinish={handleClipFinish}
                 backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
+                cameraSettings={cameraSettings}
               />
             </div>
 
