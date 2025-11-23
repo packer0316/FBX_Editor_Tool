@@ -31,6 +31,7 @@ interface SceneViewerProps {
     groundPlaneColor?: string;
     groundPlaneOpacity?: number;
     enableShadows?: boolean;
+    showGrid?: boolean;
 }
 
 // Camera Controller Component to update camera settings dynamically
@@ -764,7 +765,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -797,7 +798,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
                     <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
-                    <Grid args={[30, 30]} sectionColor="#4a4a4a" cellColor="#2a2a2a" side={THREE.DoubleSide} />
+                    {showGrid && <Grid args={[30, 30]} sectionColor="#4a4a4a" cellColor="#2a2a2a" side={THREE.DoubleSide} />}
 
                     {/* Ground Plane */}
                     {showGroundPlane && (

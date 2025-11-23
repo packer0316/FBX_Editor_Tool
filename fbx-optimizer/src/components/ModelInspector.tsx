@@ -126,8 +126,9 @@ export default function ModelInspector({
 
     // 新增動作片段的狀態
     const [newClipName, setNewClipName] = useState('');
-    const [startFrame, setStartFrame] = useState(0);
-    const [endFrame, setEndFrame] = useState(0);
+    // 使用字串方便讓使用者可以把「0」完全刪掉再輸入
+    const [startFrame, setStartFrame] = useState<string>('');
+    const [endFrame, setEndFrame] = useState<string>('');
 
     // Drag and Drop state for playlist
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
@@ -188,12 +189,23 @@ export default function ModelInspector({
             alert('請輸入動作名稱');
             return;
         }
-        if (startFrame >= endFrame) {
+
+        const start = parseInt(startFrame, 10);
+        const end = parseInt(endFrame, 10);
+
+        if (Number.isNaN(start) || Number.isNaN(end)) {
+            alert('請輸入起始與結束幀');
+            return;
+        }
+
+        if (start >= end) {
             alert('結束幀必須大於起始幀');
             return;
         }
-        onCreateClip(newClipName, startFrame, endFrame);
+        onCreateClip(newClipName, start, end);
         setNewClipName('');
+        setStartFrame('');
+        setEndFrame('');
     };
 
     // 播放條拖動處理
@@ -586,7 +598,7 @@ export default function ModelInspector({
                                 type="number"
                                 placeholder="始"
                                 value={startFrame}
-                                onChange={(e) => setStartFrame(Number(e.target.value))}
+                                onChange={(e) => setStartFrame(e.target.value)}
                                 className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
                             />
                             <span className="text-gray-500">-</span>
@@ -594,7 +606,7 @@ export default function ModelInspector({
                                 type="number"
                                 placeholder="終"
                                 value={endFrame}
-                                onChange={(e) => setEndFrame(Number(e.target.value))}
+                                onChange={(e) => setEndFrame(e.target.value)}
                                 className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
                             />
                         </div>

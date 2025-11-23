@@ -10,7 +10,7 @@ import ModelInspector from './components/ModelInspector';
 import AudioPanel from './components/AudioPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './utils/AudioController';
-import { Loader2, Camera } from 'lucide-react';
+import { Loader2, Camera, Grid } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 export interface AudioTrigger {
@@ -100,6 +100,7 @@ function App() {
   const [groundPlaneColor, setGroundPlaneColor] = useState('#444444');
   const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
   const [enableShadows, setEnableShadows] = useState(false);
+  const [showGrid, setShowGrid] = useState(true);
 
   // Extract bones from model
   useEffect(() => {
@@ -731,21 +732,34 @@ function App() {
 
           {/* Tool: Rotate */}
           <div className="group relative">
-            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+            <button disabled className="p-3 rounded-lg text-gray-400 opacity-30 cursor-not-allowed">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              旋轉工具 (R)
+              旋轉工具 (未實作)
             </div>
           </div>
 
           {/* Tool: Scale */}
           <div className="group relative">
-            <button className="p-3 rounded-lg text-gray-400 hover:bg-gray-800 hover:text-white transition-colors">
+            <button disabled className="p-3 rounded-lg text-gray-400 opacity-30 cursor-not-allowed">
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3l-6 6" /><path d="M21 3v6" /><path d="M21 3h-6" /><path d="M3 21l6-6" /><path d="M3 21v-6" /><path d="M3 21h6" /><path d="M14.5 9.5L9.5 14.5" /></svg>
             </button>
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              縮放工具 (S)
+              縮放工具 (未實作)
+            </div>
+          </div>
+
+          {/* Tool: Grid Toggle */}
+          <div className="group relative">
+            <button
+              onClick={() => setShowGrid(!showGrid)}
+              className={`p-3 rounded-lg transition-colors ${showGrid ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-800 hover:text-white'}`}
+            >
+              <Grid size={20} />
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              {showGrid ? '隱藏網格' : '顯示網格'}
             </div>
           </div>
 
@@ -1037,6 +1051,7 @@ function App() {
                 groundPlaneColor={groundPlaneColor}
                 groundPlaneOpacity={groundPlaneOpacity}
                 enableShadows={enableShadows}
+                showGrid={showGrid}
               />
             </div>
 
