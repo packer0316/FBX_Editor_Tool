@@ -60,6 +60,7 @@ function App() {
   const [boneSearchQuery, setBoneSearchQuery] = useState('');
   const [selectedBoneUuid, setSelectedBoneUuid] = useState<string | null>(null);
   const [isCameraBound, setIsCameraBound] = useState(false);
+  const [showGroundPlane, setShowGroundPlane] = useState(false);
 
   // Extract bones from model
   useEffect(() => {
@@ -835,6 +836,21 @@ function App() {
               </div>
             )}
           </div>
+          {/* Tool: Ground Plane Toggle */}
+          <div className="group relative">
+            <button
+              className={`p-3 rounded-lg transition-colors ${showGroundPlane
+                ? 'bg-gray-800 text-white'
+                : 'text-gray-400 hover:bg-gray-800 hover:text-white'
+                }`}
+              onClick={() => setShowGroundPlane(!showGroundPlane)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
+            </button>
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+              地面開關
+            </div>
+          </div>
         </div>
 
         {/* 左側：3D 預覽區 */}
@@ -854,6 +870,7 @@ function App() {
                 cameraSettings={cameraSettings}
                 boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
                 isCameraBound={isCameraBound}
+                showGroundPlane={showGroundPlane}
               />
             </div>
 
