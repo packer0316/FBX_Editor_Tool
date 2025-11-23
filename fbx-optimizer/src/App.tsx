@@ -66,6 +66,7 @@ function App() {
   const [showGroundPlane, setShowGroundPlane] = useState(false);
   const [groundPlaneColor, setGroundPlaneColor] = useState('#444444');
   const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
+  const [enableShadows, setEnableShadows] = useState(false);
 
   // Extract bones from model
   useEffect(() => {
@@ -107,14 +108,14 @@ function App() {
       }
     };
 
-    if (showCameraSettings) {
+    if (showCameraSettings || showGroundSettings) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showCameraSettings]);
+  }, [showCameraSettings, showGroundSettings]);
 
   // 處理檔案上傳
   const handleFileUpload = async (files: FileList) => {
@@ -701,7 +702,7 @@ function App() {
             >
               <Camera size={20} />
             </button>
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+            <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 pointer-events-none whitespace-nowrap z-50 ${!showCameraSettings ? 'group-hover:opacity-100' : ''}`}>
               相機參數
             </div>
 
@@ -865,7 +866,7 @@ function App() {
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
             </button>
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+            <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 pointer-events-none whitespace-nowrap z-50 ${!showGroundSettings ? 'group-hover:opacity-100' : ''}`}>
               地面設定
             </div>
 
@@ -920,6 +921,19 @@ function App() {
                     className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider"
                   />
                 </div>
+
+                {/* Shadow Toggle */}
+                <div className="mb-2 pt-2 border-t border-gray-700">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={enableShadows}
+                      onChange={(e) => setEnableShadows(e.target.checked)}
+                      className="w-4 h-4 rounded border-gray-600 bg-gray-700 text-blue-500 focus:ring-blue-500 focus:ring-offset-gray-800"
+                    />
+                    <span className="text-sm text-gray-300">顯示陰影</span>
+                  </label>
+                </div>
               </div>
             )}
           </div>
@@ -945,6 +959,7 @@ function App() {
                 showGroundPlane={showGroundPlane}
                 groundPlaneColor={groundPlaneColor}
                 groundPlaneOpacity={groundPlaneOpacity}
+                enableShadows={enableShadows}
               />
             </div>
 

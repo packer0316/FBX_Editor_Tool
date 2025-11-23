@@ -30,6 +30,7 @@ interface SceneViewerProps {
     showGroundPlane?: boolean;
     groundPlaneColor?: string;
     groundPlaneOpacity?: number;
+    enableShadows?: boolean;
 }
 
 // Camera Controller Component to update camera settings dynamically
@@ -73,10 +74,11 @@ type ModelProps = {
     shaderGroups: ShaderGroup[];
     loop?: boolean;
     onFinish?: () => void;
+    enableShadows?: boolean;
 };
 
 const Model = forwardRef<SceneViewerRef, ModelProps>(
-    ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish }, ref) => {
+    ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish, enableShadows }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
@@ -90,6 +92,18 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 mixerRef.current = null;
             };
         }, [model]);
+
+        useEffect(() => {
+            if (model) {
+                // Update shadow casting without recreating the mixer
+                model.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.castShadow = !!enableShadows;
+                        child.receiveShadow = !!enableShadows;
+                    }
+                });
+            }
+        }, [model, enableShadows]);
 
         const onFinishRef = useRef(onFinish);
 
@@ -732,21 +746,36 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0 }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
                 style={{ backgroundColor }}
             >
-                <Canvas camera={{
-                    position: [0, 2, 5],
-                    fov: cameraSettings?.fov || 50,
-                    near: cameraSettings?.near || 0.1,
-                    far: cameraSettings?.far || 1000
-                }}>
+                <Canvas
+                    shadows={enableShadows}
+                    camera={{
+                        position: [0, 2, 5],
+                        fov: cameraSettings?.fov || 50,
+                        near: cameraSettings?.near || 0.1,
+                        far: cameraSettings?.far || 1000
+                    }}>
                     <ambientLight intensity={0.8} />
                     <hemisphereLight args={["#ffffff", "#444444", 0.6]} />
-                    <directionalLight position={[10, 10, 5]} intensity={1.2} castShadow />
+                    <directionalLight
+                        position={[5, 10, 7.5]}
+                        intensity={1.2}
+                        castShadow={enableShadows}
+                        shadow-mapSize-width={2048}
+                        shadow-mapSize-height={2048}
+                        shadow-camera-near={0.1}
+                        shadow-camera-far={100}
+                        shadow-camera-left={-10}
+                        shadow-camera-right={10}
+                        shadow-camera-top={10}
+                        shadow-camera-bottom={-10}
+                        shadow-bias={-0.0001}
+                    />
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
                     <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
@@ -754,7 +783,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
 
                     {/* Ground Plane */}
                     {showGroundPlane && (
-                        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow>
+                        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow={enableShadows}>
                             <planeGeometry args={[100, 100]} />
                             <meshStandardMaterial
                                 key={`ground-${groundPlaneColor}-${groundPlaneOpacity}`}
@@ -773,6 +802,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             shaderGroups={shaderGroups}
                             loop={loop}
                             onFinish={onFinish}
+                            enableShadows={enableShadows}
                         />
                     )}
                     <OrbitControls
