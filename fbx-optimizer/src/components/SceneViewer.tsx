@@ -781,12 +781,12 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
                     <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
-                    <Grid infiniteGrid fadeDistance={30} sectionColor="#4a4a4a" cellColor="#2a2a2a" />
+                    <Grid args={[30, 30]} sectionColor="#4a4a4a" cellColor="#2a2a2a" />
 
                     {/* Ground Plane */}
                     {showGroundPlane && (
                         <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.01, 0]} receiveShadow={enableShadows}>
-                            <planeGeometry args={[100, 100]} />
+                            <planeGeometry args={[30, 30]} />
                             <meshStandardMaterial
                                 key={`ground-${groundPlaneColor}-${groundPlaneOpacity}`}
                                 color={groundPlaneColor}
