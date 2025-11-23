@@ -253,14 +253,12 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                             // Base Matcap
                             matcapTexture: { value: null },
                             matcapProgress: { value: 0 },
-                            matcapLdrBoost: { value: 1.2 },
                             useMatcap: { value: 0.0 },
 
                             // Additive Matcap
                             matcapAddTexture: { value: null },
                             matcapAddStrength: { value: 1.0 },
                             matcapAddColor: { value: new THREE.Color(0xffffff) },
-                            matcapAddLdrBoost: { value: 1.3 },
                             useMatcapAdd: { value: 0.0 },
 
                             // Rim Light
@@ -330,14 +328,12 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 // Base Matcap
                                 uniform sampler2D matcapTexture;
                                 uniform float matcapProgress;
-                                uniform float matcapLdrBoost;
                                 uniform float useMatcap;
 
                                 // Additive Matcap
                                 uniform sampler2D matcapAddTexture;
                                 uniform float matcapAddStrength;
                                 uniform vec3 matcapAddColor;
-                                uniform float matcapAddLdrBoost;
                                 uniform float useMatcapAdd;
 
                                 // Rim Light
@@ -448,7 +444,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         matcapUv.y = -viewNormal.y * 0.49 + 0.5;
                                         
                                         vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
-                                        matcapCol *= matcapLdrBoost;
 
                                         finalColor = mix(finalColor, matcapCol, matcapProgress);
                                     }
@@ -460,7 +455,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
 
                                         vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
-                                        matcapAddCol *= matcapAddLdrBoost;
                                         matcapAddCol *= matcapAddColor; // Apply tint
 
                                         // Additive blending logic
@@ -552,7 +546,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.useMatcap.value = 1.0;
                         shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
                         shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
-                        shaderMat.uniforms.matcapLdrBoost.value = baseMatcapFeature.params.ldrBoost || 1.2;
                     } else {
                         shaderMat.uniforms.useMatcap.value = 0.0;
                     }
@@ -563,7 +556,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
                         shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
                         shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
-                        shaderMat.uniforms.matcapAddLdrBoost.value = addMatcapFeature.params.ldrBoost || 1.3;
                     } else {
                         shaderMat.uniforms.useMatcapAdd.value = 0.0;
                     }

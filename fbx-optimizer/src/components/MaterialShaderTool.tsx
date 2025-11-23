@@ -67,14 +67,12 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
             return {
                 texture: null,
                 progress: 0.5,
-                ldrBoost: 1.2,
             };
         case 'matcap_add':
             return {
                 texture: null,
                 strength: 1.0,
                 color: '#ffffff',
-                ldrBoost: 1.3,
             };
         case 'normal_map':
             return {
@@ -316,7 +314,7 @@ export default function MaterialShaderTool({ fileName: _fileName, features, onFe
             // 根據參數名稱設定範圍
             if (paramName === 'power') { min = 0.1; max = 10; step = 0.1; }
             else if (paramName === 'intensity' || paramName === 'strength') { min = 0; max = 5; step = 0.1; }
-            else if (paramName === 'ldrBoost') { min = 1; max = 2; step = 0.1; }
+
             else if (paramName === 'speed') { min = 0; max = 5; step = 0.1; }
             else if (paramName === 'width') { min = 0.1; max = 1.0; step = 0.05; }
             else if (paramName === 'threshold') { min = 0; max = 1; step = 0.01; }
