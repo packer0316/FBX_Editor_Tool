@@ -604,7 +604,7 @@ function App() {
 
   return (
     <div
-      className="min-h-screen bg-gray-900 text-white flex flex-col"
+      className="h-screen overflow-hidden bg-gray-900 text-white flex flex-col"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
