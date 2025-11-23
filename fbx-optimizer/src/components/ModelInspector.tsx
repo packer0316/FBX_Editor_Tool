@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2 } from 'lucide-react';
+import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat } from 'lucide-react';
 
 interface ModelInspectorProps {
     model: THREE.Group | null;
@@ -22,6 +22,8 @@ interface ModelInspectorProps {
     onPlayPlaylist: () => void;
     onPausePlaylist: () => void;
     onDeleteCreatedClip: (index: number) => void;
+    isLoopEnabled: boolean;
+    onToggleLoop: () => void;
 }
 
 // 遞迴渲染骨架樹狀圖
@@ -105,7 +107,9 @@ export default function ModelInspector({
     onReorderPlaylist,
     onPlayPlaylist,
     onPausePlaylist,
-    onDeleteCreatedClip
+    onDeleteCreatedClip,
+    isLoopEnabled,
+    onToggleLoop
 }: ModelInspectorProps) {
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
@@ -318,48 +322,68 @@ export default function ModelInspector({
                         {createdClips.length === 0 ? (
                             <div className="text-gray-500 text-sm text-center mt-4">尚未建立動作片段</div>
                         ) : (
-                            createdClips.map((c, idx) => (
-                                <div
-                                    key={idx}
-                                    className={`flex items-center justify-between p-2 rounded transition-colors ${clip === c ? 'bg-blue-900/50 border border-blue-500/30' : 'hover:bg-gray-700'}`}
-                                >
+                            createdClips.map((c, idx) => {
+                                // Calculate progress for current clip
+                                const isCurrentClip = clip === c;
+                                let progress = 0;
+                                if (isCurrentClip && c.duration > 0) {
+                                    progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
+                                }
+
+                                return (
                                     <div
-                                        className="flex flex-col gap-0.5 flex-1 cursor-pointer"
-                                        onClick={() => onSelectClip(c)}
+                                        key={idx}
+                                        className={`flex flex-col p-2 rounded border transition-colors ${clip === c ? 'bg-blue-900/50 border-blue-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}
                                     >
-                                        <div className="flex items-center gap-2">
-                                            <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
-                                            <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                        {/* Top row: clip info and buttons */}
+                                        <div className="flex items-center justify-between mb-2">
+                                            <div
+                                                className="flex flex-col gap-0.5 flex-1 cursor-pointer"
+                                                onClick={() => onSelectClip(c)}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
+                                                    <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                                </div>
+                                                {/* Display frame range if available */}
+                                                {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
+                                                    <span className="text-xs text-gray-500 ml-5">
+                                                        {(c as any).startFrame}-{(c as any).endFrame}幀
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onAddToPlaylist(c); }}
+                                                    className="text-gray-400 hover:text-green-400 p-1"
+                                                    title="加入播放清單"
+                                                >
+                                                    <Plus size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        onDeleteCreatedClip(idx);
+                                                    }}
+                                                    className="text-gray-400 hover:text-red-400 p-1"
+                                                    title="刪除動作"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
                                         </div>
-                                        {/* Display frame range if available */}
-                                        {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
-                                            <span className="text-xs text-gray-500 ml-5">
-                                                {(c as any).startFrame}-{(c as any).endFrame}幀
-                                            </span>
-                                        )}
+
+                                        {/* Progress Bar */}
+                                        <div className="w-full h-2 bg-gray-900 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full transition-all duration-150 ${isCurrentClip ? 'bg-blue-500' : 'bg-gray-600'}`}
+                                                style={{ width: `${progress}%` }}
+                                            />
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onAddToPlaylist(c); }}
-                                            className="text-gray-400 hover:text-green-400 p-1"
-                                            title="加入播放清單"
-                                        >
-                                            <Plus size={14} />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                onDeleteCreatedClip(idx);
-                                            }}
-                                            className="text-gray-400 hover:text-red-400 p-1"
-                                            title="刪除動作"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
-                                    </div>
-                                </div>
-                            ))
+                                );
+                            })
                         )}
                     </div>
                 )}
@@ -469,6 +493,21 @@ export default function ModelInspector({
                         className="w-10 h-10 flex items-center justify-center bg-blue-600 hover:bg-blue-500 rounded-full text-white transition-colors"
                     >
                         {isPlaying ? <Pause size={20} /> : <Play size={20} />}
+                    </button>
+
+                    {/* Loop Toggle Button */}
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleLoop();
+                        }}
+                        className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${isLoopEnabled
+                            ? 'bg-green-600 hover:bg-green-500 text-white'
+                            : 'bg-gray-700 hover:bg-gray-600 text-gray-400'
+                            }`}
+                        title={isLoopEnabled ? '循環播放：開啟' : '循環播放：關閉'}
+                    >
+                        <Repeat size={20} />
                     </button>
 
                     <div className="flex-1">

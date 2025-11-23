@@ -27,6 +27,7 @@ function App() {
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [createdClips, setCreatedClips] = useState<THREE.AnimationClip[]>([]);
+  const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
   // 面板高度控制
   const [panelHeight, setPanelHeight] = useState(384); // 預設 384px (h-96)
@@ -925,7 +926,7 @@ function App() {
                 playingClip={optimizedClip}
                 onTimeUpdate={handleTimeUpdate}
                 shaderGroups={shaderGroups}
-                loop={!isPlaylistPlaying}
+                loop={isPlaylistPlaying ? false : isLoopEnabled}
                 onFinish={handleClipFinish}
                 backgroundColor={themeMode === 'dark' ? '#111827' : '#F5F5F5'}
                 cameraSettings={cameraSettings}
@@ -979,6 +980,8 @@ function App() {
               onReorderPlaylist={handleReorderPlaylist}
               onPlayPlaylist={handlePlayPlaylist}
               onPausePlaylist={handlePausePlaylist}
+              isLoopEnabled={isLoopEnabled}
+              onToggleLoop={() => setIsLoopEnabled(!isLoopEnabled)}
             />
           </div>
         </div>
