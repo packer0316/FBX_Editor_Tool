@@ -184,7 +184,7 @@ function App() {
       setMeshNames(meshes);
 
       // 初始化第一組 shader 配置（包含所有 mesh）
-      if (shaderGroups.length === 0 && meshes.length > 0) {
+      if (meshes.length > 0) {
         const defaultGroup: ShaderGroup = {
           id: `group_${Date.now()}`,
           name: '組合 1',

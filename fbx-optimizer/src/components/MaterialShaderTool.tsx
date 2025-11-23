@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2 } from 'lucide-react';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2 } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../types/shaderTypes';
 
 interface MaterialShaderToolProps {
@@ -147,6 +147,8 @@ const getParamLabel = (paramName: string): string => {
 export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange }: MaterialShaderToolProps) {
     const [showFeatureMenu, setShowFeatureMenu] = useState<{ groupId: string } | null>(null);
     const [showMeshMenu, setShowMeshMenu] = useState<string | null>(null);
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [editingName, setEditingName] = useState<string>('');
 
     const meshMenuRef = useRef<HTMLDivElement>(null);
     const featureMenuRef = useRef<HTMLDivElement>(null);
@@ -185,6 +187,15 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
     // 刪除組合
     const removeGroup = (groupId: string) => {
         onGroupsChange(shaderGroups.filter(g => g.id !== groupId));
+    };
+
+    // 更新組合名稱
+    const updateGroupName = (groupId: string, newName: string) => {
+        if (!newName.trim()) return;
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId ? { ...g, name: newName } : g
+        ));
+        setEditingGroupId(null);
     };
 
     // 切換組合展開/收起
@@ -430,67 +441,114 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                 {shaderGroups.map((group, groupIndex) => (
                     <div key={group.id} className="bg-gray-700/50 rounded-lg border border-gray-600">
                         {/* Group Header */}
-                        <div className="p-3 flex items-center gap-2 border-b border-gray-600">
-                            <button
-                                onClick={() => toggleGroupExpanded(group.id)}
-                                className="text-gray-400 hover:text-white transition-colors"
-                            >
-                                {group.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                            </button>
-                            <span className="flex-1 text-white font-medium">{group.name}</span>
-                            <span className="text-xs text-gray-400">({group.selectedMeshes.length} meshes)</span>
-
-                            {/* Mesh Selection Dropdown */}
-                            <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
+                        <div className="p-3 flex items-center justify-between border-b border-gray-600">
+                            <div className="flex items-center gap-2 flex-1">
                                 <button
-                                    onClick={() => setShowMeshMenu(showMeshMenu === group.id ? null : group.id)}
-                                    className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition-colors"
+                                    onClick={() => toggleGroupExpanded(group.id)}
+                                    className="text-gray-400 hover:text-white transition-colors"
                                 >
-                                    Mesh 選單 ▼
+                                    {group.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                 </button>
-                                {showMeshMenu === group.id && (
-                                    <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
-                                        {meshNames.length === 0 ? (
-                                            <div className="p-3 text-gray-400 text-sm">沒有可用的 mesh</div>
-                                        ) : (
-                                            meshNames.map(meshName => {
-                                                const isSelected = group.selectedMeshes.includes(meshName);
-                                                const isUsedByOther = isMeshUsedByOtherGroup(group.id, meshName);
 
-                                                return (
-                                                    <label
-                                                        key={meshName}
-                                                        className={`flex items-center gap-2 p-2 hover:bg-gray-700 cursor-pointer ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={isSelected}
-                                                            disabled={isUsedByOther && !isSelected}
-                                                            onChange={() => toggleMeshSelection(group.id, meshName)}
-                                                            className="w-4 h-4"
-                                                        />
-                                                        <span className="text-sm text-white flex-1">{meshName}</span>
-                                                        {isSelected && <Check size={14} className="text-green-400" />}
-                                                        {isUsedByOther && !isSelected && (
-                                                            <span className="text-xs text-gray-400">(已使用)</span>
-                                                        )}
-                                                    </label>
-                                                );
-                                            })
-                                        )}
+                                {editingGroupId === group.id ? (
+                                    <input
+                                        type="text"
+                                        value={editingName}
+                                        onChange={(e) => setEditingName(e.target.value)}
+                                        onBlur={() => updateGroupName(group.id, editingName)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') updateGroupName(group.id, editingName);
+                                            if (e.key === 'Escape') setEditingGroupId(null);
+                                        }}
+                                        autoFocus
+                                        className="bg-gray-800 text-white px-2 py-1 rounded border border-purple-500 text-sm focus:outline-none"
+                                        onClick={(e) => e.stopPropagation()}
+                                    />
+                                ) : (
+                                    <div className="flex items-center gap-2 group/name">
+                                        <span
+                                            className="text-white font-medium cursor-pointer hover:text-purple-300 transition-colors"
+                                            onDoubleClick={() => {
+                                                setEditingGroupId(group.id);
+                                                setEditingName(group.name);
+                                            }}
+                                            title="雙擊修改名稱"
+                                        >
+                                            {group.name}
+                                        </span>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setEditingGroupId(group.id);
+                                                setEditingName(group.name);
+                                            }}
+                                            className="text-gray-500 hover:text-purple-400 transition-colors"
+                                            title="修改名稱"
+                                        >
+                                            <Edit2 size={14} />
+                                        </button>
                                     </div>
                                 )}
+                                <span className="text-xs text-gray-400">({group.selectedMeshes.length} meshes)</span>
                             </div>
 
-                            {/* Delete Group Button (except first group) */}
-                            {groupIndex > 0 && (
-                                <button
-                                    onClick={() => removeGroup(group.id)}
-                                    className="p-1 text-red-400 hover:text-red-300 transition-colors"
-                                >
-                                    <Trash2 size={16} />
-                                </button>
-                            )}
+                            <div className="flex items-center gap-2">
+                                {/* Mesh Selection Dropdown */}
+                                <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
+                                    <button
+                                        onClick={() => setShowMeshMenu(showMeshMenu === group.id ? null : group.id)}
+                                        className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition-colors"
+                                    >
+                                        Mesh 選單 ▼
+                                    </button>
+                                    {showMeshMenu === group.id && (
+                                        <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                            {meshNames.length === 0 ? (
+                                                <div className="p-3 text-gray-400 text-sm">沒有可用的 mesh</div>
+                                            ) : (
+                                                meshNames.map(meshName => {
+                                                    const isSelected = group.selectedMeshes.includes(meshName);
+                                                    const isUsedByOther = isMeshUsedByOtherGroup(group.id, meshName);
+
+                                                    return (
+                                                        <label
+                                                            key={meshName}
+                                                            className={`flex items-center gap-2 p-2 hover:bg-gray-700 cursor-pointer ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={isSelected}
+                                                                disabled={isUsedByOther && !isSelected}
+                                                                onChange={() => toggleMeshSelection(group.id, meshName)}
+                                                                className="w-4 h-4"
+                                                            />
+                                                            <span className="text-sm text-white flex-1">{meshName}</span>
+                                                            {isSelected && <Check size={14} className="text-green-400" />}
+                                                            {isUsedByOther && !isSelected && (
+                                                                <span className="text-xs text-gray-400">(已使用)</span>
+                                                            )}
+                                                        </label>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Delete Group Button (except first group) */}
+                                {groupIndex > 0 ? (
+                                    <button
+                                        onClick={() => removeGroup(group.id)}
+                                        className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                                        title="刪除組合"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                ) : (
+                                    // 佔位符，保持對齊
+                                    <div className="w-6 h-6"></div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Group Content */}
