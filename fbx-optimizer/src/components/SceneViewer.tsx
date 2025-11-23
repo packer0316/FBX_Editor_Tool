@@ -198,70 +198,104 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                         normalMapTex = textureLoader.load(texUrl);
                     }
 
+                    let flashTex = null;
+                    if (flashFeature && flashFeature.params.texture) {
+                        const texUrl = typeof flashFeature.params.texture === 'string'
+                            ? flashFeature.params.texture
+                            : URL.createObjectURL(flashFeature.params.texture);
+                        flashTex = textureLoader.load(texUrl, (tex) => {
+                            console.log('[Flash Texture Loaded]', tex);
+                            // Force material update when texture loads
+                            if (child.material) {
+                                child.material.needsUpdate = true;
+                            }
+                        });
+                        console.log('[Flash Texture Loading...]', flashTex);
+                    }
+
+                    let flashMaskTex = null;
+                    if (flashFeature && flashFeature.params.maskTexture) {
+                        const texUrl = typeof flashFeature.params.maskTexture === 'string'
+                            ? flashFeature.params.maskTexture
+                            : URL.createObjectURL(flashFeature.params.maskTexture);
+                        flashMaskTex = textureLoader.load(texUrl, (tex) => {
+                            console.log('[Flash Mask Texture Loaded]', tex);
+                            // Force material update when texture loads
+                            if (child.material) {
+                                child.material.needsUpdate = true;
+                            }
+                        });
+                        console.log('[Flash Mask Texture Loading...]', flashMaskTex);
+                    }
+
+
                     const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
                         (child.material as any).isCustomShader;
 
                     let shaderMat: THREE.ShaderMaterial;
 
-                    if (isCustomShader) {
-                        shaderMat = child.material as THREE.ShaderMaterial;
-                    } else {
-                        const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
-                        const baseTexture = originalMaterial.map || null;
-                        const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
-                        const isSkinnedMesh = (child as any).isSkinnedMesh;
+                    // ALWAYS recreate shader when features change to ensure defines are updated
+                    // (especially important when textures are added/removed)
+                    const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
+                    const baseTexture = originalMaterial.map || null;
+                    const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
+                    const isSkinnedMesh = (child as any).isSkinnedMesh;
 
-                        shaderMat = new THREE.ShaderMaterial({
-                            uniforms: {
-                                // Base
-                                baseTexture: { value: baseTexture },
-                                baseColor: { value: baseColor },
-                                uTime: { value: 0 },
+                    console.log('[Creating Shader] flashTex:', !!flashTex, 'flashMaskTex:', !!flashMaskTex);
 
-                                // Base Matcap
-                                matcapTexture: { value: null },
-                                matcapProgress: { value: 0 },
-                                matcapLdrBoost: { value: 1.2 },
-                                useMatcap: { value: 0.0 },
+                    shaderMat = new THREE.ShaderMaterial({
+                        uniforms: {
+                            // Base
+                            baseTexture: { value: baseTexture },
+                            baseColor: { value: baseColor },
+                            uTime: { value: 0 },
 
-                                // Additive Matcap
-                                matcapAddTexture: { value: null },
-                                matcapAddStrength: { value: 1.0 },
-                                matcapAddColor: { value: new THREE.Color(0xffffff) },
-                                matcapAddLdrBoost: { value: 1.3 },
-                                useMatcapAdd: { value: 0.0 },
+                            // Base Matcap
+                            matcapTexture: { value: null },
+                            matcapProgress: { value: 0 },
+                            matcapLdrBoost: { value: 1.2 },
+                            useMatcap: { value: 0.0 },
 
-                                // Rim Light
-                                rimColor: { value: new THREE.Color(0xffffff) },
-                                rimIntensity: { value: 0.0 },
-                                rimPower: { value: 3.0 },
-                                useRimLight: { value: 0.0 },
+                            // Additive Matcap
+                            matcapAddTexture: { value: null },
+                            matcapAddStrength: { value: 1.0 },
+                            matcapAddColor: { value: new THREE.Color(0xffffff) },
+                            matcapAddLdrBoost: { value: 1.3 },
+                            useMatcapAdd: { value: 0.0 },
 
-                                // Flash
-                                flashColor: { value: new THREE.Color(0xffffff) },
-                                flashIntensity: { value: 0.0 },
-                                flashSpeed: { value: 1.0 },
-                                flashWidth: { value: 0.5 },
-                                useFlash: { value: 0.0 },
+                            // Rim Light
+                            rimColor: { value: new THREE.Color(0xffffff) },
+                            rimIntensity: { value: 0.0 },
+                            rimPower: { value: 3.0 },
+                            useRimLight: { value: 0.0 },
 
-                                // Dissolve
-                                dissolveTexture: { value: null },
-                                dissolveThreshold: { value: 0.0 },
-                                dissolveEdgeWidth: { value: 0.1 },
-                                dissolveColor1: { value: new THREE.Color(0xffff00) },
-                                dissolveColor2: { value: new THREE.Color(0xff0000) },
-                                useDissolve: { value: 0.0 },
+                            // Flash
+                            flashTexture: { value: null },
+                            flashMaskTexture: { value: null },
+                            flashColor: { value: new THREE.Color(0xffffff) },
+                            flashIntensity: { value: 0.0 },
+                            flashSpeed: { value: 1.0 },
+                            flashWidth: { value: 0.5 },
+                            useFlash: { value: 0.0 },
 
-                                // Alpha Test
-                                alphaTestThreshold: { value: 0.5 },
-                                useAlphaTest: { value: 0.0 },
+                            // Dissolve
+                            dissolveTexture: { value: null },
+                            dissolveThreshold: { value: 0.0 },
+                            dissolveEdgeWidth: { value: 0.1 },
+                            dissolveColor1: { value: new THREE.Color(0xffff00) },
+                            dissolveColor2: { value: new THREE.Color(0xff0000) },
+                            useDissolve: { value: 0.0 },
 
-                                // Normal Map
-                                normalMap: { value: null },
-                                normalScale: { value: new THREE.Vector2(1, 1) },
-                                useNormalMap: { value: 0.0 },
-                            },
-                            vertexShader: `
+                            // Alpha Test
+                            alphaTestThreshold: { value: 0.5 },
+                            useAlphaTest: { value: 0.0 },
+
+                            // Normal Map
+                            normalMap: { value: null },
+                            normalScale: { value: new THREE.Vector2(1, 1) },
+                            useNormalMap: { value: 0.0 },
+                        },
+                        vertexShader: `
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
@@ -287,7 +321,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     gl_Position = projectionMatrix * mvPosition;
                                 }
                             `,
-                            fragmentShader: `
+                        fragmentShader: `
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
                                 uniform float uTime;
@@ -312,6 +346,8 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 uniform float useRimLight;
 
                                 // Flash
+                                uniform sampler2D flashTexture;
+                                uniform sampler2D flashMaskTexture;
                                 uniform vec3 flashColor;
                                 uniform float flashIntensity;
                                 uniform float flashSpeed;
@@ -441,31 +477,66 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         finalColor += rimColor * rim * rimIntensity;
                                     }
 
+
                                     // --- Flash Effect ---
                                     if (useFlash > 0.5) {
-                                        float flashPos = mod(uTime * flashSpeed, 2.0) - 0.5; 
-                                        vec2 rotatedUv = vec2(
-                                            vUv.x * 0.707 - vUv.y * 0.707,
-                                            vUv.x * 0.707 + vUv.y * 0.707
-                                        );
+                                        // Sample mask texture or use defaults
+                                        vec3 maskColor = vec3(1.0, vUv.x, 1.0); // Default: R=1, G=UV.x for direction, B=1
+                                        #ifdef USE_FLASH_MASK
+                                            maskColor = texture2D(flashMaskTexture, vUv).rgb;
+                                        #endif
+
+                                        // Reference Logic from azureDrag_body.effect:
+                                        // maskColor.r: Static weight (for constant glow)
+                                        // maskColor.g: Time/Phase (Direction) - this creates the sweeping effect
+                                        // maskColor.b: Flash Mask (Intensity) - controls where flash appears
+
+                                        float t = mod(uTime * flashSpeed, 1.0);
                                         
-                                        float dist = abs(rotatedUv.x - flashPos);
-                                        float flash = 1.0 - smoothstep(0.0, flashWidth, dist);
-                                        finalColor += flashColor * flash * flashIntensity;
+                                        // Calculate offset based on Green channel (Direction/Time)
+                                        // This creates the animated sweep across the model
+                                        float offset = abs(mod(maskColor.g - t, 1.0));
+                                        
+                                        // Calculate Light Value (Gradient)
+                                        float lightVal = 0.0;
+                                        
+                                        #ifdef USE_FLASH_TEXTURE
+                                            // Use flashTexture as a gradient lookup (LUT)
+                                            // Reference uses: texture(lightTexture, vec2(0.5, offset * lightRange)).r
+                                            // We map offset to V coordinate, using flashWidth as the range multiplier
+                                            lightVal = texture2D(flashTexture, vec2(0.5, offset * flashWidth)).r;
+                                        #else
+                                            // Fallback: Calculated gradient with smooth falloff
+                                            // Create a sharp pulse that fades smoothly
+                                            lightVal = 1.0 - smoothstep(0.0, flashWidth, offset);
+                                        #endif
+
+                                        // Reference shader combines like this:
+                                        // float maskAdd = maskWeight * maskWeight2 * maskColor.r + maskWeight * maskColor.b * lightColor;
+                                        // finalColor = textureColor * (1.0 + maskAdd);
+                                        
+                                        // We'll use additive blending for the dynamic flash:
+                                        vec3 flashEffect = flashColor * lightVal * maskColor.b * flashIntensity;
+                                        
+                                        // Add to final color (additive blending)
+                                        finalColor += flashEffect;
                                     }
                                     
                                     gl_FragColor = vec4(finalColor, 1.0);
                                 }
                             `,
-                            defines: baseTexture ? { USE_MAP: '' } : {},
-                            extensions: {
-                                derivatives: true
-                            },
-                            skinning: isSkinnedMesh
-                        });
-                        (shaderMat as any).isCustomShader = true;
-                        child.material = shaderMat;
-                    }
+                        defines: {
+                            ...(baseTexture ? { USE_MAP: '' } : {}),
+                            ...(flashTex ? { USE_FLASH_TEXTURE: '' } : {}),
+                            ...(flashMaskTex ? { USE_FLASH_MASK: '' } : {}),
+                        },
+                        extensions: {
+                            derivatives: true
+                        },
+                        skinning: isSkinnedMesh
+                    });
+                    (shaderMat as any).isCustomShader = true;
+                    child.material = shaderMat;
 
                     // Update Uniforms
 
@@ -503,6 +574,8 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     // Flash
                     if (flashFeature) {
                         shaderMat.uniforms.useFlash.value = 1.0;
+                        if (flashTex) shaderMat.uniforms.flashTexture.value = flashTex;
+                        if (flashMaskTex) shaderMat.uniforms.flashMaskTexture.value = flashMaskTex;
                         shaderMat.uniforms.flashColor.value = new THREE.Color(flashFeature.params.color || '#ffffff');
                         shaderMat.uniforms.flashIntensity.value = flashFeature.params.intensity ?? 1.0;
                         shaderMat.uniforms.flashSpeed.value = flashFeature.params.speed ?? 1.0;
