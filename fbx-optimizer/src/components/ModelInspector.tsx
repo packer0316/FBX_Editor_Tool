@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat } from 'lucide-react';
+import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat, Music } from 'lucide-react';
+import type { AudioTrack } from '../App';
 
 interface ModelInspectorProps {
     model: THREE.Group | null;
@@ -23,7 +24,9 @@ interface ModelInspectorProps {
     onPausePlaylist: () => void;
     onDeleteCreatedClip: (index: number) => void;
     isLoopEnabled: boolean;
+
     onToggleLoop: () => void;
+    audioTracks: AudioTrack[];
 }
 
 // 遞迴渲染骨架樹狀圖
@@ -109,7 +112,9 @@ export default function ModelInspector({
     onPausePlaylist,
     onDeleteCreatedClip,
     isLoopEnabled,
-    onToggleLoop
+
+    onToggleLoop,
+    audioTracks
 }: ModelInspectorProps) {
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
@@ -324,7 +329,8 @@ export default function ModelInspector({
                         ) : (
                             createdClips.map((c, idx) => {
                                 // Calculate progress for current clip
-                                const isCurrentClip = clip === c;
+                                // Use name for matching as UUIDs might change during optimization
+                                const isCurrentClip = clip?.name === c.name;
                                 let progress = 0;
                                 if (isCurrentClip && c.duration > 0) {
                                     progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
@@ -333,7 +339,12 @@ export default function ModelInspector({
                                 return (
                                     <div
                                         key={idx}
-                                        className={`flex flex-col p-2 rounded border transition-colors ${clip === c ? 'bg-blue-900/50 border-blue-500' : 'bg-gray-800 border-gray-700 hover:bg-gray-700'}`}
+                                        className={`flex flex-col p-2 rounded border transition-colors ${(isCurrentClip && isPlaying)
+                                            ? 'bg-blue-900/70 border-blue-500'
+                                            : isCurrentClip
+                                                ? 'bg-gray-800 border-blue-600'
+                                                : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
+                                            }`}
                                     >
                                         {/* Top row: clip info and buttons */}
                                         <div className="flex items-center justify-between mb-2">
@@ -342,8 +353,8 @@ export default function ModelInspector({
                                                 onClick={() => onSelectClip(c)}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <Film size={14} className={clip === c ? 'text-blue-400' : 'text-gray-500'} />
-                                                    <span className={`text-sm ${clip === c ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                                    <Film size={14} className={isCurrentClip ? 'text-blue-400' : 'text-gray-500'} />
+                                                    <span className={`text-sm ${isCurrentClip ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
                                                 </div>
                                                 {/* Display frame range if available */}
                                                 {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
@@ -375,11 +386,41 @@ export default function ModelInspector({
                                         </div>
 
                                         {/* Progress Bar */}
-                                        <div className="w-full h-2 bg-gray-900 rounded-full overflow-hidden">
+                                        <div className="w-full h-2 bg-gray-900 rounded-full relative mt-2">
                                             <div
-                                                className={`h-full transition-all duration-150 ${isCurrentClip ? 'bg-blue-500' : 'bg-gray-600'}`}
+                                                className={`h-full rounded-full ${isCurrentClip ? 'bg-blue-500' : 'bg-gray-600'}`}
                                                 style={{ width: `${progress}%` }}
                                             />
+                                            {/* Audio Markers */}
+                                            {audioTracks.flatMap(track =>
+                                                track.triggers
+                                                    .filter(t => t.clipName === c.name) // Match by name here too for consistency
+                                                    .map(t => ({ trigger: t, track }))
+                                            ).map(({ trigger, track }) => {
+                                                // Calculate percentage based on frame count (assuming 30fps for now as standard)
+                                                // If duration is 0, avoid division by zero
+                                                const totalFrames = c.duration * 30;
+                                                const pct = totalFrames > 0 ? (trigger.frame / totalFrames) * 100 : 0;
+
+                                                return (
+                                                    <div
+                                                        key={trigger.id}
+                                                        className="absolute top-0 bottom-0 w-1 z-10 hover:w-2 transition-all cursor-help group"
+                                                        style={{
+                                                            left: `${Math.min(Math.max(pct, 0), 100)}%`,
+                                                            backgroundColor: track.color || '#FACC15'
+                                                        }}
+                                                    >
+                                                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 whitespace-nowrap">
+                                                            <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded border border-gray-600 shadow-lg flex flex-col items-center">
+                                                                <span className="font-medium" style={{ color: track.color || '#FACC15' }}>{track.name}</span>
+                                                                <span className="text-gray-400 text-[10px]">Frame: {trigger.frame}</span>
+                                                            </div>
+                                                            <div className="w-2 h-2 bg-gray-600 transform rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1"></div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
                                         </div>
                                     </div>
                                 );

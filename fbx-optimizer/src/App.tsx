@@ -7,9 +7,38 @@ import SceneViewer, { type SceneViewerRef } from './components/SceneViewer';
 import OptimizationControls from './components/OptimizationControls';
 import MaterialShaderTool from './components/MaterialShaderTool';
 import ModelInspector from './components/ModelInspector';
+import AudioPanel from './components/AudioPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
+import { AudioController } from './utils/AudioController';
 import { Loader2, Camera } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
+
+export interface AudioTrigger {
+  id: string;
+  clipUuid: string; // Keep for backward compatibility, but will use clipName for matching
+  clipName: string; // Use name for matching since UUID changes after optimization
+  frame: number;
+}
+
+export interface AudioTrack {
+  id: string;
+  name: string;
+  url: string;
+  file: File;
+  note: string;
+  triggers: AudioTrigger[];
+  color: string;
+  playbackRate: number;
+  volume: number;
+  // Advanced Audio Features
+  pitch: number; // detune in cents
+  echo: number; // mix 0-1
+  eqLow: number; // gain dB
+  eqMid: number; // gain dB
+  eqHigh: number; // gain dB
+  lowpass: number; // frequency Hz
+  highpass: number; // frequency Hz
+}
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
@@ -38,7 +67,8 @@ function App() {
   const [isResizingRight, setIsResizingRight] = useState(false);
 
   // 右側面板分頁
-  const [activeTab, setActiveTab] = useState<'optimization' | 'shader'>('optimization');
+  const [activeTab, setActiveTab] = useState<'optimization' | 'shader' | 'audio'>('optimization');
+  const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
 
   // Theme Mode
   const [themeMode, setThemeMode] = useState<'dark' | 'light'>('dark');
@@ -52,6 +82,9 @@ function App() {
   const [showGroundSettings, setShowGroundSettings] = useState(false);
   const cameraSettingsRef = useRef<HTMLDivElement>(null);
   const groundSettingsRef = useRef<HTMLDivElement>(null);
+  const audioControllerRef = useRef<AudioController>(new AudioController());
+  const lastAudioFrameRef = useRef<number>(-1);
+  const lastTimeRef = useRef<number>(0);
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
     near: 0.1,
@@ -362,9 +395,48 @@ function App() {
     setCurrentTime(time);
   };
 
+  const lastUIUpdateRef = useRef(0);
+
   const handleTimeUpdate = useCallback((time: number) => {
-    setCurrentTime(time);
-  }, []);
+    // Throttle UI updates to ~30fps to prevent main thread blocking
+    const now = performance.now();
+    if (now - lastUIUpdateRef.current > 32) {
+      setCurrentTime(time);
+      lastUIUpdateRef.current = now;
+    }
+
+    if (!isPlaying || !optimizedClip) {
+      return;
+    }
+
+    // Detect loop or seek (if time goes backward)
+    if (time < lastTimeRef.current) {
+      lastAudioFrameRef.current = -1;
+      lastTimeRef.current = time;
+      return;
+    }
+
+    const fps = 30;
+    const previousTime = lastTimeRef.current;
+
+    audioTracks.forEach(track => {
+      track.triggers.forEach(trigger => {
+        const clipName = trigger.clipName || '';
+
+        // Match by clip name instead of UUID (since UUID changes after optimization)
+        if (clipName === optimizedClip.name) {
+          const triggerTime = trigger.frame / fps;
+
+          if (triggerTime > previousTime && triggerTime <= time) {
+            console.log(`[Audio Trigger] ✓ Playing: ${track.name} at frame ${trigger.frame}`);
+            audioControllerRef.current.play(track);
+          }
+        }
+      });
+    });
+
+    lastTimeRef.current = time;
+  }, [isPlaying, optimizedClip, audioTracks]);
 
   const handleSelectClip = (clip: THREE.AnimationClip) => {
     setOriginalClip(clip);
@@ -462,6 +534,11 @@ function App() {
         setIsPlaying(false);
         sceneViewerRef.current?.pause();
       }
+    } else {
+      // Single clip playback finished (when loop is disabled)
+      setIsPlaying(false);
+      // We don't need to pause SceneViewer here because it auto-pauses on finish when loop is false
+      // But we need to update the UI state to reflect that it stopped
     }
   };
 
@@ -1005,8 +1082,10 @@ function App() {
               onReorderPlaylist={handleReorderPlaylist}
               onPlayPlaylist={handlePlayPlaylist}
               onPausePlaylist={handlePausePlaylist}
+
               isLoopEnabled={isLoopEnabled}
               onToggleLoop={() => setIsLoopEnabled(!isLoopEnabled)}
+              audioTracks={audioTracks}
             />
           </div>
         </div>
@@ -1041,6 +1120,15 @@ function App() {
             >
               Material Shader
             </button>
+            <button
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'audio'
+                ? 'bg-gray-800 text-white border-b-2 border-green-500'
+                : 'text-gray-400 hover:text-white hover:bg-gray-800/50'
+                }`}
+              onClick={() => setActiveTab('audio')}
+            >
+              Audio
+            </button>
           </div>
 
           {/* 分頁內容 */}
@@ -1064,6 +1152,15 @@ function App() {
                 shaderGroups={shaderGroups}
                 meshNames={meshNames}
                 onGroupsChange={setShaderGroups}
+              />
+            )}
+
+            {activeTab === 'audio' && (
+              <AudioPanel
+                audioTracks={audioTracks}
+                setAudioTracks={setAudioTracks}
+                createdClips={createdClips}
+                audioController={audioControllerRef.current}
               />
             )}
           </div>

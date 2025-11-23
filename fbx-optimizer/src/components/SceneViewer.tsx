@@ -150,6 +150,16 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
         useImperativeHandle(ref, () => ({
             play: () => {
                 if (actionRef.current) {
+                    // If the action was finished (clamped) and we want to play again, we might need to reset it
+                    // However, usually we want to resume. But if it's at the end and not looping, we should probably restart?
+                    // Let's check if it's effectively finished.
+                    // But simpler: just unpause. If the user wants to replay, they usually seek to 0 or we handle it here.
+                    // If we are at the end and play is clicked, we should probably restart.
+
+                    if (!actionRef.current.isRunning() && actionRef.current.time >= actionRef.current.getClip().duration && !loop) {
+                        actionRef.current.reset();
+                    }
+
                     actionRef.current.paused = false;
                     isPlayingRef.current = true;
                 }
@@ -175,11 +185,17 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
             getDuration: () => actionRef.current?.getClip().duration ?? 0,
         }));
 
+        const onTimeUpdateRef = useRef(onTimeUpdate);
+        useEffect(() => {
+            onTimeUpdateRef.current = onTimeUpdate;
+        }, [onTimeUpdate]);
+
         useFrame((_state, delta) => {
             if (mixerRef.current && isPlayingRef.current) {
                 mixerRef.current.update(delta);
-                if (onTimeUpdate && actionRef.current) {
-                    onTimeUpdate(actionRef.current.time);
+                if (onTimeUpdateRef.current && actionRef.current) {
+                    // console.log('SceneViewer: sending time', actionRef.current.time);
+                    onTimeUpdateRef.current(actionRef.current.time);
                 }
             }
         });
@@ -823,4 +839,4 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
     }
 );
 
-export default SceneViewer;
+export default React.memo(SceneViewer);
