@@ -668,7 +668,15 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             onFinish={onFinish}
                         />
                     )}
-                    <OrbitControls makeDefault />
+                    <OrbitControls
+                        makeDefault
+                        enableDamping
+                        dampingFactor={0.05}
+                        screenSpacePanning={false}
+                        rotateSpeed={1.0}
+                        zoomSpeed={1.0}
+                        panSpeed={0.8}
+                    />
                 </Canvas>
             </div>
         );
