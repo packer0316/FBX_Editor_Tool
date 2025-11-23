@@ -10,7 +10,7 @@ import ModelInspector from './components/ModelInspector';
 import AudioPanel from './components/AudioPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './utils/AudioController';
-import { Loader2, Camera, Grid, Zap, Terminal, Sunset, Snowflake, Ghost } from 'lucide-react';
+import { Loader2, Camera, Grid, Zap, Terminal, Sunset, Snowflake, Ghost, Moon, Sun } from 'lucide-react';
 import type { ShaderFeature, ShaderGroup } from './types/shaderTypes';
 
 export interface AudioTrigger {
@@ -176,8 +176,20 @@ function App() {
   // Camera Settings
   const [showCameraSettings, setShowCameraSettings] = useState(false);
   const [showGroundSettings, setShowGroundSettings] = useState(false);
+  const [showThemeMenu, setShowThemeMenu] = useState(false);
   const cameraSettingsRef = useRef<HTMLDivElement>(null);
   const groundSettingsRef = useRef<HTMLDivElement>(null);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
+
+  const themeOptions = [
+    { id: 'dark', name: '深色', icon: Moon, color: '#111827' },
+    { id: 'light', name: '亮色', icon: Sun, color: '#f0f0f0' },
+    { id: 'cyberpunk', name: 'Cyberpunk', icon: Zap, color: '#050510' },
+    { id: 'matrix', name: 'Matrix', icon: Terminal, color: '#000000' },
+    { id: 'synthwave', name: 'Synthwave', icon: Sunset, color: '#2b003b' },
+    { id: 'nord', name: 'Nord', icon: Snowflake, color: '#2e3440' },
+    { id: 'dracula', name: 'Dracula', icon: Ghost, color: '#282a36' },
+  ] as const;
   const audioControllerRef = useRef<AudioController>(new AudioController());
   const lastAudioFrameRef = useRef<number>(-1);
   const lastTimeRef = useRef<number>(0);
@@ -236,9 +248,12 @@ function App() {
       if (groundSettingsRef.current && !groundSettingsRef.current.contains(event.target as Node)) {
         setShowGroundSettings(false);
       }
+      if (themeMenuRef.current && !themeMenuRef.current.contains(event.target as Node)) {
+        setShowThemeMenu(false);
+      }
     };
 
-    if (showCameraSettings || showGroundSettings) {
+    if (showCameraSettings || showGroundSettings || showThemeMenu) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
@@ -862,45 +877,57 @@ function App() {
           <div className="w-8 h-px bg-gray-700 my-2"></div>
 
           {/* Tool: Theme Toggle */}
-          <div className="group relative">
+          <div className="group relative" ref={themeMenuRef}>
             <button
-              className={`p-3 rounded-lg transition-colors ${currentTheme.button}`}
-              onClick={() => setThemeMode(prev => {
-                if (prev === 'dark') return 'light';
-                if (prev === 'light') return 'cyberpunk';
-                if (prev === 'cyberpunk') return 'matrix';
-                if (prev === 'matrix') return 'synthwave';
-                if (prev === 'synthwave') return 'nord';
-                if (prev === 'nord') return 'dracula';
-                return 'dark';
-              })}
+              className={`p-3 rounded-lg transition-colors ${showThemeMenu ? currentTheme.activeButton : currentTheme.button}`}
+              onClick={() => setShowThemeMenu(!showThemeMenu)}
             >
-              {themeMode === 'dark' ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>
-              ) : themeMode === 'light' ? (
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5" /><path d="M12 1v2" /><path d="M12 21v2" /><path d="M4.22 4.22l1.42 1.42" /><path d="M18.36 18.36l1.42 1.42" /><path d="M1 12h2" /><path d="M21 12h2" /><path d="M4.22 19.78l1.42-1.42" /><path d="M18.36 5.64l1.42-1.42" /></svg>
-              ) : themeMode === 'cyberpunk' ? (
-                <Zap size={20} />
-              ) : themeMode === 'matrix' ? (
-                <Terminal size={20} />
-              ) : themeMode === 'synthwave' ? (
-                <Sunset size={20} />
-              ) : themeMode === 'nord' ? (
-                <Snowflake size={20} />
-              ) : (
-                <Ghost size={20} />
-              )}
+              {themeMode === 'dark' ? <Moon size={20} /> :
+                themeMode === 'light' ? <Sun size={20} /> :
+                  themeMode === 'cyberpunk' ? <Zap size={20} /> :
+                    themeMode === 'matrix' ? <Terminal size={20} /> :
+                      themeMode === 'synthwave' ? <Sunset size={20} /> :
+                        themeMode === 'nord' ? <Snowflake size={20} /> :
+                          <Ghost size={20} />}
             </button>
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
-              切換模式 ({
-                themeMode === 'dark' ? '深色' :
-                  themeMode === 'light' ? '亮色' :
-                    themeMode === 'cyberpunk' ? 'Cyberpunk' :
-                      themeMode === 'matrix' ? 'Matrix' :
-                        themeMode === 'synthwave' ? 'Synthwave' :
-                          themeMode === 'nord' ? 'Nord' : 'Dracula'
-              })
-            </div>
+
+            {/* Tooltip (only show when menu is closed) */}
+            {!showThemeMenu && (
+              <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                切換模式
+              </div>
+            )}
+
+            {/* Theme Selection Menu */}
+            {showThemeMenu && (
+              <div className={`absolute left-full top-0 ml-4 w-48 ${currentTheme.panelBg} border ${currentTheme.panelBorder} rounded-lg shadow-xl p-2 z-50 flex flex-col gap-1`}>
+                {themeOptions.map((option) => {
+                  const Icon = option.icon;
+                  const isActive = themeMode === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      onClick={() => {
+                        setThemeMode(option.id);
+                        setShowThemeMenu(false);
+                      }}
+                      className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors ${isActive
+                        ? currentTheme.activeButton
+                        : `${currentTheme.text} hover:bg-gray-700/50`
+                        }`}
+                    >
+                      <Icon size={16} />
+                      <span className="flex-1 text-left">{option.name}</span>
+                      {/* Color Preview Dot */}
+                      <div
+                        className="w-3 h-3 rounded-full border border-gray-500/30"
+                        style={{ backgroundColor: option.color }}
+                      />
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Tool: Camera Settings */}
