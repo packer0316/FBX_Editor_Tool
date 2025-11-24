@@ -97,7 +97,8 @@ function App() {
   const [showGrid, setShowGrid] = useState(true);
 
   // Tone Mapping & Exposure Settings
-  const [toneMappingExposure, setToneMappingExposure] = useState(1.0);
+  // 預設曝光調整為 1.5，作為視覺上較中性的基準亮度
+  const [toneMappingExposure, setToneMappingExposure] = useState(1.5);
   const [whitePoint, setWhitePoint] = useState(1.0);
   const [selectedPreset, setSelectedPreset] = useState<CameraPresetType>('outdoor');
   const [hdriUrl, setHdriUrl] = useState<string>('');

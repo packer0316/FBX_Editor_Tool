@@ -28,7 +28,8 @@ export const CAMERA_PRESETS: Record<CameraPresetType, CameraPreset> = {
   outdoor: {
     name: '室外',
     type: 'outdoor',
-    toneMappingExposure: 1.0,
+    // 將室外預設曝光設定為 1.5，與 App 初始值一致
+    toneMappingExposure: 1.5,
     whitePoint: 1.0,
     description: '適合明亮的室外場景，標準曝光'
   },
@@ -42,7 +43,8 @@ export const CAMERA_PRESETS: Record<CameraPresetType, CameraPreset> = {
   night: {
     name: '夜間',
     type: 'night',
-    toneMappingExposure: 1.5,
+    // 夜間場景預設再亮一些，方便看清暗部細節
+    toneMappingExposure: 2.0,
     whitePoint: 1.0,
     description: '適合夜間場景，提高曝光以顯示更多細節'
   }
