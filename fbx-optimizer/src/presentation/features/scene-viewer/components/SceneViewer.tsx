@@ -5,12 +5,16 @@ import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 
-export interface SceneViewerRef {
+export interface ModelRef {
     play: () => void;
     pause: () => void;
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
     getDuration: () => number;
+}
+
+export interface SceneViewerRef extends ModelRef {
+    resetCamera: () => void;
 }
 
 interface SceneViewerProps {
@@ -45,7 +49,7 @@ interface SceneViewerProps {
 // Scene Settings Controller
 function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMappingExposure?: number, environmentIntensity?: number }) {
     const { gl, scene } = useThree();
-    
+
     useEffect(() => {
         if (toneMappingExposure !== undefined) {
             gl.toneMappingExposure = toneMappingExposure;
@@ -58,11 +62,11 @@ function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMapp
             if ('environmentIntensity' in scene) {
                 (scene as any).environmentIntensity = environmentIntensity;
             } else {
-                 // Fallback for older versions: traverse and update environment map intensity if possible, 
-                 // or rely on Environment component's background intensity if it supports it.
-                 // Since we can't easily change global env map intensity on older three.js without traversing materials
-                 // or using a specific prop on Environment (which might be 'environmentIntensity' prop on Environment in v9+),
-                 // we will try setting it on the scene if supported.
+                // Fallback for older versions: traverse and update environment map intensity if possible, 
+                // or rely on Environment component's background intensity if it supports it.
+                // Since we can't easily change global env map intensity on older three.js without traversing materials
+                // or using a specific prop on Environment (which might be 'environmentIntensity' prop on Environment in v9+),
+                // we will try setting it on the scene if supported.
             }
         }
     }, [environmentIntensity, scene]);
@@ -115,7 +119,7 @@ type ModelProps = {
     enableShadows?: boolean;
 };
 
-const Model = forwardRef<SceneViewerRef, ModelProps>(
+const Model = forwardRef<ModelRef, ModelProps>(
     ({ model, clip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop = true, onFinish, enableShadows }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef: React.MutableRefObject<THREE.AnimationAction | null> = useRef<THREE.AnimationAction | null>(null);
@@ -314,22 +318,22 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 // Load textures using utility function
                 const baseMatcapTex = loadTexture(textureLoader, baseMatcapFeature?.params.texture);
                 setTextureColorSpace(baseMatcapTex, 'sRGB'); // Matcap → sRGB
-                
+
                 const baseMatcapMaskTex = loadTexture(textureLoader, baseMatcapFeature?.params.maskTexture);
                 setTextureColorSpace(baseMatcapMaskTex, 'linear'); // Mask → Linear
-                
+
                 const addMatcapTex = loadTexture(textureLoader, addMatcapFeature?.params.texture);
                 setTextureColorSpace(addMatcapTex, 'sRGB'); // Matcap → sRGB
-                
+
                 const addMatcapMaskTex = loadTexture(textureLoader, addMatcapFeature?.params.maskTexture);
                 setTextureColorSpace(addMatcapMaskTex, 'linear'); // Mask → Linear
-                
+
                 const dissolveTex = loadTexture(textureLoader, dissolveFeature?.params.texture);
                 setTextureColorSpace(dissolveTex, 'linear'); // Dissolve noise → Linear
-                
+
                 const normalMapTex = loadTexture(textureLoader, normalMapFeature?.params.texture);
                 setTextureColorSpace(normalMapTex, 'linear'); // Normal → Linear
-                
+
                 // Flash textures need callback for material update
                 const flashTex = loadTexture(
                     textureLoader,
@@ -342,7 +346,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     }
                 );
                 setTextureColorSpace(flashTex, 'sRGB'); // Set immediately if already loaded
-                
+
                 const flashMaskTex = loadTexture(
                     textureLoader,
                     flashFeature?.params.maskTexture,
@@ -780,6 +784,23 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
     ({ model, playingClip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a', toneMappingExposure, whitePoint, hdriUrl, environmentIntensity }, ref) => {
+        const modelRef = useRef<ModelRef>(null);
+        const orbitControlsRef = useRef<any>(null);
+
+        useImperativeHandle(ref, () => ({
+            play: () => modelRef.current?.play(),
+            pause: () => modelRef.current?.pause(),
+            seekTo: (time: number) => modelRef.current?.seekTo(time),
+            getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
+            getDuration: () => modelRef.current?.getDuration() ?? 0,
+            resetCamera: () => {
+                console.log('resetCamera called', orbitControlsRef.current);
+                if (orbitControlsRef.current) {
+                    orbitControlsRef.current.reset();
+                }
+            }
+        }));
+
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -840,7 +861,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     )}
                     {model && (
                         <Model
-                            ref={ref}
+                            ref={modelRef}
                             model={model}
                             clip={playingClip}
                             onTimeUpdate={onTimeUpdate}
@@ -852,6 +873,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         />
                     )}
                     <OrbitControls
+                        ref={orbitControlsRef}
                         makeDefault
                         enableDamping
                         dampingFactor={0.05}

@@ -4,12 +4,16 @@ import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../domain/value-objects/ShaderFeature';
 
-export interface SceneViewerRef {
+export interface ModelRef {
     play: () => void;
     pause: () => void;
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
     getDuration: () => number;
+}
+
+export interface SceneViewerRef extends ModelRef {
+    resetCamera: () => void;
 }
 
 interface SceneViewerProps {
@@ -34,6 +38,10 @@ interface SceneViewerProps {
     showGrid?: boolean;
     gridColor?: string;
     gridCellColor?: string;
+    toneMappingExposure?: number;
+    whitePoint?: number;
+    hdriUrl?: string;
+    environmentIntensity?: number;
 }
 
 // Camera Controller Component to update camera settings dynamically
@@ -80,7 +88,7 @@ type ModelProps = {
     enableShadows?: boolean;
 };
 
-const Model = forwardRef<SceneViewerRef, ModelProps>(
+const Model = forwardRef<ModelRef, ModelProps>(
     ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish, enableShadows }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef = useRef<THREE.AnimationAction | null>(null);
@@ -767,7 +775,24 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a' }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a', toneMappingExposure, whitePoint, hdriUrl, environmentIntensity }, ref) => {
+        const modelRef = useRef<ModelRef>(null);
+        const orbitControlsRef = useRef<any>(null);
+
+        useImperativeHandle(ref, () => ({
+            play: () => modelRef.current?.play(),
+            pause: () => modelRef.current?.pause(),
+            seekTo: (time: number) => modelRef.current?.seekTo(time),
+            getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
+            getDuration: () => modelRef.current?.getDuration() ?? 0,
+            resetCamera: () => {
+                console.log('resetCamera called', orbitControlsRef.current);
+                if (orbitControlsRef.current) {
+                    orbitControlsRef.current.reset();
+                }
+            }
+        }));
+
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -817,7 +842,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     )}
                     {model && (
                         <Model
-                            ref={ref}
+                            ref={modelRef}
                             model={model}
                             clip={playingClip}
                             onTimeUpdate={onTimeUpdate}
@@ -828,6 +853,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         />
                     )}
                     <OrbitControls
+                        ref={orbitControlsRef}
                         makeDefault
                         enableDamping
                         dampingFactor={0.05}

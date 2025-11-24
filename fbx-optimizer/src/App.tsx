@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
 import { setClipIdentifier, type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
 import SceneViewer, { type SceneViewerRef } from './presentation/features/scene-viewer/components/SceneViewer';
+import SceneToolbar from './presentation/features/scene-viewer/components/SceneToolbar';
 import OptimizationControls from './presentation/features/optimization-panel/components/OptimizationControls';
 import MaterialShaderTool from './presentation/features/shader-panel/components/MaterialShaderTool';
 import ModelInspector from './presentation/features/model-inspector/components/ModelInspector';
@@ -136,11 +137,11 @@ function App() {
     setIsLoading(true);
     try {
       const loadModelResult = await LoadModelUseCase.execute(files);
-      
+
       setFile(files[0]); // Assume first file is FBX
       setModel(loadModelResult.model);
       setMeshNames(loadModelResult.meshNames);
-      
+
       if (loadModelResult.defaultShaderGroup) {
         setShaderGroups([loadModelResult.defaultShaderGroup]);
       }
@@ -295,7 +296,7 @@ function App() {
     }
 
     const nextClipResult = PlaylistUseCase.getNextClip(playlist, currentPlaylistIndex);
-    
+
     // Early return if playlist ended
     if (nextClipResult.isEnd || !nextClipResult.nextClip) {
       setIsPlaylistPlaying(false);
@@ -562,11 +563,10 @@ function App() {
                         <button
                           key={preset.type}
                           onClick={() => applyPreset(preset.type)}
-                          className={`py-1.5 text-xs rounded transition-colors ${
-                            selectedPreset === preset.type
-                              ? 'bg-blue-600 text-white'
-                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          }`}
+                          className={`py-1.5 text-xs rounded transition-colors ${selectedPreset === preset.type
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                            }`}
                           title={preset.description}
                         >
                           {preset.name}
@@ -819,6 +819,14 @@ function App() {
         <div className="flex-1 relative flex flex-col">
           {/* 3D Canvas */}
           <div className="flex-1 relative">
+            <SceneToolbar onResetCamera={() => {
+              console.log('Toolbar reset clicked', sceneViewerRef.current);
+              if (sceneViewerRef.current && typeof sceneViewerRef.current.resetCamera === 'function') {
+                sceneViewerRef.current.resetCamera();
+              } else {
+                console.error('resetCamera function not found on ref');
+              }
+            }} />
             <div className="absolute inset-0">
               <SceneViewer
                 ref={sceneViewerRef}
