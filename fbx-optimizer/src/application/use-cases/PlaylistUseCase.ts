@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 
 /**
- * 播放清單管理 Use Case
+ * 動作序列播放管理 Use Case
  * 
- * 負責管理動畫播放清單的業務邏輯，包括：
- * - 添加片段到播放清單
- * - 從播放清單移除片段
- * - 重新排序播放清單
+ * 負責管理動畫序列播放的業務邏輯，包括：
+ * - 添加片段到序列
+ * - 從序列移除片段
+ * - 重新排序序列
  * - 獲取下一個要播放的片段
  * 
  * @example
@@ -19,14 +19,14 @@ import * as THREE from 'three';
  */
 export class PlaylistUseCase {
   /**
-   * 添加片段到播放清單
+   * 添加片段到動作序列
    * 
-   * 將動畫片段添加到播放清單的末尾。為了確保每個播放清單項目都有唯一的引用，
+   * 將動畫片段添加到序列的末尾。為了確保每個序列項目都有唯一的引用，
    * 此方法會複製片段，避免重複添加相同片段時造成的播放問題。
    * 
-   * @param playlist - 當前的播放清單陣列
+   * @param playlist - 當前的序列陣列
    * @param clip - 要添加的動畫片段
-   * @returns 新的播放清單陣列（包含複製後的片段）
+   * @returns 新的序列陣列（包含複製後的片段）
    * 
    * @example
    * ```typescript
@@ -52,15 +52,15 @@ export class PlaylistUseCase {
   }
 
   /**
-   * 從播放清單移除片段
+   * 從動作序列移除片段
    * 
-   * 從播放清單中移除指定索引的片段，並自動調整當前播放索引。
+   * 從序列中移除指定索引的片段，並自動調整當前播放索引。
    * 如果移除的是當前正在播放的片段，會標記需要停止播放。
    * 
-   * @param playlist - 當前的播放清單陣列
+   * @param playlist - 當前的序列陣列
    * @param index - 要移除的片段索引
    * @param currentIndex - 當前正在播放的片段索引
-   * @returns 包含新播放清單、是否應該停止播放、以及新的當前索引的物件
+   * @returns 包含新序列、是否應該停止播放、以及新的當前索引的物件
    * 
    * @example
    * ```typescript
@@ -94,15 +94,15 @@ export class PlaylistUseCase {
   }
 
   /**
-   * 重新排序播放清單
+   * 重新排序動作序列
    * 
-   * 將播放清單中的片段從一個位置移動到另一個位置。
+   * 將序列中的片段從一個位置移動到另一個位置。
    * 為了安全起見，如果在播放過程中重新排序，會標記需要停止播放。
    * 
-   * @param playlist - 當前的播放清單陣列
+   * @param playlist - 當前的序列陣列
    * @param fromIndex - 要移動的片段原始索引
    * @param toIndex - 目標索引位置
-   * @returns 包含新播放清單和是否應該停止播放的物件
+   * @returns 包含新序列和是否應該停止播放的物件
    * 
    * @example
    * ```typescript
@@ -130,10 +130,10 @@ export class PlaylistUseCase {
   /**
    * 獲取下一個片段
    * 
-   * 根據當前播放索引獲取下一個要播放的片段。如果已經到達播放清單末尾，
+   * 根據當前播放索引獲取下一個要播放的片段。如果已經到達序列末尾，
    * 則返回 null 並標記為結束。
    * 
-   * @param playlist - 當前的播放清單陣列
+   * @param playlist - 當前的序列陣列
    * @param currentIndex - 當前正在播放的片段索引
    * @returns 包含下一個片段、下一個索引、以及是否已到達末尾的物件
    * 

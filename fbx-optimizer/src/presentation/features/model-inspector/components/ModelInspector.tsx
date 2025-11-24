@@ -248,7 +248,7 @@ export default function ModelInspector({
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'playlist' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                     onClick={() => setActiveTab('playlist')}
                 >
-                    播放清單 ({playlist.length})
+                    動作序列播放 ({playlist.length})
                 </button>
             </div>
 
@@ -364,7 +364,7 @@ export default function ModelInspector({
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onAddToPlaylist(animationClip); }}
                                                     className="text-gray-400 hover:text-green-400 p-1"
-                                                    title="加入播放清單"
+                                                    title="加入動作序列"
                                                 >
                                                     <Plus size={14} />
                                                 </button>

@@ -225,7 +225,7 @@ ExportModelUseCase.execute(model, optimizedClip, fileName)
 - 音高調整（detune）
 - 播放速率調整
 
-### 5. 播放清單系統
+### 5. 動作序列播放系統
 
 **功能**：連續播放多個動畫片段
 
@@ -268,7 +268,7 @@ application/
     ├── LoadModelUseCase.ts            # 載入模型用例
     ├── ExportModelUseCase.ts          # 導出模型用例
     ├── CreateClipUseCase.ts           # 創建動畫片段用例
-    ├── PlaylistUseCase.ts             # 播放清單管理用例
+    ├── PlaylistUseCase.ts             # 動作序列播放管理用例
     └── AudioSyncUseCase.ts            # 音訊同步用例
 ```
 
@@ -368,7 +368,7 @@ shaderGroups: ShaderGroup[]
 // 音訊相關
 audioTracks: AudioTrack[]
 
-// 播放清單
+// 動作序列播放
 playlist: THREE.AnimationClip[]
 isPlaylistPlaying: boolean
 currentPlaylistIndex: number
@@ -408,7 +408,7 @@ cameraSettings: { fov, near, far }
 
 4. **ModelInspector**：模型檢查器
    - 動畫片段列表
-   - 播放清單管理
+   - 動作序列播放管理
    - 片段創建/刪除
 
 5. **AudioPanel**：音訊管理
