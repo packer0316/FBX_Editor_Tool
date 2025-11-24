@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat, Music } from 'lucide-react';
-import type { AudioTrack } from '../../../domain/value-objects/AudioTrack';
+import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 
 interface ModelInspectorProps {
     model: THREE.Group | null;
@@ -339,18 +339,18 @@ export default function ModelInspector({
                         {createdClips.length === 0 ? (
                             <div className="text-gray-500 text-sm text-center mt-4">尚未建立動作片段</div>
                         ) : (
-                            createdClips.map((c, idx) => {
+                            createdClips.map((animationClip, clipIndex) => {
                                 // Calculate progress for current clip
                                 // Use name for matching as UUIDs might change during optimization
-                                const isCurrentClip = clip?.name === c.name;
+                                const isCurrentClip = clip?.name === animationClip.name;
                                 let progress = 0;
-                                if (isCurrentClip && c.duration > 0) {
-                                    progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
+                                if (isCurrentClip && animationClip.duration > 0) {
+                                    progress = (Math.min(currentTime, animationClip.duration) / animationClip.duration) * 100;
                                 }
 
                                 return (
                                     <div
-                                        key={idx}
+                                        key={clipIndex}
                                         className={`flex flex-col p-2 rounded border transition-colors ${(isCurrentClip && isPlaying)
                                             ? 'bg-blue-900/70 border-blue-500'
                                             : isCurrentClip
@@ -362,23 +362,23 @@ export default function ModelInspector({
                                         <div className="flex items-center justify-between mb-2">
                                             <div
                                                 className="flex flex-col gap-0.5 flex-1 cursor-pointer"
-                                                onClick={() => onSelectClip(c)}
+                                                onClick={() => onSelectClip(animationClip)}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <Film size={14} className={isCurrentClip ? 'text-blue-400' : 'text-gray-500'} />
-                                                    <span className={`text-sm ${isCurrentClip ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{c.name}</span>
+                                                    <span className={`text-sm ${isCurrentClip ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{animationClip.name}</span>
                                                 </div>
                                                 {/* Display frame range if available */}
-                                                {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
+                                                {(animationClip as any).startFrame !== undefined && (animationClip as any).endFrame !== undefined && (
                                                     <span className="text-xs text-gray-500 ml-5">
-                                                        {(c as any).startFrame}-{(c as any).endFrame}幀
+                                                        {(animationClip as any).startFrame}-{(animationClip as any).endFrame}幀
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500 font-mono">{c.duration.toFixed(2)}s</span>
+                                                <span className="text-xs text-gray-500 font-mono">{animationClip.duration.toFixed(2)}s</span>
                                                 <button
-                                                    onClick={(e) => { e.stopPropagation(); onAddToPlaylist(c); }}
+                                                    onClick={(e) => { e.stopPropagation(); onAddToPlaylist(animationClip); }}
                                                     className="text-gray-400 hover:text-green-400 p-1"
                                                     title="加入播放清單"
                                                 >
@@ -387,7 +387,7 @@ export default function ModelInspector({
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        onDeleteCreatedClip(idx);
+                                                        onDeleteCreatedClip(clipIndex);
                                                     }}
                                                     className="text-gray-400 hover:text-red-400 p-1"
                                                     title="刪除動作"
@@ -404,28 +404,28 @@ export default function ModelInspector({
                                                 style={{ width: `${progress}%` }}
                                             />
                                             {/* Audio Markers */}
-                                            {audioTracks.flatMap(track =>
-                                                track.triggers
-                                                    .filter(t => t.clipName === c.name) // Match by name here too for consistency
-                                                    .map(t => ({ trigger: t, track }))
-                                            ).map(({ trigger, track }) => {
+                                            {audioTracks.flatMap(audioTrack =>
+                                                audioTrack.triggers
+                                                    .filter(trigger => trigger.clipName === animationClip.name) // Match by name here too for consistency
+                                                    .map(trigger => ({ trigger, audioTrack }))
+                                            ).map(({ trigger, audioTrack }) => {
                                                 // Calculate percentage based on frame count (assuming 30fps for now as standard)
                                                 // If duration is 0, avoid division by zero
-                                                const totalFrames = c.duration * 30;
-                                                const pct = totalFrames > 0 ? (trigger.frame / totalFrames) * 100 : 0;
+                                                const totalFrames = animationClip.duration * 30;
+                                                const triggerPositionPercent = totalFrames > 0 ? (trigger.frame / totalFrames) * 100 : 0;
 
                                                 return (
                                                     <div
                                                         key={trigger.id}
                                                         className="absolute top-0 bottom-0 w-1 z-10 hover:w-2 transition-all cursor-help group"
                                                         style={{
-                                                            left: `${Math.min(Math.max(pct, 0), 100)}%`,
-                                                            backgroundColor: track.color || '#FACC15'
+                                                            left: `${Math.min(Math.max(triggerPositionPercent, 0), 100)}%`,
+                                                            backgroundColor: audioTrack.color || '#FACC15'
                                                         }}
                                                     >
                                                         <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover:block z-50 whitespace-nowrap">
                                                             <div className="bg-gray-800 text-white text-xs px-2 py-1 rounded border border-gray-600 shadow-lg flex flex-col items-center">
-                                                                <span className="font-medium" style={{ color: track.color || '#FACC15' }}>{track.name}</span>
+                                                                <span className="font-medium" style={{ color: audioTrack.color || '#FACC15' }}>{audioTrack.name}</span>
                                                                 <span className="text-gray-400 text-[10px]">Frame: {trigger.frame}</span>
                                                             </div>
                                                             <div className="w-2 h-2 bg-gray-600 transform rotate-45 absolute left-1/2 -translate-x-1/2 -bottom-1"></div>
@@ -465,56 +465,56 @@ export default function ModelInspector({
                                 <span className="text-xs">請從「動作」分頁加入</span>
                             </div>
                         ) : (
-                            playlist.map((c, idx) => {
-                                const isCurrent = (isPlaylistPlaying && currentPlaylistIndex === idx) || (!isPlaylistPlaying && clip === c);
+                            playlist.map((playlistClip, playlistIndex) => {
+                                const isCurrentClip = (isPlaylistPlaying && currentPlaylistIndex === playlistIndex) || (!isPlaylistPlaying && clip === playlistClip);
                                 // A clip is completed if:
                                 // 1. Its index is less than current index, OR
-                                // 2. Playlist has finished (!isPlaylistPlaying) and this clip was in the playlist (idx <= currentPlaylistIndex)
-                                const isCompleted = idx < currentPlaylistIndex || (!isPlaylistPlaying && idx <= currentPlaylistIndex && currentPlaylistIndex > 0);
-                                let progress = 0;
+                                // 2. Playlist has finished (!isPlaylistPlaying) and this clip was in the playlist (playlistIndex <= currentPlaylistIndex)
+                                const isClipCompleted = playlistIndex < currentPlaylistIndex || (!isPlaylistPlaying && playlistIndex <= currentPlaylistIndex && currentPlaylistIndex > 0);
+                                let clipProgress = 0;
 
-                                if (isCompleted) {
+                                if (isClipCompleted) {
                                     // Clips that have already finished playing should stay at 100%
-                                    progress = 100;
-                                } else if (isCurrent && c.duration > 0) {
+                                    clipProgress = 100;
+                                } else if (isCurrentClip && playlistClip.duration > 0) {
                                     // Current playing clip shows actual progress
-                                    progress = (Math.min(currentTime, c.duration) / c.duration) * 100;
+                                    clipProgress = (Math.min(currentTime, playlistClip.duration) / playlistClip.duration) * 100;
                                 }
 
                                 return (
                                     <div
-                                        key={`${c.uuid}-${idx}`}
+                                        key={`${playlistClip.uuid}-${playlistIndex}`}
                                         draggable
-                                        onDragStart={(e) => handleDragStart(e, idx)}
-                                        onDragOver={(e) => handleDragOver(e, idx)}
+                                        onDragStart={(e) => handleDragStart(e, playlistIndex)}
+                                        onDragOver={(e) => handleDragOver(e, playlistIndex)}
                                         onDragEnd={handleDragEnd}
-                                        className={`relative flex flex-col p-2 rounded border transition-colors ${isCurrent
+                                        className={`relative flex flex-col p-2 rounded border transition-colors ${isCurrentClip
                                             ? 'bg-blue-900/30 border-blue-500'
                                             : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
-                                            } ${draggedItemIndex === idx ? 'opacity-50' : ''}`}
+                                            } ${draggedItemIndex === playlistIndex ? 'opacity-50' : ''}`}
                                     >
                                         <div className="flex items-center justify-between mb-1">
                                             <div className="flex flex-col gap-0.5">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-gray-500 font-mono w-4">{idx + 1}.</span>
-                                                    <span className={`text-sm font-medium ${isCurrent ? 'text-blue-300' : 'text-gray-300'}`}>
-                                                        {c.name}
+                                                    <span className="text-xs text-gray-500 font-mono w-4">{playlistIndex + 1}.</span>
+                                                    <span className={`text-sm font-medium ${isCurrentClip ? 'text-blue-300' : 'text-gray-300'}`}>
+                                                        {playlistClip.name}
                                                     </span>
                                                 </div>
                                                 {/* Display frame range if available */}
-                                                {(c as any).startFrame !== undefined && (c as any).endFrame !== undefined && (
+                                                {(playlistClip as any).startFrame !== undefined && (playlistClip as any).endFrame !== undefined && (
                                                     <span className="text-xs text-gray-500 ml-6">
-                                                        {(c as any).startFrame}-{(c as any).endFrame}幀
+                                                        {(playlistClip as any).startFrame}-{(playlistClip as any).endFrame}幀
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500">{c.duration.toFixed(1)}s</span>
-                                                {isCurrent && (
-                                                    <span className="text-xs text-blue-400 font-mono">{Math.round(progress)}%</span>
+                                                <span className="text-xs text-gray-500">{playlistClip.duration.toFixed(1)}s</span>
+                                                {isCurrentClip && (
+                                                    <span className="text-xs text-blue-400 font-mono">{Math.round(clipProgress)}%</span>
                                                 )}
                                                 <button
-                                                    onClick={() => onRemoveFromPlaylist(idx)}
+                                                    onClick={() => onRemoveFromPlaylist(playlistIndex)}
                                                     className="text-gray-500 hover:text-red-400 p-1"
                                                 >
                                                     <Plus size={14} className="rotate-45" />
@@ -525,8 +525,8 @@ export default function ModelInspector({
                                         {/* Progress Bar */}
                                         <div className="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
                                             <div
-                                                className={`h-full ${isCompleted ? 'bg-green-500' : (isCurrent ? 'bg-blue-500' : 'bg-gray-600')}`}
-                                                style={{ width: `${progress}%` }}
+                                                className={`h-full ${isClipCompleted ? 'bg-green-500' : (isCurrentClip ? 'bg-blue-500' : 'bg-gray-600')}`}
+                                                style={{ width: `${clipProgress}%` }}
                                             />
                                         </div>
                                     </div>
@@ -623,3 +623,4 @@ export default function ModelInspector({
         </div>
     );
 }
+

@@ -1,0 +1,236 @@
+# Cursor Rules for FBX Optimizer Project
+
+## 📋 專案概述
+這是一個基於 React + TypeScript + Three.js 的 3D 模型檢視與優化工具，採用 Domain-Driven Design (DDD) 啟發的分層架構。
+
+---
+
+## 🏗️ 架構限制
+
+### 分層架構規則
+
+1. **Domain Layer (`src/domain/`)**
+   - ✅ 只能包含純業務邏輯
+   - ❌ 禁止依賴 React、Three.js 等外部框架
+   - ❌ 禁止依賴 Application、Infrastructure、Presentation 層
+   - ✅ 可以依賴 TypeScript 標準庫和 Three.js 類型定義（僅類型）
+
+2. **Application Layer (`src/application/`)**
+   - ✅ 可以依賴 Domain 層
+   - ✅ 可以依賴 Infrastructure 層
+   - ❌ 禁止依賴 Presentation 層
+   - ✅ Use Cases 應為靜態方法，命名為 `execute()`
+
+3. **Infrastructure Layer (`src/infrastructure/`)**
+   - ✅ 可以依賴 Domain 層（實現 Domain 定義的介面）
+   - ❌ 禁止依賴 Application、Presentation 層
+   - ✅ 封裝外部 API（Web Audio API、Three.js Loaders 等）
+
+4. **Presentation Layer (`src/presentation/`)**
+   - ✅ 可以依賴 Application 層（透過 Use Cases）
+   - ✅ 可以依賴 Domain 層（使用 Value Objects）
+   - ❌ 禁止直接依賴 Infrastructure 層（應透過 Use Cases）
+   - ✅ React 組件應放在 `features/` 下，按功能模組組織
+
+### 檔案組織規則
+
+- ✅ 每個功能模組放在 `presentation/features/[feature-name]/components/` 下
+- ✅ 共用 Hooks 放在 `presentation/hooks/` 下
+- ✅ 工具函數按類別組織在 `utils/[category]/` 下
+- ❌ 禁止在 `src/components/` 根目錄放置新檔案（已廢棄）
+- ✅ Use Cases 放在 `application/use-cases/` 下
+- ✅ Domain Services 放在 `domain/services/` 下
+- ✅ Value Objects 放在 `domain/value-objects/` 下
+
+---
+
+## 📝 命名規則
+
+### 變數命名
+- **camelCase**：變數、函數參數
+  - ✅ `currentTime`、`audioTracks`、`meshNames`
+  - ❌ `CurrentTime`、`audio_tracks`、`mesh_names`
+
+- **UPPER_CASE**：常數（真正的常數值）
+  - ✅ `SAMPLE_RATE`、`MP3_SAMPLE_BLOCK_SIZE`
+  - ❌ `sampleRate`（如果是變數）
+
+- **PascalCase**：類別、介面、類型、React 組件
+  - ✅ `AnimationOptimizer`、`LoadModelResult`、`SceneViewer`
+
+### 函數命名
+- **動詞開頭**：清楚表達函數行為
+  - ✅ `loadModel()`、`exportAudio()`、`createSubClip()`、`countKeyframes()`
+  - ❌ `model()`、`audio()`、`clip()`、`keyframes()`
+
+- **Use Cases**：靜態方法命名為 `execute()`
+  - ✅ `LoadModelUseCase.execute()`
+  - ❌ `LoadModelUseCase.load()`、`LoadModelUseCase.run()`
+
+- **Hooks**：必須以 `use` 開頭
+  - ✅ `useTheme()`、`useFileDrop()`、`usePanelResize()`
+  - ❌ `theme()`、`fileDrop()`、`panelResize()`
+
+- **Services**：方法應為動詞
+  - ✅ `optimize()`、`fixMaterials()`、`loadFBX()`
+  - ❌ `optimization()`、`materialFix()`、`fbxLoader()`
+
+### 檔案命名
+- **組件檔案**：PascalCase + `.tsx`
+  - ✅ `SceneViewer.tsx`、`AudioPanel.tsx`
+  - ❌ `sceneViewer.tsx`、`audio-panel.tsx`
+
+- **工具函數檔案**：camelCase + `Utils` 後綴 + `.ts`
+  - ✅ `arrayUtils.ts`、`textureLoaderUtils.ts`
+  - ❌ `ArrayUtils.ts`、`texture-loader-utils.ts`
+
+- **Use Cases**：PascalCase + `UseCase` 後綴 + `.ts`
+  - ✅ `LoadModelUseCase.ts`、`ExportModelUseCase.ts`
+  - ❌ `loadModelUseCase.ts`、`LoadModel.ts`
+
+- **Services**：PascalCase + `Service` 後綴 + `.ts`
+  - ✅ `ModelLoaderService.ts`、`AnimationOptimizer.ts`
+  - ❌ `modelLoaderService.ts`、`ModelLoader.ts`
+
+- **Hooks**：camelCase + `use` 前綴 + `.ts`
+  - ✅ `useTheme.ts`、`useFileDrop.ts`
+  - ❌ `UseTheme.ts`、`theme.ts`
+
+### 避免的命名
+- ❌ 模糊的變數名：`data`、`temp`、`obj`、`result`
+- ✅ 使用業務意義明確的名稱：`loadModelResult`、`audioTrack`、`shaderGroup`
+
+- ❌ 單字母變數：`i`、`j`、`k`、`t`、`f`
+- ✅ 使用描述性名稱：`currentKeyframeIndex`、`textureLoader`、`audioFile`
+
+---
+
+## 💻 程式碼風格
+
+### TypeScript
+- ✅ 使用明確的類型註解（避免 `any`）
+- ✅ 使用 `interface` 定義物件結構
+- ✅ 使用 `type` 定義聯合類型、別名
+- ✅ 使用 `const` 宣告常數，`let` 宣告變數（避免 `var`）
+
+### React
+- ✅ 使用函數組件（Function Components）
+- ✅ 使用 Hooks 管理狀態和副作用
+- ✅ Props 使用 `interface` 定義類型
+- ✅ 使用 `forwardRef` 暴露組件 API
+- ✅ 使用 `useCallback`、`useMemo` 優化性能（當需要時）
+
+### 函數式程式設計
+- ✅ 優先使用不可變更新（不直接修改陣列/物件）
+- ✅ 使用工具函數（`updateArrayItemById`、`updateShaderGroupById`）進行更新
+- ✅ 使用 Guard Clauses 和 Early Return 簡化邏輯
+- ❌ 避免深層嵌套的 if/else
+
+### 錯誤處理
+- ✅ 使用 `try-catch` 處理異步操作
+- ✅ 在 Use Cases 中拋出有意義的錯誤訊息
+- ✅ 在 UI 層顯示用戶友好的錯誤訊息
+
+---
+
+## 📚 文檔註釋規範
+
+### JSDoc/TSDoc 格式
+所有 Public Function 和 Class 必須包含完整的 JSDoc 註釋：
+
+```typescript
+/**
+ * 函數/類別的簡短描述
+ * 
+ * 詳細說明（如果需要）
+ * 
+ * @param paramName - 參數說明
+ * @param paramName2 - 參數說明
+ * @returns 返回值說明
+ * @throws {Error} 可能的錯誤情況
+ * 
+ * @example
+ * ```typescript
+ * const result = functionName(param1, param2);
+ * ```
+ */
+```
+
+### 必須加上文檔的項目
+- ✅ 所有 Public Classes
+- ✅ 所有 Public Methods（包括 Use Cases 的 `execute()`）
+- ✅ 所有 Public Functions（Utils、Hooks）
+- ✅ 所有 Public Interfaces（Value Objects）
+- ❌ Private Methods 可以省略（但建議加上）
+
+---
+
+## 🔧 重構原則
+
+### 單一職責原則 (SRP)
+- ✅ 每個類別/函數只負責一件事
+- ✅ 將複雜邏輯拆分成多個小函數
+- ✅ 業務邏輯移至 Use Cases 或 Services
+- ✅ UI 邏輯移至 Hooks
+
+### DRY (Don't Repeat Yourself)
+- ✅ 提取重複邏輯為共用函數
+- ✅ 使用工具函數避免重複的更新模式
+- ✅ 共用組件放在 `presentation/features/shared/` 下
+
+### 可讀性
+- ✅ 使用 Guard Clauses 和 Early Return
+- ✅ 避免深層嵌套（建議不超過 3 層）
+- ✅ 使用有意義的變數名
+- ✅ 複雜邏輯加上註釋說明
+
+---
+
+## 🚫 禁止事項
+
+1. ❌ 在 Domain 層使用 React Hooks 或 Three.js 物件
+2. ❌ 在 Presentation 層直接呼叫 Infrastructure 層的方法
+3. ❌ 使用 `any` 類型（除非絕對必要）
+4. ❌ 直接修改 props 或狀態（使用不可變更新）
+5. ❌ 在組件中寫入複雜的業務邏輯（應移至 Use Cases）
+6. ❌ 使用模糊的變數名（`data`、`temp`、`obj`）
+7. ❌ 在 `src/components/` 根目錄建立新檔案
+
+---
+
+## ✅ 最佳實踐
+
+1. **狀態管理**
+   - 使用 React `useState`、`useRef` 管理本地狀態
+   - 複雜業務邏輯透過 Use Cases 處理
+   - UI 邏輯封裝在自訂 Hooks 中
+
+2. **錯誤處理**
+   - Use Cases 拋出有意義的錯誤
+   - UI 層捕獲錯誤並顯示友好訊息
+
+3. **性能優化**
+   - 使用 `useCallback` 包裝事件處理函數（當作為 props 傳遞時）
+   - 使用 `useMemo` 快取昂貴計算（當需要時）
+   - 使用 `React.memo` 優化組件渲染（當需要時）
+
+4. **類型安全**
+   - 為所有函數參數和返回值加上類型註解
+   - 使用 `interface` 定義複雜物件結構
+   - 避免使用 `any`，優先使用 `unknown` 或具體類型
+
+5. **測試準備**
+   - Domain 層應易於單元測試（無外部依賴）
+   - Use Cases 應易於測試（可注入依賴）
+
+---
+
+## 📖 參考檔案
+
+- **專案上下文**：`PROJECT_CONTEXT.md` - 完整的專案技術文檔
+- **架構說明**：見 `PROJECT_CONTEXT.md` 的「架構設計」章節
+
+---
+
+**最後更新**：2024年（重構後）
+

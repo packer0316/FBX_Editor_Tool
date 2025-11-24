@@ -2,7 +2,8 @@ import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
-import type { ShaderFeature, ShaderGroup } from '../../domain/value-objects/ShaderFeature';
+import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
+import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 
 export interface SceneViewerRef {
     play: () => void;
@@ -83,7 +84,7 @@ type ModelProps = {
 const Model = forwardRef<SceneViewerRef, ModelProps>(
     ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish, enableShadows }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
-        const actionRef = useRef<THREE.AnimationAction | null>(null);
+        const actionRef: React.MutableRefObject<THREE.AnimationAction | null> = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
 
         useEffect(() => {
@@ -256,158 +257,109 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
                 const shouldUseShader = baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
 
-                if (shouldUseShader) {
-                    // Load Base Matcap Texture
-                    let baseMatcapTex = null;
-                    if (baseMatcapFeature && baseMatcapFeature.params.texture) {
-                        const texUrl = typeof baseMatcapFeature.params.texture === 'string'
-                            ? baseMatcapFeature.params.texture
-                            : URL.createObjectURL(baseMatcapFeature.params.texture);
-                        baseMatcapTex = textureLoader.load(texUrl);
+                if (!shouldUseShader) {
+                    child.material = child.userData.originalMaterial;
+                    return;
+                }
+
+                // Load textures using utility function
+                const baseMatcapTex = loadTexture(textureLoader, baseMatcapFeature?.params.texture);
+                const baseMatcapMaskTex = loadTexture(textureLoader, baseMatcapFeature?.params.maskTexture);
+                const addMatcapTex = loadTexture(textureLoader, addMatcapFeature?.params.texture);
+                const addMatcapMaskTex = loadTexture(textureLoader, addMatcapFeature?.params.maskTexture);
+                const dissolveTex = loadTexture(textureLoader, dissolveFeature?.params.texture);
+                const normalMapTex = loadTexture(textureLoader, normalMapFeature?.params.texture);
+                
+                // Flash textures need callback for material update
+                const flashTex = loadTexture(
+                    textureLoader,
+                    flashFeature?.params.texture,
+                    (tex) => {
+                        console.log('[Flash Texture Loaded]', tex);
+                        if (child.material) {
+                            child.material.needsUpdate = true;
+                        }
                     }
-
-                    // Load Base Matcap Mask Texture
-                    let baseMatcapMaskTex = null;
-                    if (baseMatcapFeature && baseMatcapFeature.params.maskTexture) {
-                        const texUrl = typeof baseMatcapFeature.params.maskTexture === 'string'
-                            ? baseMatcapFeature.params.maskTexture
-                            : URL.createObjectURL(baseMatcapFeature.params.maskTexture);
-                        baseMatcapMaskTex = textureLoader.load(texUrl);
+                );
+                const flashMaskTex = loadTexture(
+                    textureLoader,
+                    flashFeature?.params.maskTexture,
+                    (tex) => {
+                        console.log('[Flash Mask Texture Loaded]', tex);
+                        if (child.material) {
+                            child.material.needsUpdate = true;
+                        }
                     }
+                );
 
-                    // Load Additive Matcap Texture
-                    let addMatcapTex = null;
-                    if (addMatcapFeature && addMatcapFeature.params.texture) {
-                        const texUrl = typeof addMatcapFeature.params.texture === 'string'
-                            ? addMatcapFeature.params.texture
-                            : URL.createObjectURL(addMatcapFeature.params.texture);
-                        addMatcapTex = textureLoader.load(texUrl);
-                    }
+                const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
+                    (child.material as any).isCustomShader;
 
-                    // Load Additive Matcap Mask Texture
-                    let addMatcapMaskTex = null;
-                    if (addMatcapFeature && addMatcapFeature.params.maskTexture) {
-                        const texUrl = typeof addMatcapFeature.params.maskTexture === 'string'
-                            ? addMatcapFeature.params.maskTexture
-                            : URL.createObjectURL(addMatcapFeature.params.maskTexture);
-                        addMatcapMaskTex = textureLoader.load(texUrl);
-                    }
+                let shaderMat: THREE.ShaderMaterial;
 
-                    let dissolveTex = null;
-                    if (dissolveFeature && dissolveFeature.params.texture) {
-                        const texUrl = typeof dissolveFeature.params.texture === 'string'
-                            ? dissolveFeature.params.texture
-                            : URL.createObjectURL(dissolveFeature.params.texture);
-                        dissolveTex = textureLoader.load(texUrl);
-                    }
+                // ALWAYS recreate shader when features change to ensure defines are updated
+                // (especially important when textures are added/removed)
+                const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
+                const baseTexture = originalMaterial.map || null;
+                const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
+                const isSkinnedMesh = (child as any).isSkinnedMesh;
 
-                    let normalMapTex = null;
-                    if (normalMapFeature && normalMapFeature.params.texture) {
-                        const texUrl = typeof normalMapFeature.params.texture === 'string'
-                            ? normalMapFeature.params.texture
-                            : URL.createObjectURL(normalMapFeature.params.texture);
-                        normalMapTex = textureLoader.load(texUrl);
-                    }
+                console.log('[Creating Shader] flashTex:', !!flashTex, 'flashMaskTex:', !!flashMaskTex);
 
-                    let flashTex = null;
-                    if (flashFeature && flashFeature.params.texture) {
-                        const texUrl = typeof flashFeature.params.texture === 'string'
-                            ? flashFeature.params.texture
-                            : URL.createObjectURL(flashFeature.params.texture);
-                        flashTex = textureLoader.load(texUrl, (tex) => {
-                            console.log('[Flash Texture Loaded]', tex);
-                            // Force material update when texture loads
-                            if (child.material) {
-                                child.material.needsUpdate = true;
-                            }
-                        });
-                        console.log('[Flash Texture Loading...]', flashTex);
-                    }
+                shaderMat = new THREE.ShaderMaterial({
+                    uniforms: {
+                        // Base
+                        baseTexture: { value: baseTexture },
+                        baseColor: { value: baseColor },
+                        uTime: { value: 0 },
 
-                    let flashMaskTex = null;
-                    if (flashFeature && flashFeature.params.maskTexture) {
-                        const texUrl = typeof flashFeature.params.maskTexture === 'string'
-                            ? flashFeature.params.maskTexture
-                            : URL.createObjectURL(flashFeature.params.maskTexture);
-                        flashMaskTex = textureLoader.load(texUrl, (tex) => {
-                            console.log('[Flash Mask Texture Loaded]', tex);
-                            // Force material update when texture loads
-                            if (child.material) {
-                                child.material.needsUpdate = true;
-                            }
-                        });
-                        console.log('[Flash Mask Texture Loading...]', flashMaskTex);
-                    }
+                        // Base Matcap
+                        matcapTexture: { value: null },
+                        matcapMaskTexture: { value: null },
+                        matcapProgress: { value: 0 },
+                        useMatcap: { value: 0.0 },
 
+                        // Additive Matcap
+                        matcapAddTexture: { value: null },
+                        matcapAddMaskTexture: { value: null },
+                        matcapAddStrength: { value: 1.0 },
+                        matcapAddColor: { value: new THREE.Color(0xffffff) },
+                        useMatcapAdd: { value: 0.0 },
 
-                    const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
-                        (child.material as any).isCustomShader;
+                        // Rim Light
+                        rimColor: { value: new THREE.Color(0xffffff) },
+                        rimIntensity: { value: 0.0 },
+                        rimPower: { value: 3.0 },
+                        useRimLight: { value: 0.0 },
 
-                    let shaderMat: THREE.ShaderMaterial;
+                        // Flash
+                        flashTexture: { value: null },
+                        flashMaskTexture: { value: null },
+                        flashColor: { value: new THREE.Color(0xffffff) },
+                        flashIntensity: { value: 0.0 },
+                        flashSpeed: { value: 1.0 },
+                        flashWidth: { value: 0.5 },
+                        flashReverse: { value: 0.0 },
+                        useFlash: { value: 0.0 },
 
-                    // ALWAYS recreate shader when features change to ensure defines are updated
-                    // (especially important when textures are added/removed)
-                    const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
-                    const baseTexture = originalMaterial.map || null;
-                    const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
-                    const isSkinnedMesh = (child as any).isSkinnedMesh;
+                        // Dissolve
+                        dissolveTexture: { value: null },
+                        dissolveThreshold: { value: 0.0 },
+                        dissolveEdgeWidth: { value: 0.1 },
+                        dissolveColor1: { value: new THREE.Color(0xffff00) },
+                        dissolveColor2: { value: new THREE.Color(0xff0000) },
+                        useDissolve: { value: 0.0 },
 
-                    console.log('[Creating Shader] flashTex:', !!flashTex, 'flashMaskTex:', !!flashMaskTex);
+                        // Alpha Test
+                        alphaTestThreshold: { value: 0.5 },
+                        useAlphaTest: { value: 0.0 },
 
-                    shaderMat = new THREE.ShaderMaterial({
-                        uniforms: {
-                            // Base
-                            baseTexture: { value: baseTexture },
-                            baseColor: { value: baseColor },
-                            uTime: { value: 0 },
-
-                            // Base Matcap
-                            matcapTexture: { value: null },
-                            matcapMaskTexture: { value: null },
-                            matcapProgress: { value: 0 },
-                            useMatcap: { value: 0.0 },
-
-                            // Additive Matcap
-                            matcapAddTexture: { value: null },
-                            matcapAddMaskTexture: { value: null },
-                            matcapAddStrength: { value: 1.0 },
-                            matcapAddColor: { value: new THREE.Color(0xffffff) },
-                            useMatcapAdd: { value: 0.0 },
-
-                            // Rim Light
-                            rimColor: { value: new THREE.Color(0xffffff) },
-                            rimIntensity: { value: 0.0 },
-                            rimPower: { value: 3.0 },
-                            useRimLight: { value: 0.0 },
-
-                            // Flash
-                            flashTexture: { value: null },
-                            flashMaskTexture: { value: null },
-                            flashColor: { value: new THREE.Color(0xffffff) },
-                            flashIntensity: { value: 0.0 },
-                            flashSpeed: { value: 1.0 },
-                            flashWidth: { value: 0.5 },
-                            flashReverse: { value: 0.0 },
-                            useFlash: { value: 0.0 },
-
-                            // Dissolve
-                            dissolveTexture: { value: null },
-                            dissolveThreshold: { value: 0.0 },
-                            dissolveEdgeWidth: { value: 0.1 },
-                            dissolveColor1: { value: new THREE.Color(0xffff00) },
-                            dissolveColor2: { value: new THREE.Color(0xff0000) },
-                            useDissolve: { value: 0.0 },
-
-                            // Alpha Test
-                            alphaTestThreshold: { value: 0.5 },
-                            useAlphaTest: { value: 0.0 },
-
-                            // Normal Map
-                            normalMap: { value: null },
-                            normalScale: { value: new THREE.Vector2(1, 1) },
-                            useNormalMap: { value: 0.0 },
-                        },
-                        vertexShader: `
+                        // Normal Map
+                        normalMap: { value: null },
+                        normalScale: { value: new THREE.Vector2(1, 1) },
+                        useNormalMap: { value: 0.0 },
+                    },
+                    vertexShader: `
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
@@ -653,111 +605,102 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     gl_FragColor = vec4(finalColor, 1.0);
                                 }
                             `,
-                        defines: {
-                            ...(baseTexture ? { USE_MAP: '' } : {}),
-                            ...(baseMatcapMaskTex ? { USE_MATCAP_MASK: '' } : {}),
-                            ...(addMatcapMaskTex ? { USE_MATCAP_ADD_MASK: '' } : {}),
-                            ...(flashTex ? { USE_FLASH_TEXTURE: '' } : {}),
-                            ...(flashMaskTex ? { USE_FLASH_MASK: '' } : {}),
-                        },
-                        extensions: {
-                            derivatives: true
-                        },
-                        skinning: isSkinnedMesh
-                    });
-                    (shaderMat as any).isCustomShader = true;
-                    child.material = shaderMat;
+                    defines: {
+                        ...(baseTexture ? { USE_MAP: '' } : {}),
+                        ...(baseMatcapMaskTex ? { USE_MATCAP_MASK: '' } : {}),
+                        ...(addMatcapMaskTex ? { USE_MATCAP_ADD_MASK: '' } : {}),
+                        ...(flashTex ? { USE_FLASH_TEXTURE: '' } : {}),
+                        ...(flashMaskTex ? { USE_FLASH_MASK: '' } : {}),
+                    },
+                    extensions: {
+                        derivatives: true
+                    },
+                    skinning: isSkinnedMesh
+                });
+                (shaderMat as any).isCustomShader = true;
+                child.material = shaderMat;
 
-                    // Update Uniforms
+                // Update Uniforms
 
-                    // Base Matcap
-                    if (baseMatcapFeature && baseMatcapTex) {
-                        shaderMat.uniforms.useMatcap.value = 1.0;
-                        shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
-                        if (baseMatcapMaskTex) shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
-                        shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
-                    } else {
-                        shaderMat.uniforms.useMatcap.value = 0.0;
-                    }
-
-                    // Additive Matcap
-                    if (addMatcapFeature && addMatcapTex) {
-                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
-                        shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
-                        if (addMatcapMaskTex) shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
-                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
-                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
-                    } else {
-                        shaderMat.uniforms.useMatcapAdd.value = 0.0;
-                    }
-
-                    // Rim Light
-                    if (rimLightFeature) {
-                        shaderMat.uniforms.useRimLight.value = 1.0;
-                        shaderMat.uniforms.rimColor.value = new THREE.Color(rimLightFeature.params.color || '#ffffff');
-                        shaderMat.uniforms.rimIntensity.value = rimLightFeature.params.intensity ?? 1.0;
-                        shaderMat.uniforms.rimPower.value = rimLightFeature.params.power ?? 3.0;
-                    } else {
-                        shaderMat.uniforms.useRimLight.value = 0.0;
-                    }
-
-                    // Flash
-                    if (flashFeature) {
-                        shaderMat.uniforms.useFlash.value = 1.0;
-                        if (flashTex) shaderMat.uniforms.flashTexture.value = flashTex;
-                        if (flashMaskTex) shaderMat.uniforms.flashMaskTexture.value = flashMaskTex;
-                        shaderMat.uniforms.flashColor.value = new THREE.Color(flashFeature.params.color || '#ffffff');
-                        shaderMat.uniforms.flashIntensity.value = flashFeature.params.intensity ?? 1.0;
-                        shaderMat.uniforms.flashSpeed.value = flashFeature.params.speed ?? 1.0;
-                        shaderMat.uniforms.flashWidth.value = flashFeature.params.width ?? 0.5;
-                        shaderMat.uniforms.flashReverse.value = flashFeature.params.reverse ? 1.0 : 0.0;
-                    } else {
-                        shaderMat.uniforms.useFlash.value = 0.0;
-                    }
-
-                    // Dissolve
-                    if (dissolveFeature) {
-                        shaderMat.uniforms.useDissolve.value = 1.0;
-                        if (dissolveTex) shaderMat.uniforms.dissolveTexture.value = dissolveTex;
-                        shaderMat.uniforms.dissolveThreshold.value = dissolveFeature.params.threshold ?? 0.0;
-                        shaderMat.uniforms.dissolveEdgeWidth.value = dissolveFeature.params.edgeWidth ?? 0.1;
-                        shaderMat.uniforms.dissolveColor1.value = new THREE.Color(dissolveFeature.params.color1 || '#ffff00');
-                        shaderMat.uniforms.dissolveColor2.value = new THREE.Color(dissolveFeature.params.color2 || '#ff0000');
-                        shaderMat.transparent = true;
-                    } else {
-                        shaderMat.uniforms.useDissolve.value = 0.0;
-                    }
-
-                    // Alpha Test
-                    if (alphaTestFeature) {
-                        shaderMat.uniforms.useAlphaTest.value = 1.0;
-                        shaderMat.uniforms.alphaTestThreshold.value = alphaTestFeature.params.threshold ?? 0.5;
-                    } else {
-                        shaderMat.uniforms.useAlphaTest.value = 0.0;
-                    }
-
-                    // Normal Map
-                    if (normalMapFeature && normalMapTex) {
-                        shaderMat.uniforms.useNormalMap.value = 1.0;
-                        shaderMat.uniforms.normalMap.value = normalMapTex;
-                        shaderMat.uniforms.normalScale.value = new THREE.Vector2(
-                            normalMapFeature.params.strength ?? 1.0,
-                            normalMapFeature.params.strength ?? 1.0
-                        );
-                    } else {
-                        shaderMat.uniforms.useNormalMap.value = 0.0;
-                    }
-
-                    materialsRef.current.push(shaderMat);
-
+                // Base Matcap
+                if (baseMatcapFeature && baseMatcapTex) {
+                    shaderMat.uniforms.useMatcap.value = 1.0;
+                    shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
+                    if (baseMatcapMaskTex) shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
+                    shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
                 } else {
-                    // Revert to original material if no shader features are active
-                    if (child.material instanceof THREE.ShaderMaterial && (child.material as any).isCustomShader) {
-                        if (child.userData.originalMaterial) {
-                            child.material = child.userData.originalMaterial.clone();
-                        }
-                    }
+                    shaderMat.uniforms.useMatcap.value = 0.0;
                 }
+
+                // Additive Matcap
+                if (addMatcapFeature && addMatcapTex) {
+                    shaderMat.uniforms.useMatcapAdd.value = 1.0;
+                    shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
+                    if (addMatcapMaskTex) shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
+                    shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
+                    shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                } else {
+                    shaderMat.uniforms.useMatcapAdd.value = 0.0;
+                }
+
+                // Rim Light
+                if (rimLightFeature) {
+                    shaderMat.uniforms.useRimLight.value = 1.0;
+                    shaderMat.uniforms.rimColor.value = new THREE.Color(rimLightFeature.params.color || '#ffffff');
+                    shaderMat.uniforms.rimIntensity.value = rimLightFeature.params.intensity ?? 1.0;
+                    shaderMat.uniforms.rimPower.value = rimLightFeature.params.power ?? 3.0;
+                } else {
+                    shaderMat.uniforms.useRimLight.value = 0.0;
+                }
+
+                // Flash
+                if (flashFeature) {
+                    shaderMat.uniforms.useFlash.value = 1.0;
+                    if (flashTex) shaderMat.uniforms.flashTexture.value = flashTex;
+                    if (flashMaskTex) shaderMat.uniforms.flashMaskTexture.value = flashMaskTex;
+                    shaderMat.uniforms.flashColor.value = new THREE.Color(flashFeature.params.color || '#ffffff');
+                    shaderMat.uniforms.flashIntensity.value = flashFeature.params.intensity ?? 1.0;
+                    shaderMat.uniforms.flashSpeed.value = flashFeature.params.speed ?? 1.0;
+                    shaderMat.uniforms.flashWidth.value = flashFeature.params.width ?? 0.5;
+                    shaderMat.uniforms.flashReverse.value = flashFeature.params.reverse ? 1.0 : 0.0;
+                } else {
+                    shaderMat.uniforms.useFlash.value = 0.0;
+                }
+
+                // Dissolve
+                if (dissolveFeature) {
+                    shaderMat.uniforms.useDissolve.value = 1.0;
+                    if (dissolveTex) shaderMat.uniforms.dissolveTexture.value = dissolveTex;
+                    shaderMat.uniforms.dissolveThreshold.value = dissolveFeature.params.threshold ?? 0.0;
+                    shaderMat.uniforms.dissolveEdgeWidth.value = dissolveFeature.params.edgeWidth ?? 0.1;
+                    shaderMat.uniforms.dissolveColor1.value = new THREE.Color(dissolveFeature.params.color1 || '#ffff00');
+                    shaderMat.uniforms.dissolveColor2.value = new THREE.Color(dissolveFeature.params.color2 || '#ff0000');
+                    shaderMat.transparent = true;
+                } else {
+                    shaderMat.uniforms.useDissolve.value = 0.0;
+                }
+
+                // Alpha Test
+                if (alphaTestFeature) {
+                    shaderMat.uniforms.useAlphaTest.value = 1.0;
+                    shaderMat.uniforms.alphaTestThreshold.value = alphaTestFeature.params.threshold ?? 0.5;
+                } else {
+                    shaderMat.uniforms.useAlphaTest.value = 0.0;
+                }
+
+                // Normal Map
+                if (normalMapFeature && normalMapTex) {
+                    shaderMat.uniforms.useNormalMap.value = 1.0;
+                    shaderMat.uniforms.normalMap.value = normalMapTex;
+                    shaderMat.uniforms.normalScale.value = new THREE.Vector2(
+                        normalMapFeature.params.strength ?? 1.0,
+                        normalMapFeature.params.strength ?? 1.0
+                    );
+                } else {
+                    shaderMat.uniforms.useNormalMap.value = 0.0;
+                }
+
+                materialsRef.current.push(shaderMat);
             });
         }, [model, shaderGroups]);
 
@@ -843,3 +786,4 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
 );
 
 export default React.memo(SceneViewer);
+

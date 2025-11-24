@@ -4,6 +4,7 @@ import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 import type { AudioTrigger } from '../../../../domain/value-objects/AudioTrigger';
 import * as THREE from 'three';
 import { AudioController } from '../../../../infrastructure/audio/WebAudioAdapter';
+import { updateArrayItemById, updateArrayItemProperties } from '../../../../utils/array/arrayUtils';
 
 interface AudioPanelProps {
     audioTracks: AudioTrack[];
@@ -18,7 +19,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({});
     const [expandedSettings, setExpandedSettings] = useState<Record<string, boolean>>({});
     const [editingNameId, setEditingNameId] = useState<string | null>(null);
-    const [tempName, setTempName] = useState('');
+    const [editingTrackName, setEditingTrackName] = useState('');
 
     // Temporary state for adding new triggers
     const [newTriggerState, setNewTriggerState] = useState<Record<string, { clipUuid: string, frame: string }>>({});
@@ -57,12 +58,12 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     };
 
     const handleDeleteTrack = (id: string) => {
-        const track = audioTracks.find(t => t.id === id);
-        if (track) {
-            URL.revokeObjectURL(track.url); // Cleanup URL
+        const trackToDelete = audioTracks.find(track => track.id === id);
+        if (trackToDelete) {
+            URL.revokeObjectURL(trackToDelete.url); // Cleanup URL
             audioController.cleanup(id);
         }
-        setAudioTracks(audioTracks.filter(t => t.id !== id));
+        setAudioTracks(audioTracks.filter(track => track.id !== id));
     };
 
     const toggleCard = (id: string) => {
@@ -79,34 +80,26 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
 
     const startEditingName = (track: AudioTrack) => {
         setEditingNameId(track.id);
-        setTempName(track.name);
+        setEditingTrackName(track.name);
     };
 
     const saveName = () => {
-        if (editingNameId) {
-            setAudioTracks(audioTracks.map(t =>
-                t.id === editingNameId ? { ...t, name: tempName } : t
-            ));
-            setEditingNameId(null);
-        }
+        if (!editingNameId) return;
+        
+        setAudioTracks(updateArrayItemProperties(audioTracks, editingNameId, { name: editingTrackName }));
+        setEditingNameId(null);
     };
 
     const updateNote = (id: string, note: string) => {
-        setAudioTracks(audioTracks.map(t =>
-            t.id === id ? { ...t, note } : t
-        ));
+        setAudioTracks(updateArrayItemProperties(audioTracks, id, { note }));
     };
 
     const updateColor = (id: string, color: string) => {
-        setAudioTracks(audioTracks.map(t =>
-            t.id === id ? { ...t, color } : t
-        ));
+        setAudioTracks(updateArrayItemProperties(audioTracks, id, { color }));
     };
 
     const updateTrackProperty = (id: string, property: keyof AudioTrack, value: number) => {
-        setAudioTracks(audioTracks.map(t =>
-            t.id === id ? { ...t, [property]: value } : t
-        ));
+        setAudioTracks(updateArrayItemProperties(audioTracks, id, { [property]: value } as Partial<AudioTrack>));
     };
 
     const closeSettings = (id: string) => {
@@ -114,20 +107,17 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     };
 
     const resetPlaybackSettings = (id: string) => {
-        setAudioTracks(audioTracks.map(t =>
-            t.id === id ? {
-                ...t,
-                playbackRate: 1.0,
-                volume: 1.0,
-                pitch: 0,
-                echo: 0,
-                eqLow: 0,
-                eqMid: 0,
-                eqHigh: 0,
-                lowpass: 20000,
-                highpass: 0
-            } : t
-        ));
+        setAudioTracks(updateArrayItemProperties(audioTracks, id, {
+            playbackRate: 1.0,
+            volume: 1.0,
+            pitch: 0,
+            echo: 0,
+            eqLow: 0,
+            eqMid: 0,
+            eqHigh: 0,
+            lowpass: 20000,
+            highpass: 0
+        }));
     };
 
     const switchTab = (id: string, tab: 'basic' | 'eq' | 'effects') => {
@@ -136,25 +126,26 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
 
     const addTrigger = (trackId: string) => {
         const state = newTriggerState[trackId];
-        if (!state || !state.clipUuid || !state.frame) return;
+        if (!state?.clipUuid || !state.frame) return;
 
         const frame = parseInt(state.frame);
         if (isNaN(frame)) return;
 
         // Find the selected clip to get its name
-        const selectedClip = createdClips.find(c => c.uuid === state.clipUuid);
-        if (!selectedClip) return;
+        const selectedAnimationClip = createdClips.find(clip => clip.uuid === state.clipUuid);
+        if (!selectedAnimationClip) return;
 
         const newTrigger: AudioTrigger = {
             id: crypto.randomUUID(),
             clipUuid: state.clipUuid,
-            clipName: selectedClip.name, // Store clip name for matching
+            clipName: selectedAnimationClip.name, // Store clip name for matching
             frame: frame
         };
 
-        setAudioTracks(audioTracks.map(t =>
-            t.id === trackId ? { ...t, triggers: [...t.triggers, newTrigger] } : t
-        ));
+        setAudioTracks(updateArrayItemById(audioTracks, trackId, track => ({
+            ...track,
+            triggers: [...track.triggers, newTrigger]
+        })));
 
         // Reset input
         setNewTriggerState(prev => ({
@@ -164,9 +155,10 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     };
 
     const removeTrigger = (trackId: string, triggerId: string) => {
-        setAudioTracks(audioTracks.map(t =>
-            t.id === trackId ? { ...t, triggers: t.triggers.filter(tr => tr.id !== triggerId) } : t
-        ));
+        setAudioTracks(updateArrayItemById(audioTracks, trackId, track => ({
+            ...track,
+            triggers: track.triggers.filter(trigger => trigger.id !== triggerId)
+        })));
     };
 
     const updateNewTriggerState = (trackId: string, field: 'clipUuid' | 'frame', value: string) => {
@@ -214,8 +206,8 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                 {editingNameId === track.id ? (
                                     <input
                                         type="text"
-                                        value={tempName}
-                                        onChange={(e) => setTempName(e.target.value)}
+                                        value={editingTrackName}
+                                        onChange={(e) => setEditingTrackName(e.target.value)}
                                         onBlur={saveName}
                                         onKeyDown={(e) => e.key === 'Enter' && saveName()}
                                         className="bg-gray-700 text-white px-2 py-1 rounded text-sm w-full focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -386,20 +378,20 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                                                         { label: 'Low', prop: 'eqLow' as const, color: 'text-red-400', accent: 'accent-red-500' },
                                                                         { label: 'Mid', prop: 'eqMid' as const, color: 'text-yellow-400', accent: 'accent-yellow-500' },
                                                                         { label: 'High', prop: 'eqHigh' as const, color: 'text-cyan-400', accent: 'accent-cyan-500' }
-                                                                    ].map(band => (
-                                                                        <div key={band.label} className="flex flex-col items-center gap-1">
+                                                                    ].map(eqBand => (
+                                                                        <div key={eqBand.label} className="flex flex-col items-center gap-1">
                                                                             <input
                                                                                 type="range"
                                                                                 min="-20"
                                                                                 max="20"
                                                                                 step="1"
-                                                                                value={track[band.prop]}
-                                                                                onChange={(e) => updateTrackProperty(track.id, band.prop, parseFloat(e.target.value))}
-                                                                                className={`h-24 w-2 bg-gray-700 rounded-lg appearance-none cursor-pointer ${band.accent} writing-mode-vertical`}
+                                                                                value={track[eqBand.prop]}
+                                                                                onChange={(e) => updateTrackProperty(track.id, eqBand.prop, parseFloat(e.target.value))}
+                                                                                className={`h-24 w-2 bg-gray-700 rounded-lg appearance-none cursor-pointer ${eqBand.accent} writing-mode-vertical`}
                                                                                 style={{ writingMode: 'vertical-lr', WebkitAppearance: 'slider-vertical' }}
                                                                             />
-                                                                            <span className={`text-[10px] ${band.color}`}>{band.label}</span>
-                                                                            <span className="text-[10px] text-gray-500">{track[band.prop]}dB</span>
+                                                                            <span className={`text-[10px] ${eqBand.color}`}>{eqBand.label}</span>
+                                                                            <span className="text-[10px] text-gray-500">{track[eqBand.prop]}dB</span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
@@ -533,11 +525,11 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                 <div className="space-y-2">
                                     <div className="text-xs text-gray-400 font-medium">觸發設定</div>
                                     {track.triggers.map(trigger => {
-                                        const clipName = createdClips.find(c => c.uuid === trigger.clipUuid)?.name || 'Unknown Clip';
+                                        const animationClipName = createdClips.find(clip => clip.uuid === trigger.clipUuid)?.name || 'Unknown Clip';
                                         return (
                                             <div key={trigger.id} className="flex items-center justify-between bg-gray-800 rounded px-2 py-1.5 border border-gray-700">
                                                 <div className="flex items-center gap-2 text-xs">
-                                                    <span className="text-blue-400">{clipName}</span>
+                                                    <span className="text-blue-400">{animationClipName}</span>
                                                     <span className="text-gray-500">@</span>
                                                     <span style={{ color: track.color }}>{trigger.frame} Frame</span>
                                                 </div>
@@ -562,8 +554,8 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                             className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
                                         >
                                             <option value="">選擇動作...</option>
-                                            {createdClips.map(clip => (
-                                                <option key={clip.uuid} value={clip.uuid}>{clip.name}</option>
+                                            {createdClips.map(animationClip => (
+                                                <option key={animationClip.uuid} value={animationClip.uuid}>{animationClip.name}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -599,3 +591,4 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
         </div>
     );
 }
+

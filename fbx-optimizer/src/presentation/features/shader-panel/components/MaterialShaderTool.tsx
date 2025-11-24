@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2 } from 'lucide-react';
-import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../domain/value-objects/ShaderFeature';
+import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
+import { updateShaderGroupById, updateShaderGroupFeatureParam } from '../../../../utils/shader/shaderGroupUtils';
 
 interface MaterialShaderToolProps {
     fileName: string | null;
@@ -186,23 +187,19 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
     // 刪除組合
     const removeGroup = (groupId: string) => {
-        onGroupsChange(shaderGroups.filter(g => g.id !== groupId));
+        onGroupsChange(shaderGroups.filter(group => group.id !== groupId));
     };
 
     // 更新組合名稱
     const updateGroupName = (groupId: string, newName: string) => {
         if (!newName.trim()) return;
-        onGroupsChange(shaderGroups.map(g =>
-            g.id === groupId ? { ...g, name: newName } : g
-        ));
+        onGroupsChange(updateShaderGroupById(shaderGroups, groupId, group => ({ ...group, name: newName })));
         setEditingGroupId(null);
     };
 
     // 切換組合展開/收起
     const toggleGroupExpanded = (groupId: string) => {
-        onGroupsChange(shaderGroups.map(g =>
-            g.id === groupId ? { ...g, expanded: !g.expanded } : g
-        ));
+        onGroupsChange(updateShaderGroupById(shaderGroups, groupId, group => ({ ...group, expanded: !group.expanded })));
     };
 
     // 添加功能到組合
@@ -214,25 +211,25 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             params: getDefaultParams(featureTemplate.type),
         };
 
-        onGroupsChange(shaderGroups.map(g => {
-            if (g.id !== groupId) return g;
+        onGroupsChange(shaderGroups.map(group => {
+            if (group.id !== groupId) return group;
 
-            let newFeatures = [...g.features];
+            let updatedFeatures = [...group.features];
 
             if (newFeature.type === 'normal_map') {
-                newFeatures = newFeatures.filter(f => f.type !== 'normal_map');
-                newFeatures.unshift(newFeature);
+                updatedFeatures = updatedFeatures.filter(feature => feature.type !== 'normal_map');
+                updatedFeatures.unshift(newFeature);
             } else {
-                newFeatures.push(newFeature);
+                updatedFeatures.push(newFeature);
             }
 
-            const normalMapIndex = newFeatures.findIndex(f => f.type === 'normal_map');
+            const normalMapIndex = updatedFeatures.findIndex(feature => feature.type === 'normal_map');
             if (normalMapIndex > 0) {
-                const [normalMap] = newFeatures.splice(normalMapIndex, 1);
-                newFeatures.unshift(normalMap);
+                const [normalMapFeature] = updatedFeatures.splice(normalMapIndex, 1);
+                updatedFeatures.unshift(normalMapFeature);
             }
 
-            return { ...g, features: newFeatures };
+            return { ...group, features: updatedFeatures };
         }));
 
         setShowFeatureMenu(null);
@@ -240,59 +237,43 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
     // 從組合移除功能
     const removeFeatureFromGroup = (groupId: string, featureId: string) => {
-        onGroupsChange(shaderGroups.map(g =>
-            g.id === groupId
-                ? { ...g, features: g.features.filter(f => f.id !== featureId) }
-                : g
-        ));
+        onGroupsChange(updateShaderGroupById(shaderGroups, groupId, group => ({
+            ...group,
+            features: group.features.filter(feature => feature.id !== featureId)
+        })));
     };
 
     // 切換功能展開/收起
     const toggleFeatureExpanded = (groupId: string, featureId: string) => {
-        onGroupsChange(shaderGroups.map(g =>
-            g.id === groupId
-                ? {
-                    ...g,
-                    features: g.features.map(f =>
-                        f.id === featureId ? { ...f, expanded: !f.expanded } : f
-                    )
-                }
-                : g
-        ));
+        onGroupsChange(updateShaderGroupById(shaderGroups, groupId, group => ({
+            ...group,
+            features: group.features.map(feature =>
+                feature.id === featureId ? { ...feature, expanded: !feature.expanded } : feature
+            )
+        })));
     };
 
     // 更新功能參數
     const updateFeatureParam = (groupId: string, featureId: string, paramName: string, value: any) => {
-        onGroupsChange(shaderGroups.map(g =>
-            g.id === groupId
-                ? {
-                    ...g,
-                    features: g.features.map(f =>
-                        f.id === featureId
-                            ? { ...f, params: { ...f.params, [paramName]: value } }
-                            : f
-                    )
-                }
-                : g
-        ));
+        onGroupsChange(updateShaderGroupFeatureParam(shaderGroups, groupId, featureId, paramName, value));
     };
 
     // 切換 mesh 選擇
     const toggleMeshSelection = (groupId: string, meshName: string) => {
-        onGroupsChange(shaderGroups.map(g => {
-            if (g.id === groupId) {
-                const isSelected = g.selectedMeshes.includes(meshName);
+        onGroupsChange(shaderGroups.map(group => {
+            if (group.id === groupId) {
+                const isMeshSelected = group.selectedMeshes.includes(meshName);
                 return {
-                    ...g,
-                    selectedMeshes: isSelected
-                        ? g.selectedMeshes.filter(m => m !== meshName)
-                        : [...g.selectedMeshes, meshName]
+                    ...group,
+                    selectedMeshes: isMeshSelected
+                        ? group.selectedMeshes.filter(selectedMeshName => selectedMeshName !== meshName)
+                        : [...group.selectedMeshes, meshName]
                 };
             } else {
                 // 從其他組移除這個 mesh
                 return {
-                    ...g,
-                    selectedMeshes: g.selectedMeshes.filter(m => m !== meshName)
+                    ...group,
+                    selectedMeshes: group.selectedMeshes.filter(selectedMeshName => selectedMeshName !== meshName)
                 };
             }
         }));
@@ -300,7 +281,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
     // 檢查 mesh 是否被其他組使用
     const isMeshUsedByOtherGroup = (groupId: string, meshName: string): boolean => {
-        return shaderGroups.some(g => g.id !== groupId && g.selectedMeshes.includes(meshName));
+        return shaderGroups.some(group => group.id !== groupId && group.selectedMeshes.includes(meshName));
     };
 
     // 渲染參數控制項
@@ -634,3 +615,4 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
         </div>
     );
 }
+
