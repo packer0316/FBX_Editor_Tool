@@ -8,6 +8,8 @@ interface MaterialShaderToolProps {
     shaderGroups: ShaderGroup[];
     meshNames: string[];
     onGroupsChange: (groups: ShaderGroup[]) => void;
+    isShaderEnabled: boolean;
+    onToggleShaderEnabled: (enabled: boolean) => void;
 }
 
 // 可用的 Shader 功能列表
@@ -145,7 +147,7 @@ const getParamLabel = (paramName: string): string => {
     return labels[paramName] || paramName;
 };
 
-export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange }: MaterialShaderToolProps) {
+export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange, isShaderEnabled, onToggleShaderEnabled }: MaterialShaderToolProps) {
     const [showFeatureMenu, setShowFeatureMenu] = useState<{ groupId: string } | null>(null);
     const [showMeshMenu, setShowMeshMenu] = useState<string | null>(null);
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -412,9 +414,24 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
     return (
         <div className="h-full flex flex-col bg-gray-800">
             {/* Header */}
-            <div className="p-4 border-b border-gray-700 flex items-center gap-2">
-                <Palette className="text-purple-400" size={20} />
-                <h2 className="text-white font-semibold">Material Shader 工具</h2>
+            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <Palette className="text-purple-400" size={20} />
+                    <h2 className="text-white font-semibold">Material Shader 工具</h2>
+                </div>
+                
+                <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="relative">
+                        <input
+                            type="checkbox"
+                            className="sr-only peer"
+                            checked={isShaderEnabled}
+                            onChange={(e) => onToggleShaderEnabled(e.target.checked)}
+                        />
+                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                    </div>
+                    {/* <span className="text-xs text-gray-400">{isShaderEnabled ? '開啟' : '關閉'}</span> */}
+                </label>
             </div>
 
             {/* Groups List */}

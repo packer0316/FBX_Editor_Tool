@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid } from '@react-three/drei';
+import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
@@ -18,6 +18,7 @@ interface SceneViewerProps {
     playingClip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
     shaderGroups: ShaderGroup[];
+    isShaderEnabled?: boolean;
     loop?: boolean;
     onFinish?: () => void;
     backgroundColor?: string;
@@ -35,6 +36,38 @@ interface SceneViewerProps {
     showGrid?: boolean;
     gridColor?: string;
     gridCellColor?: string;
+    toneMappingExposure?: number;
+    whitePoint?: number;
+    hdriUrl?: string;
+    environmentIntensity?: number;
+}
+
+// Scene Settings Controller
+function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMappingExposure?: number, environmentIntensity?: number }) {
+    const { gl, scene } = useThree();
+    
+    useEffect(() => {
+        if (toneMappingExposure !== undefined) {
+            gl.toneMappingExposure = toneMappingExposure;
+        }
+    }, [toneMappingExposure, gl]);
+
+    useEffect(() => {
+        if (environmentIntensity !== undefined) {
+            // For newer Three.js versions
+            if ('environmentIntensity' in scene) {
+                (scene as any).environmentIntensity = environmentIntensity;
+            } else {
+                 // Fallback for older versions: traverse and update environment map intensity if possible, 
+                 // or rely on Environment component's background intensity if it supports it.
+                 // Since we can't easily change global env map intensity on older three.js without traversing materials
+                 // or using a specific prop on Environment (which might be 'environmentIntensity' prop on Environment in v9+),
+                 // we will try setting it on the scene if supported.
+            }
+        }
+    }, [environmentIntensity, scene]);
+
+    return null;
 }
 
 // Camera Controller Component to update camera settings dynamically
@@ -76,13 +109,14 @@ type ModelProps = {
     clip: THREE.AnimationClip | null;
     onTimeUpdate?: (time: number) => void;
     shaderGroups: ShaderGroup[];
+    isShaderEnabled?: boolean;
     loop?: boolean;
     onFinish?: () => void;
     enableShadows?: boolean;
 };
 
 const Model = forwardRef<SceneViewerRef, ModelProps>(
-    ({ model, clip, onTimeUpdate, shaderGroups, loop = true, onFinish, enableShadows }, ref) => {
+    ({ model, clip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop = true, onFinish, enableShadows }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef: React.MutableRefObject<THREE.AnimationAction | null> = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
@@ -227,6 +261,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     child.userData.originalMaterial = child.material;
                 }
 
+                if (!isShaderEnabled) {
+                    child.material = child.userData.originalMaterial;
+                    return;
+                }
+
                 // 找到包含此 mesh 的組
                 const meshGroup = shaderGroups.find(group =>
                     group.selectedMeshes.includes(child.name)
@@ -262,13 +301,34 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     return;
                 }
 
+                // Helper function to set texture color space
+                const setTextureColorSpace = (texture: THREE.Texture | null, type: 'sRGB' | 'linear') => {
+                    if (!texture) return;
+                    if (type === 'sRGB') {
+                        texture.colorSpace = THREE.SRGBColorSpace;
+                    } else {
+                        texture.colorSpace = THREE.LinearSRGBColorSpace;
+                    }
+                };
+
                 // Load textures using utility function
                 const baseMatcapTex = loadTexture(textureLoader, baseMatcapFeature?.params.texture);
+                setTextureColorSpace(baseMatcapTex, 'sRGB'); // Matcap → sRGB
+                
                 const baseMatcapMaskTex = loadTexture(textureLoader, baseMatcapFeature?.params.maskTexture);
+                setTextureColorSpace(baseMatcapMaskTex, 'linear'); // Mask → Linear
+                
                 const addMatcapTex = loadTexture(textureLoader, addMatcapFeature?.params.texture);
+                setTextureColorSpace(addMatcapTex, 'sRGB'); // Matcap → sRGB
+                
                 const addMatcapMaskTex = loadTexture(textureLoader, addMatcapFeature?.params.maskTexture);
+                setTextureColorSpace(addMatcapMaskTex, 'linear'); // Mask → Linear
+                
                 const dissolveTex = loadTexture(textureLoader, dissolveFeature?.params.texture);
+                setTextureColorSpace(dissolveTex, 'linear'); // Dissolve noise → Linear
+                
                 const normalMapTex = loadTexture(textureLoader, normalMapFeature?.params.texture);
+                setTextureColorSpace(normalMapTex, 'linear'); // Normal → Linear
                 
                 // Flash textures need callback for material update
                 const flashTex = loadTexture(
@@ -276,24 +336,26 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     flashFeature?.params.texture,
                     (tex) => {
                         console.log('[Flash Texture Loaded]', tex);
+                        setTextureColorSpace(tex, 'sRGB'); // Flash texture → sRGB
                         if (child.material) {
                             child.material.needsUpdate = true;
                         }
                     }
                 );
+                setTextureColorSpace(flashTex, 'sRGB'); // Set immediately if already loaded
+                
                 const flashMaskTex = loadTexture(
                     textureLoader,
                     flashFeature?.params.maskTexture,
                     (tex) => {
                         console.log('[Flash Mask Texture Loaded]', tex);
+                        setTextureColorSpace(tex, 'linear'); // Flash mask → Linear
                         if (child.material) {
                             child.material.needsUpdate = true;
                         }
                     }
                 );
-
-                const isCustomShader = child.material instanceof THREE.ShaderMaterial &&
-                    (child.material as any).isCustomShader;
+                setTextureColorSpace(flashMaskTex, 'linear'); // Set immediately if already loaded
 
                 let shaderMat: THREE.ShaderMaterial;
 
@@ -385,30 +447,32 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     gl_Position = projectionMatrix * mvPosition;
                                 }
                             `,
-                        fragmentShader: `
+                    fragmentShader: `
+                                #include <common>
+
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
                                 uniform float uTime;
-
+                                
                                 // Base Matcap
                                 uniform sampler2D matcapTexture;
                                 uniform sampler2D matcapMaskTexture;
                                 uniform float matcapProgress;
                                 uniform float useMatcap;
-
+                                
                                 // Additive Matcap
                                 uniform sampler2D matcapAddTexture;
                                 uniform sampler2D matcapAddMaskTexture;
                                 uniform float matcapAddStrength;
                                 uniform vec3 matcapAddColor;
                                 uniform float useMatcapAdd;
-
+                                
                                 // Rim Light
                                 uniform vec3 rimColor;
                                 uniform float rimIntensity;
                                 uniform float rimPower;
                                 uniform float useRimLight;
-
+                                
                                 // Flash
                                 uniform sampler2D flashTexture;
                                 uniform sampler2D flashMaskTexture;
@@ -418,7 +482,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 uniform float flashWidth;
                                 uniform float flashReverse;
                                 uniform float useFlash;
-
+                                
                                 // Dissolve
                                 uniform sampler2D dissolveTexture;
                                 uniform float dissolveThreshold;
@@ -426,11 +490,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 uniform vec3 dissolveColor1;
                                 uniform vec3 dissolveColor2;
                                 uniform float useDissolve;
-
+                                
                                 // Alpha Test
                                 uniform float alphaTestThreshold;
                                 uniform float useAlphaTest;
-
+                                
                                 // Normal Map
                                 uniform sampler2D normalMap;
                                 uniform vec2 normalScale;
@@ -439,26 +503,26 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
                                 varying vec3 vViewPosition;
-
+                                
                                 // Function to perturb normal based on normal map
                                 vec3 perturbNormal2Arb( vec3 eye_pos, vec3 surf_norm, vec2 uv, vec2 scale ) {
                                     vec3 q0 = dFdx( eye_pos.xyz );
                                     vec3 q1 = dFdy( eye_pos.xyz );
                                     vec2 st0 = dFdx( uv.st );
                                     vec2 st1 = dFdy( uv.st );
-
+                                
                                     vec3 N = surf_norm; // normalized
-
+                                
                                     vec3 q1perp = cross( q1, N );
                                     vec3 q0perp = cross( N, q0 );
-
+                                
                                     vec3 T = q1perp * st0.x + q0perp * st1.x;
                                     vec3 B = q1perp * st0.y + q0perp * st1.y;
-
+                                
                                     float det = max( dot( T, T ), dot( B, B ) );
                                     float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;
                                     float scaleFactor = ( det == 0.0 ) ? 0.0 : faceDirection * inversesqrt( det );
-
+                                
                                     vec3 mapN = texture2D( normalMap, uv ).xyz * 2.0 - 1.0;
                                     mapN.xy *= scale;
                                     
@@ -466,18 +530,21 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                 }
                                 
                                 void main() {
+                                    // 在 Linear 色域中進行所有顏色運算
                                     vec3 finalColor = baseColor;
                                     vec4 baseTexColor = vec4(1.0);
                                     #ifdef USE_MAP
                                         baseTexColor = texture2D(baseTexture, vUv);
+                                        // baseTexture 已透過 colorSpace 設為 sRGB，three.js / GPU 會自動解碼到 Linear
+                                        // 這裡直接使用 sample 結果，避免重複 gamma 解碼
                                         finalColor *= baseTexColor.rgb;
                                     #endif
-
+                                
                                     // --- Alpha Test ---
                                     if (useAlphaTest > 0.5) {
                                         if (baseTexColor.a < alphaTestThreshold) discard;
                                     }
-
+                                
                                     // --- Dissolve Effect ---
                                     if (useDissolve > 0.5) {
                                         float noiseValue = texture2D(dissolveTexture, vUv).r;
@@ -485,7 +552,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         if (noiseValue < dissolveThreshold) {
                                             discard;
                                         }
-
+                                
                                         float edge = smoothstep(dissolveThreshold, dissolveThreshold + dissolveEdgeWidth, noiseValue);
                                         // Invert edge to get the glowing rim part
                                         float edgeFactor = 1.0 - edge;
@@ -498,12 +565,12 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                     
                                     vec3 viewNormal = normalize(vNormal);
                                     vec3 viewDir = normalize(vViewPosition);
-
+                                
                                     // --- Normal Map ---
                                     if (useNormalMap > 0.5) {
                                         viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, vUv, normalScale );
                                     }
-
+                                
                                     // --- Base Matcap (Mix) ---
                                     if (useMatcap > 0.5) {
                                         vec2 matcapUv;
@@ -511,31 +578,33 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         matcapUv.y = -viewNormal.y * 0.49 + 0.5;
                                         
                                         vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
-
+                                        // matcapTexture 也設為 sRGB，sample 結果已是 Linear
+                                
                                         // Apply mask if available
                                         float matcapMask = 1.0;
                                         #ifdef USE_MATCAP_MASK
                                             matcapMask = texture2D(matcapMaskTexture, vUv).r;
                                         #endif
-
+                                
                                         finalColor = mix(finalColor, matcapCol, matcapProgress * matcapMask);
                                     }
-
+                                
                                     // --- Additive Matcap (Add) ---
                                     if (useMatcapAdd > 0.5) {
                                         vec2 matcapAddUv;
                                         matcapAddUv.x = viewNormal.x * 0.49 + 0.5;
                                         matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
-
+                                
                                         vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
+                                        // matcapAddTexture 也設為 sRGB，sample 結果已是 Linear
                                         matcapAddCol *= matcapAddColor; // Apply tint
-
+                                
                                         // Apply mask if available
                                         float matcapAddMask = 1.0;
                                         #ifdef USE_MATCAP_ADD_MASK
                                             matcapAddMask = texture2D(matcapAddMaskTexture, vUv).r;
                                         #endif
-
+                                
                                         // Additive blending logic
                                         float dotNV = dot(viewDir, viewNormal);
                                         dotNV = clamp(dotNV, 0.0, 1.0);
@@ -543,7 +612,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         // Simple additive for now, controlled by strength and mask
                                         finalColor += matcapAddCol * matcapAddStrength * matcapAddMask;
                                     }
-
+                                
                                     // --- Rim Light ---
                                     if (useRimLight > 0.5) {
                                         float dotNV = dot(viewDir, viewNormal);
@@ -551,8 +620,8 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         rim = pow(rim, rimPower);
                                         finalColor += rimColor * rim * rimIntensity;
                                     }
-
-
+                                
+                                
                                     // --- Flash Effect ---
                                     if (useFlash > 0.5) {
                                         // Sample mask texture or use defaults
@@ -560,12 +629,12 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         #ifdef USE_FLASH_MASK
                                             maskColor = texture2D(flashMaskTexture, vUv).rgb;
                                         #endif
-
+                                
                                         // Reference Logic from azureDrag_body.effect:
                                         // maskColor.r: Static weight (for constant glow)
                                         // maskColor.g: Time/Phase (Direction) - this creates the sweeping effect
                                         // maskColor.b: Flash Mask (Intensity) - controls where flash appears
-
+                                
                                         float t = mod(uTime * flashSpeed, 1.0);
                                         
                                         // Reverse direction if flashReverse is enabled
@@ -590,7 +659,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                             // Create a sharp pulse that fades smoothly
                                             lightVal = 1.0 - smoothstep(0.0, flashWidth, offset);
                                         #endif
-
+                                
                                         // Reference shader combines like this:
                                         // float maskAdd = maskWeight * maskWeight2 * maskColor.r + maskWeight * maskColor.b * lightColor;
                                         // finalColor = textureColor * (1.0 + maskAdd);
@@ -602,7 +671,11 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                                         finalColor += flashEffect;
                                     }
                                     
-                                    gl_FragColor = vec4(finalColor, 1.0);
+                                    // 將 Linear 顏色輸出給 three.js，後續由 toneMapping_fragment / colorspace_fragment 統一處理
+                                    gl_FragColor = vec4(finalColor, baseTexColor.a);
+
+                                    #include <tonemapping_fragment>
+                                    #include <colorspace_fragment>
                                 }
                             `,
                     defines: {
@@ -614,10 +687,9 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     },
                     extensions: {
                         derivatives: true
-                    },
+                    } as any,
                     skinning: isSkinnedMesh
-                });
-                (shaderMat as any).isCustomShader = true;
+                } as any);
                 child.material = shaderMat;
 
                 // Update Uniforms
@@ -702,7 +774,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 
                 materialsRef.current.push(shaderMat);
             });
-        }, [model, shaderGroups]);
+        }, [model, shaderGroups, isShaderEnabled]);
 
         if (!model) return null;
         return <primitive object={model} scale={0.01} />;
@@ -710,7 +782,7 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a' }, ref) => {
+    ({ model, playingClip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a', toneMappingExposure, whitePoint, hdriUrl, environmentIntensity }, ref) => {
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -723,8 +795,19 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         fov: cameraSettings?.fov || 50,
                         near: cameraSettings?.near || 0.1,
                         far: cameraSettings?.far || 1000
+                    }}
+                    onCreated={({ gl }) => {
+                        // 統一輸出色彩空間為 sRGB
+                        gl.outputColorSpace = THREE.SRGBColorSpace;
+                        // 設定 ACES Filmic Tone Mapping
+                        gl.toneMapping = THREE.ACESFilmicToneMapping;
+                        if (toneMappingExposure !== undefined) {
+                            gl.toneMappingExposure = toneMappingExposure;
+                        }
                     }}>
-                    <ambientLight intensity={0.8} />
+                    <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
+                    {hdriUrl && <Environment files={hdriUrl} background blur={0.5} />}
+                    <ambientLight intensity={0.8 * (environmentIntensity ?? 1.0)} />
                     <hemisphereLight args={["#ffffff", "#444444", 0.6]} />
                     <directionalLight
                         position={[5, 10, 7.5]}
@@ -765,6 +848,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             clip={playingClip}
                             onTimeUpdate={onTimeUpdate}
                             shaderGroups={shaderGroups}
+                            isShaderEnabled={isShaderEnabled}
                             loop={loop}
                             onFinish={onFinish}
                             enableShadows={enableShadows}

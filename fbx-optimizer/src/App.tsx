@@ -11,6 +11,7 @@ import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Camera, Grid } from 'lucide-react';
 import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
+import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
 
 // Use Cases
 import { LoadModelUseCase } from './application/use-cases/LoadModelUseCase';
@@ -65,6 +66,7 @@ function App() {
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
   const [meshNames, setMeshNames] = useState<string[]>([]);
+  const [isShaderEnabled, setIsShaderEnabled] = useState(true);
 
   // Camera Settings
   const [showCameraSettings, setShowCameraSettings] = useState(false);
@@ -93,6 +95,21 @@ function App() {
   const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
   const [enableShadows, setEnableShadows] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
+
+  // Tone Mapping & Exposure Settings
+  const [toneMappingExposure, setToneMappingExposure] = useState(1.0);
+  const [whitePoint, setWhitePoint] = useState(1.0);
+  const [selectedPreset, setSelectedPreset] = useState<CameraPresetType>('outdoor');
+  const [hdriUrl, setHdriUrl] = useState<string>('');
+  const [environmentIntensity, setEnvironmentIntensity] = useState(1.0);
+
+  // Apply camera preset
+  const applyPreset = (presetType: CameraPresetType) => {
+    const preset = CAMERA_PRESETS[presetType];
+    setToneMappingExposure(preset.toneMappingExposure);
+    setWhitePoint(preset.whitePoint || 1.0);
+    setSelectedPreset(presetType);
+  };
 
   // Reset bone binding when model changes
   useEffect(() => {
@@ -532,6 +549,105 @@ function App() {
                   重置預設值
                 </button>
 
+                {/* Tone Mapping & Exposure Section */}
+                <div className="mt-4 pt-4 border-t border-gray-700">
+                  <h4 className="text-xs font-semibold text-gray-400 mb-3">Tone Mapping & 曝光</h4>
+
+                  {/* Camera Presets */}
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-400 block mb-2">相機預設</label>
+                    <div className="grid grid-cols-3 gap-1">
+                      {Object.values(CAMERA_PRESETS).map((preset) => (
+                        <button
+                          key={preset.type}
+                          onClick={() => applyPreset(preset.type)}
+                          className={`py-1.5 text-xs rounded transition-colors ${
+                            selectedPreset === preset.type
+                              ? 'bg-blue-600 text-white'
+                              : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                          }`}
+                          title={preset.description}
+                        >
+                          {preset.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tone Mapping Exposure */}
+                  <div className="mb-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs text-gray-400">曝光 (Exposure)</label>
+                      <span className="text-xs text-blue-400 font-mono">{toneMappingExposure.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="3.0"
+                      step="0.1"
+                      value={toneMappingExposure}
+                      onChange={(e) => setToneMappingExposure(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* White Point */}
+                  <div className="mb-3">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-xs text-gray-400">白點 (White Point)</label>
+                      <span className="text-xs text-blue-400 font-mono">{whitePoint.toFixed(2)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={whitePoint}
+                      onChange={(e) => setWhitePoint(parseFloat(e.target.value))}
+                      className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                    />
+                  </div>
+
+                  {/* HDRI Environment */}
+                  <div className="mb-3">
+                    <label className="text-xs text-gray-400 block mb-2">HDRI 環境貼圖 (可選)</label>
+                    <input
+                      type="text"
+                      placeholder="輸入 HDRI URL..."
+                      value={hdriUrl}
+                      onChange={(e) => setHdriUrl(e.target.value)}
+                      className="w-full px-3 py-2 bg-gray-900 border border-gray-600 rounded text-white text-xs focus:outline-none focus:border-blue-500"
+                    />
+                    {hdriUrl && (
+                      <button
+                        onClick={() => setHdriUrl('')}
+                        className="mt-1 w-full py-1 text-xs text-red-400 hover:text-red-300 hover:bg-gray-700 rounded transition-colors"
+                      >
+                        清除 HDRI
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Environment Intensity */}
+                  {hdriUrl && (
+                    <div className="mb-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs text-gray-400">環境光強度</label>
+                        <span className="text-xs text-blue-400 font-mono">{environmentIntensity.toFixed(2)}</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="3"
+                        step="0.1"
+                        value={environmentIntensity}
+                        onChange={(e) => setEnvironmentIntensity(parseFloat(e.target.value))}
+                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+                      />
+                    </div>
+                  )}
+                </div>
+
                 {/* Bone Binding Section */}
                 <div className="mt-4 pt-4 border-t border-gray-700">
                   <h4 className="text-xs font-semibold text-gray-400 mb-3">骨骼綁定</h4>
@@ -709,6 +825,7 @@ function App() {
                 playingClip={optimizedClip}
                 onTimeUpdate={handleTimeUpdate}
                 shaderGroups={shaderGroups}
+                isShaderEnabled={isShaderEnabled}
                 loop={isPlaylistPlaying ? false : isLoopEnabled}
                 onFinish={handleClipFinish}
                 backgroundColor={currentTheme.sceneBg}
@@ -722,6 +839,10 @@ function App() {
                 showGrid={showGrid}
                 gridColor={currentTheme.gridColor}
                 gridCellColor={currentTheme.gridCellColor}
+                toneMappingExposure={toneMappingExposure}
+                whitePoint={whitePoint}
+                hdriUrl={hdriUrl || undefined}
+                environmentIntensity={environmentIntensity}
               />
             </div>
 
@@ -837,6 +958,8 @@ function App() {
                 shaderGroups={shaderGroups}
                 meshNames={meshNames}
                 onGroupsChange={setShaderGroups}
+                isShaderEnabled={isShaderEnabled}
+                onToggleShaderEnabled={setIsShaderEnabled}
               />
             )}
 
