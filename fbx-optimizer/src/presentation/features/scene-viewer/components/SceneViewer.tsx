@@ -335,7 +335,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     textureLoader,
                     flashFeature?.params.texture,
                     (tex) => {
-                        console.log('[Flash Texture Loaded]', tex);
                         setTextureColorSpace(tex, 'sRGB'); // Flash texture → sRGB
                         if (child.material) {
                             child.material.needsUpdate = true;
@@ -348,7 +347,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     textureLoader,
                     flashFeature?.params.maskTexture,
                     (tex) => {
-                        console.log('[Flash Mask Texture Loaded]', tex);
                         setTextureColorSpace(tex, 'linear'); // Flash mask → Linear
                         if (child.material) {
                             child.material.needsUpdate = true;
@@ -365,8 +363,6 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                 const baseTexture = originalMaterial.map || null;
                 const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
                 const isSkinnedMesh = (child as any).isSkinnedMesh;
-
-                console.log('[Creating Shader] flashTex:', !!flashTex, 'flashMaskTex:', !!flashMaskTex);
 
                 shaderMat = new THREE.ShaderMaterial({
                     uniforms: {
@@ -687,9 +683,10 @@ const Model = forwardRef<SceneViewerRef, ModelProps>(
                     },
                     extensions: {
                         derivatives: true
-                    } as any,
-                    skinning: isSkinnedMesh
+                    } as any
                 } as any);
+                // 在建立後再設定 skinning，避免 three.js 對建構參數提出警告
+                (shaderMat as any).skinning = isSkinnedMesh;
                 child.material = shaderMat;
 
                 // Update Uniforms
