@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import * as THREE from 'three';
-import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat, Music } from 'lucide-react';
+import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat } from 'lucide-react';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 
 interface ModelInspectorProps {
@@ -34,19 +34,13 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
     const [expanded, setExpanded] = useState(expandAll ?? true);
     const [visible, setVisible] = useState(bone.visible);
 
-    // Helper to check if a child is part of the skeleton hierarchy
-    const isSkeletonNode = (child: THREE.Object3D) => {
-        return (
-            child.type === 'Bone' ||
-            child.type === 'Object3D' ||
-            child.name.toLowerCase().includes('bone') ||
-            child.name.toLowerCase().includes('root') ||
-            child.name.toLowerCase().includes('bip') ||
-            child.name.toLowerCase().includes('dummy')
-        ) && !child.isMesh && !child.isSkinnedMesh;
+    // Helper to check if a child is part of the hierarchy (排除 Mesh，保留所有其他節點)
+    const isHierarchyNode = (child: THREE.Object3D) => {
+        // 只排除 Mesh 和 SkinnedMesh，保留所有其他類型的節點
+        return !(child as any).isMesh && !(child as any).isSkinnedMesh;
     };
 
-    const hasChildren = bone.children.some(isSkeletonNode);
+    const hasChildren = bone.children.some(isHierarchyNode);
 
     // 當 expandAll 改變時，更新 expanded 狀態
     useEffect(() => {
@@ -83,7 +77,7 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
             {expanded && hasChildren && (
                 <div>
                     {bone.children.map(child => (
-                        isSkeletonNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
+                        isHierarchyNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
                     ))}
                 </div>
             )}
@@ -118,7 +112,7 @@ export default function ModelInspector({
 }: ModelInspectorProps) {
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
-    const [rootBone, setRootBone] = useState<THREE.Object3D | null>(null);
+    const [rootBones, setRootBones] = useState<THREE.Object3D[]>([]); // 改為陣列，支援多個根骨架
     const [updateCounter, setUpdateCounter] = useState(0); // 用於強制重繪
     const [expandAll, setExpandAll] = useState(true); // 骨架展開狀態
     const [isDraggingSlider, setIsDraggingSlider] = useState(false); // 是否正在拖動播放條
@@ -133,49 +127,32 @@ export default function ModelInspector({
     // Drag and Drop state for playlist
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
 
-    // 遍歷模型獲取 Mesh 和骨架資訊
+    // 遍歷模型獲取 Mesh 和層級結構資訊
     useEffect(() => {
         if (model) {
             const meshList: THREE.Mesh[] = [];
-            let root: THREE.Object3D | null = null;
+            const rootNodes: THREE.Object3D[] = [];
 
+            // 收集所有 Mesh
             model.traverse((child) => {
                 if ((child as THREE.Mesh).isMesh) {
                     meshList.push(child as THREE.Mesh);
                 }
-                if (
-                    (child.type === 'Bone' ||
-                        child.type === 'Object3D' ||
-                        child.parent?.type === 'Bone' ||
-                        child.name.toLowerCase().includes('bone') ||
-                        child.name.toLowerCase().includes('root') ||
-                        child.name.toLowerCase().includes('bip') ||
-                        child.name.toLowerCase().includes('dummy')) &&
-                    !root &&
-                    child !== model &&
-                    !child.isMesh &&
-                    !child.isSkinnedMesh
-                ) {
-                    // 找到最上層的骨架 (通常是 RootNode 的子節點)
-                    // 往上找直到 parent 不是 Bone 且不是上述類型
-                    let current = child;
-                    while (current.parent && (
-                        current.parent.type === 'Bone' ||
-                        current.parent.type === 'Object3D' ||
-                        current.parent.name.toLowerCase().includes('root') ||
-                        current.parent.name.toLowerCase().includes('dummy')
-                    ) && current.parent !== model) {
-                        current = current.parent;
-                    }
-                    root = current;
+            });
+
+            // 直接使用模型的直接子節點作為根節點（排除 Mesh）
+            model.children.forEach((child) => {
+                // 排除 Mesh 和 SkinnedMesh，保留所有其他類型的節點
+                if (!(child as any).isMesh && !(child as any).isSkinnedMesh) {
+                    rootNodes.push(child);
                 }
             });
 
             setMeshes(meshList);
-            setRootBone(root);
+            setRootBones(rootNodes);
         } else {
             setMeshes([]);
-            setRootBone(null);
+            setRootBones([]);
         }
     }, [model]);
 
@@ -259,7 +236,7 @@ export default function ModelInspector({
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'bone' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
                     onClick={() => setActiveTab('bone')}
                 >
-                    骨架
+                    骨架 ({rootBones.length})
                 </button>
                 <button
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'clip' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:bg-gray-700'}`}
@@ -306,11 +283,14 @@ export default function ModelInspector({
 
                 {activeTab === 'bone' && (
                     <div className="space-y-1">
-                        {!rootBone ? (
-                            <div className="text-gray-500 text-sm text-center mt-4">無骨架資料</div>
+                        {rootBones.length === 0 ? (
+                            <div className="text-gray-500 text-sm text-center mt-4">無層級結構</div>
                         ) : (
                             <>
-                                <div className="flex justify-end mb-2">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-xs text-gray-400">
+                                        顯示完整層級結構 ({rootBones.length} 個根節點)
+                                    </span>
                                     <button
                                         onClick={() => setExpandAll(!expandAll)}
                                         className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors flex items-center gap-1"
@@ -328,7 +308,11 @@ export default function ModelInspector({
                                         )}
                                     </button>
                                 </div>
-                                <BoneTree bone={rootBone} expandAll={expandAll} />
+                                {rootBones.map((rootBone) => (
+                                    <div key={rootBone.uuid} className="mb-2">
+                                        <BoneTree bone={rootBone} expandAll={expandAll} />
+                                    </div>
+                                ))}
                             </>
                         )}
                     </div>
