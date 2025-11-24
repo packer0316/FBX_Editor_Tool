@@ -1,16 +1,16 @@
-import React, { useState, useRef } from 'react';
-import { Music, Plus, Trash2, ChevronDown, ChevronRight, Play, Settings, X, Download } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Play, Settings, X, Download, Music } from 'lucide-react';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 import type { AudioTrigger } from '../../../../domain/value-objects/AudioTrigger';
-import * as THREE from 'three';
-import { AudioController } from '../../../../infrastructure/audio/WebAudioAdapter';
+import type { AudioController } from '../../../../infrastructure/audio/WebAudioAdapter';
 import { updateArrayItemById, updateArrayItemProperties } from '../../../../utils/array/arrayUtils';
+import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 
 interface AudioPanelProps {
     audioTracks: AudioTrack[];
     setAudioTracks: (tracks: AudioTrack[]) => void;
-    createdClips: THREE.AnimationClip[];
-    audioController: AudioController;
+    createdClips: IdentifiableClip[];
+    audioController: InstanceType<typeof AudioController>;
 }
 
 export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, audioController }: AudioPanelProps) {
@@ -22,7 +22,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     const [editingTrackName, setEditingTrackName] = useState('');
 
     // Temporary state for adding new triggers
-    const [newTriggerState, setNewTriggerState] = useState<Record<string, { clipUuid: string, frame: string }>>({});
+    const [newTriggerState, setNewTriggerState] = useState<Record<string, { clipId: string, frame: string }>>({});
 
     const [activeTab, setActiveTab] = useState<Record<string, 'basic' | 'eq' | 'effects'>>({});
 
@@ -126,19 +126,19 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
 
     const addTrigger = (trackId: string) => {
         const state = newTriggerState[trackId];
-        if (!state?.clipUuid || !state.frame) return;
+        if (!state?.clipId || !state.frame) return;
 
         const frame = parseInt(state.frame);
         if (isNaN(frame)) return;
 
-        // Find the selected clip to get its name
-        const selectedAnimationClip = createdClips.find(clip => clip.uuid === state.clipUuid);
+        // Find the selected clip
+        const selectedAnimationClip = createdClips.find(clip => getClipId(clip) === state.clipId);
         if (!selectedAnimationClip) return;
 
         const newTrigger: AudioTrigger = {
             id: crypto.randomUUID(),
-            clipUuid: state.clipUuid,
-            clipName: selectedAnimationClip.name, // Store clip name for matching
+            clipId: state.clipId,  // 使用 customId 進行精確匹配
+            clipName: getClipDisplayName(selectedAnimationClip), // 顯示名稱
             frame: frame
         };
 
@@ -161,10 +161,10 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
         })));
     };
 
-    const updateNewTriggerState = (trackId: string, field: 'clipUuid' | 'frame', value: string) => {
+    const updateNewTriggerState = (trackId: string, field: 'clipId' | 'frame', value: string) => {
         setNewTriggerState(prev => ({
             ...prev,
-            [trackId]: { ...prev[trackId] || { clipUuid: createdClips[0]?.uuid || '', frame: '' }, [field]: value }
+            [trackId]: { ...prev[trackId] || { clipId: getClipId(createdClips[0]) || '', frame: '' }, [field]: value }
         }));
     };
 
@@ -525,11 +525,12 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                 <div className="space-y-2">
                                     <div className="text-xs text-gray-400 font-medium">觸發設定</div>
                                     {track.triggers.map(trigger => {
-                                        const animationClipName = createdClips.find(clip => clip.uuid === trigger.clipUuid)?.name || 'Unknown Clip';
+                                        const matchedClip = createdClips.find(clip => getClipId(clip) === trigger.clipId);
+                                        const displayName = matchedClip ? getClipDisplayName(matchedClip) : trigger.clipName || 'Unknown Clip';
                                         return (
                                             <div key={trigger.id} className="flex items-center justify-between bg-gray-800 rounded px-2 py-1.5 border border-gray-700">
                                                 <div className="flex items-center gap-2 text-xs">
-                                                    <span className="text-blue-400">{animationClipName}</span>
+                                                    <span className="text-blue-400">{displayName}</span>
                                                     <span className="text-gray-500">@</span>
                                                     <span style={{ color: track.color }}>{trigger.frame} Frame</span>
                                                 </div>
@@ -549,13 +550,13 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                     <div className="flex-1 min-w-0">
                                         <label className="text-[10px] text-gray-500 block mb-1">動作</label>
                                         <select
-                                            value={newTriggerState[track.id]?.clipUuid || ''}
-                                            onChange={(e) => updateNewTriggerState(track.id, 'clipUuid', e.target.value)}
+                                            value={newTriggerState[track.id]?.clipId || ''}
+                                            onChange={(e) => updateNewTriggerState(track.id, 'clipId', e.target.value)}
                                             className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
                                         >
                                             <option value="">選擇動作...</option>
                                             {createdClips.map(animationClip => (
-                                                <option key={animationClip.uuid} value={animationClip.uuid}>{animationClip.name}</option>
+                                                <option key={getClipId(animationClip)} value={getClipId(animationClip)}>{getClipDisplayName(animationClip)}</option>
                                             ))}
                                         </select>
                                     </div>
@@ -571,7 +572,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                     </div>
                                     <button
                                         onClick={() => addTrigger(track.id)}
-                                        disabled={!newTriggerState[track.id]?.clipUuid || !newTriggerState[track.id]?.frame}
+                                        disabled={!newTriggerState[track.id]?.clipId || !newTriggerState[track.id]?.frame}
                                         className="bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 disabled:text-gray-500 text-white p-1.5 rounded transition-colors"
                                     >
                                         <Plus className="w-4 h-4" />

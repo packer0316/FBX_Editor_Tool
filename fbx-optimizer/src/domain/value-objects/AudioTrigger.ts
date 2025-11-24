@@ -1,7 +1,7 @@
 export interface AudioTrigger {
   id: string;
-  clipUuid: string; // Keep for backward compatibility, but will use clipName for matching
-  clipName: string; // Use name for matching since UUID changes after optimization
-  frame: number;
+  clipId: string;     // 使用 customId 確保唯一匹配（取代原 clipUuid）
+  clipName: string;   // 片段名稱（僅供顯示）
+  frame: number;      // 觸發的幀數
 }
 

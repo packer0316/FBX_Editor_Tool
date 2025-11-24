@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { copyClipIdentifier, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 
 /**
  * 動作序列播放管理 Use Case
@@ -37,17 +38,14 @@ export class PlaylistUseCase {
    * setPlaylist(newPlaylist);
    * ```
    */
-  static addToPlaylist(playlist: THREE.AnimationClip[], clip: THREE.AnimationClip): THREE.AnimationClip[] {
+  static addToPlaylist(playlist: IdentifiableClip[], clip: IdentifiableClip): IdentifiableClip[] {
     // Clone the clip to ensure each playlist item has a unique reference
     // This fixes the issue where adding the same clip multiple times causes playback problems
-    const clonedClip = clip.clone();
-    // Preserve frame metadata if it exists
-    if ((clip as any).startFrame !== undefined) {
-      (clonedClip as any).startFrame = (clip as any).startFrame;
-    }
-    if ((clip as any).endFrame !== undefined) {
-      (clonedClip as any).endFrame = (clip as any).endFrame;
-    }
+    const clonedClip = clip.clone() as IdentifiableClip;
+    
+    // 複製識別資訊（保留原 customId 以共享 Audio Trigger 設定）
+    copyClipIdentifier(clip, clonedClip, false);
+    
     return [...playlist, clonedClip];
   }
 
@@ -73,10 +71,10 @@ export class PlaylistUseCase {
    * ```
    */
   static removeFromPlaylist(
-    playlist: THREE.AnimationClip[],
+    playlist: IdentifiableClip[],
     index: number,
     currentIndex: number
-  ): { newPlaylist: THREE.AnimationClip[]; shouldStop: boolean; newCurrentIndex: number } {
+  ): { newPlaylist: IdentifiableClip[]; shouldStop: boolean; newCurrentIndex: number } {
     const newPlaylist = playlist.filter((_, i) => i !== index);
     let newCurrentIndex = currentIndex;
     let shouldStop = false;
@@ -115,10 +113,10 @@ export class PlaylistUseCase {
    * ```
    */
   static reorderPlaylist(
-    playlist: THREE.AnimationClip[],
+    playlist: IdentifiableClip[],
     fromIndex: number,
     toIndex: number
-  ): { newPlaylist: THREE.AnimationClip[]; shouldStop: boolean } {
+  ): { newPlaylist: IdentifiableClip[]; shouldStop: boolean } {
     const newPlaylist = [...playlist];
     const [movedClip] = newPlaylist.splice(fromIndex, 1);
     newPlaylist.splice(toIndex, 0, movedClip);

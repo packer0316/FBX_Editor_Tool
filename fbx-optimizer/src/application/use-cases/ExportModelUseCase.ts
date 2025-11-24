@@ -54,7 +54,10 @@ export class ExportModelUseCase {
         const exporter = new GLTFExporter();
         exporter.parse(
           exportModel,
-          (glbArrayBuffer: ArrayBuffer) => {
+          (glbArrayBuffer: ArrayBuffer | { [key: string]: any }) => {
+            if (!(glbArrayBuffer instanceof ArrayBuffer)) {
+              throw new Error('Expected ArrayBuffer from GLTFExporter');
+            }
             const blob = new Blob([glbArrayBuffer], { type: 'application/octet-stream' });
             const link = document.createElement('a');
             link.href = URL.createObjectURL(blob);

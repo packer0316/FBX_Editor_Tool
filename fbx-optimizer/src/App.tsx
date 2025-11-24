@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import * as THREE from 'three';
+import { setClipIdentifier, type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
 import SceneViewer, { type SceneViewerRef } from './presentation/features/scene-viewer/components/SceneViewer';
 import OptimizationControls from './presentation/features/optimization-panel/components/OptimizationControls';
 import MaterialShaderTool from './presentation/features/shader-panel/components/MaterialShaderTool';
@@ -35,9 +36,9 @@ export type { AudioTrack } from './domain/value-objects/AudioTrack';
 function App() {
   const [file, setFile] = useState<File | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
-  const [originalClip, setOriginalClip] = useState<THREE.AnimationClip | null>(null);
-  const [masterClip, setMasterClip] = useState<THREE.AnimationClip | null>(null);
-  const [optimizedClip, setOptimizedClip] = useState<THREE.AnimationClip | null>(null);
+  const [originalClip, setOriginalClip] = useState<IdentifiableClip | null>(null);
+  const [masterClip, setMasterClip] = useState<IdentifiableClip | null>(null);
+  const [optimizedClip, setOptimizedClip] = useState<IdentifiableClip | null>(null);
   const [tolerance, setTolerance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [exporting, setExporting] = useState<boolean>(false);
@@ -47,7 +48,7 @@ function App() {
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [createdClips, setCreatedClips] = useState<THREE.AnimationClip[]>([]);
+  const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
   // Panel Resize
@@ -73,7 +74,7 @@ function App() {
   const groundSettingsRef = useRef<HTMLDivElement>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
-  const audioControllerRef = useRef<AudioController>(new AudioController());
+  const audioControllerRef = useRef<InstanceType<typeof AudioController>>(new AudioController());
   const lastAudioFrameRef = useRef<number>(-1);
   const lastTimeRef = useRef<number>(0);
   const [cameraSettings, setCameraSettings] = useState({
@@ -127,11 +128,15 @@ function App() {
       }
 
       if (loadModelResult.animations.length > 0) {
-        const clip = loadModelResult.animations[0];
+        const clip = loadModelResult.animations[0] as IdentifiableClip;
+        if (!clip.customId) {
+          setClipIdentifier(clip);
+        }
         setMasterClip(clip);
         setOriginalClip(clip);
         setDuration(clip.duration);
-        setOptimizedClip(optimizeAnimationClip(clip, tolerance));
+        const optimized = optimizeAnimationClip(clip, tolerance);
+        setOptimizedClip(optimized);
         setCreatedClips([]);
       } else {
         setMasterClip(null);
@@ -153,7 +158,7 @@ function App() {
     if (originalClip) {
       // 使用 debounce 避免頻繁計算
       const timer = setTimeout(() => {
-        const optimized = optimizeAnimationClip(originalClip, tolerance);
+        const optimized = optimizeAnimationClip(originalClip, tolerance) as IdentifiableClip;
         setOptimizedClip(optimized);
       }, 50);
       return () => clearTimeout(timer);
@@ -206,10 +211,11 @@ function App() {
     audioSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, audioTracks);
   }, [isPlaying, optimizedClip, audioTracks]);
 
-  const handleSelectClip = (clip: THREE.AnimationClip) => {
+  const handleSelectClip = (clip: IdentifiableClip) => {
     setOriginalClip(clip);
     setDuration(clip.duration);
-    setOptimizedClip(optimizeAnimationClip(clip, tolerance));
+    const optimized = optimizeAnimationClip(clip, tolerance) as IdentifiableClip;
+    setOptimizedClip(optimized);
     handleSeek(0);
     if (!isPlaying) handlePlayPause();
   };
@@ -220,7 +226,7 @@ function App() {
   const [currentPlaylistIndex, setCurrentPlaylistIndex] = useState(0);
 
   // Add clip to playlist
-  const handleAddToPlaylist = (clip: THREE.AnimationClip) => {
+  const handleAddToPlaylist = (clip: IdentifiableClip) => {
     setPlaylist(prev => PlaylistUseCase.addToPlaylist(prev, clip));
   };
 
@@ -294,7 +300,8 @@ function App() {
     if (!sourceClip) return;
 
     try {
-      const newClip = CreateClipUseCase.execute(sourceClip, name, startFrame, endFrame);
+      // 傳入現有片段以避免名稱衝突
+      const newClip = CreateClipUseCase.execute(sourceClip, name, startFrame, endFrame, 30, createdClips);
       setCreatedClips(prev => [...prev, newClip]);
       handleSelectClip(newClip);
     } catch (error) {
@@ -314,7 +321,8 @@ function App() {
       // Revert to master clip when all clips are deleted
       setOriginalClip(masterClip);
       setDuration(masterClip.duration);
-      setOptimizedClip(optimizeAnimationClip(masterClip, tolerance));
+      const optimized = optimizeAnimationClip(masterClip, tolerance) as IdentifiableClip;
+      setOptimizedClip(optimized);
       handleSeek(0);
       if (!isPlaying) handlePlayPause();
 

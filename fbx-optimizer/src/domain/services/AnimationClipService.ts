@@ -1,4 +1,9 @@
 import * as THREE from 'three';
+import { 
+  setClipIdentifier, 
+  generateUniqueDisplayName, 
+  type IdentifiableClip 
+} from '../../utils/clip/clipIdentifierUtils';
 
 /**
  * 動畫片段服務
@@ -55,8 +60,9 @@ export class AnimationClipService {
     name: string,
     startFrame: number,
     endFrame: number,
-    fps: number = 30
-  ): THREE.AnimationClip {
+    fps: number = 30,
+    existingNames: string[] = []
+  ): IdentifiableClip {
     const startTime = startFrame / fps;
     const endTime = endFrame / fps;
     const duration = endTime - startTime;
@@ -92,11 +98,19 @@ export class AnimationClipService {
       }
     });
 
-    const newClip = new THREE.AnimationClip(name, duration, newTracks);
+    // 生成唯一的顯示名稱（如果有重複）
+    const uniqueDisplayName = generateUniqueDisplayName(name, existingNames);
+    
+    const newClip = new THREE.AnimationClip(name, duration, newTracks) as IdentifiableClip;
 
-    // Store frame metadata on the clip for display purposes
-    (newClip as any).startFrame = startFrame;
-    (newClip as any).endFrame = endFrame;
+    // 設定完整的識別資訊
+    setClipIdentifier(
+      newClip,
+      undefined,  // 自動生成 customId
+      uniqueDisplayName,
+      startFrame,
+      endFrame
+    );
 
     return newClip;
   }

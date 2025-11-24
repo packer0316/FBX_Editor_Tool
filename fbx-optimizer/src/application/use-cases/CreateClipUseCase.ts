@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { AnimationClipService } from '../../domain/services/AnimationClipService';
+import { getExistingDisplayNames, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 
 /**
  * 創建片段 Use Case
@@ -52,9 +53,20 @@ export class CreateClipUseCase {
     name: string,
     startFrame: number,
     endFrame: number,
-    fps: number = 30
-  ): THREE.AnimationClip {
-    return AnimationClipService.createSubClip(sourceClip, name, startFrame, endFrame, fps);
+    fps: number = 30,
+    existingClips: IdentifiableClip[] = []
+  ): IdentifiableClip {
+    // 取得現有的顯示名稱以避免衝突
+    const existingNames = getExistingDisplayNames(existingClips);
+    
+    return AnimationClipService.createSubClip(
+      sourceClip, 
+      name, 
+      startFrame, 
+      endFrame, 
+      fps,
+      existingNames
+    );
   }
 }
 

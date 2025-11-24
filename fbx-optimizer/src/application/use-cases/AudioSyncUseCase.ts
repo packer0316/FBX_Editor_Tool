@@ -1,6 +1,6 @@
-import * as THREE from 'three';
 import type { AudioTrack } from '../../domain/value-objects/AudioTrack';
-import { AudioController } from '../../infrastructure/audio/WebAudioAdapter';
+import type { AudioController } from '../../infrastructure/audio/WebAudioAdapter';
+import { getClipId, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 
 /**
  * 音訊同步 Use Case
@@ -9,11 +9,11 @@ import { AudioController } from '../../infrastructure/audio/WebAudioAdapter';
 export class AudioSyncUseCase {
   private lastTimeRef: React.MutableRefObject<number>;
   private lastAudioFrameRef: React.MutableRefObject<number>;
-  private audioController: AudioController;
+  private audioController: InstanceType<typeof AudioController>;
   private fps: number = 30;
 
   constructor(
-    audioController: AudioController,
+    audioController: InstanceType<typeof AudioController>,
     lastTimeRef: React.MutableRefObject<number>,
     lastAudioFrameRef: React.MutableRefObject<number>
   ) {
@@ -28,7 +28,7 @@ export class AudioSyncUseCase {
   handleTimeUpdate(
     time: number,
     isPlaying: boolean,
-    clip: THREE.AnimationClip | null,
+    clip: IdentifiableClip | null,
     audioTracks: AudioTrack[]
   ): void {
     if (!isPlaying || !clip) {
@@ -43,17 +43,16 @@ export class AudioSyncUseCase {
     }
 
     const previousTime = this.lastTimeRef.current;
+    const currentClipId = getClipId(clip);
 
     audioTracks.forEach(track => {
       track.triggers.forEach(trigger => {
-        const clipName = trigger.clipName || '';
-
-        // Match by clip name instead of UUID (since UUID changes after optimization)
-        if (clipName === clip.name) {
+        // 使用 customId 進行精確匹配，解決相同名稱片段的問題
+        if (trigger.clipId === currentClipId) {
           const triggerTime = trigger.frame / this.fps;
 
           if (triggerTime > previousTime && triggerTime <= time) {
-            console.log(`[Audio Trigger] ✓ Playing: ${track.name} at frame ${trigger.frame}`);
+            console.log(`[Audio Trigger] ✓ Playing: ${track.name} at frame ${trigger.frame} for clip ${clip.displayName || clip.name}`);
             this.audioController.play(track);
           }
         }
