@@ -53,9 +53,10 @@ export class EffectSyncUseCase {
     // 重要：保存 previousTime，因為我們需要在處理完成後才更新 lastTimeRef
     const savedPreviousTime = previousTime;
     
-    // Debug: 檢查 previousTime 是否正確
-    if (Math.abs(savedPreviousTime - time) < 0.001 && savedPreviousTime !== 0) {
-      console.warn(`[EffectSync] ⚠️ previousTime (${savedPreviousTime.toFixed(3)}s) 和 currentTime (${time.toFixed(3)}s) 幾乎相同！這可能導致觸發被跳過。`);
+    // 效能優化：移除過於頻繁的警告訊息
+    // 僅在開發模式且時間完全相同時才警告（極端情況）
+    if (import.meta.env.DEV && savedPreviousTime === time && savedPreviousTime !== 0) {
+      console.warn(`[EffectSync] ⚠️ previousTime 和 currentTime 完全相同 (${time.toFixed(3)}s)，可能導致觸發檢測問題`);
     }
 
     effects.forEach(effect => {
@@ -86,9 +87,9 @@ export class EffectSyncUseCase {
           // 這確保即使時間跳躍也能觸發
           const shouldTrigger = previousFrame < triggerFrame && triggerFrame <= currentFrame;
           
-          // 詳細日誌（只在接近 trigger frame 或觸發時記錄）
-          if (Math.abs(currentFrame - triggerFrame) <= 3 || shouldTrigger || previousFrame === currentFrame) {
-            console.log(`[EffectSync] Trigger "${effect.name}" @ frame ${trigger.frame}: clipId=${triggerClipId} (match: true), currentFrame=${currentFrame}, previousFrame=${previousFrame}, triggerFrame=${triggerFrame}, savedPreviousTime=${savedPreviousTime.toFixed(3)}s, currentTime=${time.toFixed(3)}s, shouldTrigger=${shouldTrigger}`);
+          // 僅在實際觸發時記錄，避免大量重複日誌
+          if (shouldTrigger) {
+            console.log(`[EffectSync] ✓ Trigger "${effect.name}" @ frame ${trigger.frame}: clipId=${triggerClipId}, currentFrame=${currentFrame}, previousFrame=${previousFrame}`);
           }
 
           if (shouldTrigger) {

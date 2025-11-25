@@ -1,0 +1,107 @@
+MIT License
+
+Copyright (c) 2024 JR 3D Viewer Project
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 第三方開源軟體聲明
+
+本專案使用以下第三方開源軟體：
+
+### 1. lamejs (v1.2.1)
+- 授權：LGPL-3.0
+- 用途：MP3 音訊編碼
+- 來源：https://github.com/zhuker/lamejs
+- 授權文件：public/licenses/LAMEJS_LICENSE.txt
+
+⚠️ **LGPL 授權說明**：
+本專案通過全域腳本動態載入方式使用 lamejs，符合 LGPL 授權的動態連結許可。
+本專案未修改 lamejs 源碼。完整的 LGPL-3.0 授權條款請參見 public/licenses/LAMEJS_LICENSE.txt。
+
+### 2. Effekseer WebGL Runtime (v1.70e)
+- 授權：MIT License
+- 用途：WebGL 特效渲染引擎
+- 來源：https://github.com/effekseer/Effekseer
+- 授權文件：public/licenses/EFFEKSEER_LICENSE.txt
+
+### 3. Three.js (v0.181.2)
+- 授權：MIT License
+- 用途：3D WebGL 渲染引擎
+- 來源：https://github.com/mrdoob/three.js
+
+### 4. React (v19.2.0) 及相關生態系統
+- 授權：MIT License
+- 來源：https://github.com/facebook/react
+- 包含：react, react-dom, @react-three/fiber, @react-three/drei
+
+### 5. 其他依賴
+
+本專案還使用以下 MIT/ISC/Apache-2.0 授權的開源軟體：
+
+- Vite (MIT) - 建置工具
+- TypeScript (Apache-2.0) - 程式語言
+- Tailwind CSS (MIT) - CSS 框架
+- Lucide React (ISC) - 圖示庫
+- clsx (MIT) - CSS 類名工具
+- tailwind-merge (MIT) - Tailwind 類名合併
+
+完整的依賴列表和授權資訊請參見 package.json 和各套件的 LICENSE 文件。
+
+---
+
+## 授權合規說明
+
+1. **MIT 授權組件**：本專案遵守所有 MIT 授權的條款，保留原始版權聲明和授權條款。
+
+2. **LGPL 授權組件（lamejs）**：
+   - 使用動態載入方式（`<script src="/lame.min.js">`）
+   - 未對 lamejs 源碼進行任何修改
+   - 完整的 LGPL-3.0 授權文件存放於 public/licenses/LAMEJS_LICENSE.txt
+   - 符合 LGPL 授權的「動態連結」條款，允許本專案保持 MIT 授權
+
+3. **Apache-2.0 授權組件（TypeScript）**：遵守 Apache 2.0 授權條款，與 MIT 授權相容。
+
+---
+
+## 商業使用說明
+
+本專案採用 MIT 授權，允許商業使用。但請注意：
+
+- ✅ 本專案主體代碼可自由商業使用
+- ⚠️ lamejs (LGPL) 通過動態載入使用，符合商業使用要求
+- ✅ 其他所有依賴均為 MIT/ISC/Apache-2.0，可自由商業使用
+
+**建議**：如需完全避免 LGPL 授權，可考慮：
+1. 使用瀏覽器原生 Web Audio API 編碼 WAV 格式
+2. 替換為 MIT 授權的 MP3 編碼器（如 @breezystack/lamejs）
+
+---
+
+## 免責聲明
+
+本軟體按「現狀」提供，不提供任何明示或暗示的保證。
+在任何情況下，作者或版權持有人均不對任何索賠、損害或其他責任負責。
+
+---
+
+**授權文件版本**：1.0  
+**最後更新**：2024年11月25日
+

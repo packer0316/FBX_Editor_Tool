@@ -7,18 +7,18 @@ import { getClipId, type IdentifiableClip } from '../../utils/clip/clipIdentifie
  * 負責處理動畫播放時的音訊觸發邏輯
  */
 export class AudioSyncUseCase {
-  private lastTimeRef: React.MutableRefObject<number>;
+  private lastAudioTimeRef: React.MutableRefObject<number>;
   private lastAudioFrameRef: React.MutableRefObject<number>;
   private audioController: InstanceType<typeof AudioController>;
   private fps: number = 30;
 
   constructor(
     audioController: InstanceType<typeof AudioController>,
-    lastTimeRef: React.MutableRefObject<number>,
+    lastAudioTimeRef: React.MutableRefObject<number>,
     lastAudioFrameRef: React.MutableRefObject<number>
   ) {
     this.audioController = audioController;
-    this.lastTimeRef = lastTimeRef;
+    this.lastAudioTimeRef = lastAudioTimeRef;
     this.lastAudioFrameRef = lastAudioFrameRef;
   }
 
@@ -36,13 +36,13 @@ export class AudioSyncUseCase {
     }
 
     // Detect loop or seek (if time goes backward)
-    if (time < this.lastTimeRef.current) {
+    if (time < this.lastAudioTimeRef.current) {
       this.lastAudioFrameRef.current = -1;
-      this.lastTimeRef.current = time;
+      this.lastAudioTimeRef.current = time;
       return;
     }
 
-    const previousTime = this.lastTimeRef.current;
+    const previousTime = this.lastAudioTimeRef.current;
     const currentClipId = getClipId(clip);
 
     audioTracks.forEach(track => {
@@ -59,7 +59,7 @@ export class AudioSyncUseCase {
       });
     });
 
-    this.lastTimeRef.current = time;
+    this.lastAudioTimeRef.current = time;
   }
 }
 

@@ -90,9 +90,10 @@ function App() {
   const themeMenuRef = useRef<HTMLDivElement>(null);
 
   const audioControllerRef = useRef<InstanceType<typeof AudioController>>(new AudioController());
+  const lastAudioTimeRef = useRef<number>(0);
+  const lastEffectTimeRef = useRef<number>(0);
   const lastAudioFrameRef = useRef<number>(-1);
   const lastEffectFrameRef = useRef<number>(-1);
-  const lastTimeRef = useRef<number>(0);
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
     near: 0.1,
@@ -421,7 +422,8 @@ function App() {
     sceneViewerRef.current?.seekTo(time);
     setCurrentTime(time);
     // 重置觸發狀態，避免跳過觸發
-    lastTimeRef.current = time;
+    lastAudioTimeRef.current = time;
+    lastEffectTimeRef.current = time;
     lastAudioFrameRef.current = -1;
     lastEffectFrameRef.current = -1;
 
@@ -432,11 +434,11 @@ function App() {
   };
 
   const audioSyncUseCaseRef = useRef(
-    new AudioSyncUseCase(audioControllerRef.current, lastTimeRef, lastAudioFrameRef)
+    new AudioSyncUseCase(audioControllerRef.current, lastAudioTimeRef, lastAudioFrameRef)
   );
   const effectSyncUseCaseRef = useRef(
     new EffectSyncUseCase(
-      lastTimeRef,
+      lastEffectTimeRef,
       lastEffectFrameRef,
       () => model,
       () => bones
@@ -447,7 +449,7 @@ function App() {
   // 當 model 或 bones 改變時，更新 effectSyncUseCaseRef
   useEffect(() => {
     effectSyncUseCaseRef.current = new EffectSyncUseCase(
-      lastTimeRef,
+      lastEffectTimeRef,
       lastEffectFrameRef,
       () => model,
       () => bones
@@ -468,8 +470,7 @@ function App() {
     }
 
     // 確保使用最新的 effects（避免閉包問題）
-    // 重要：先調用 effectSync，因為它和 audioSync 共享 lastTimeRef
-    // 如果 audioSync 先更新 lastTimeRef，effectSync 的 previousTime 就會和 time 相同
+    // 優先處理特效，再處理音效；兩者使用獨立時間參考，避免互相覆蓋
     effectSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, effects);
     audioSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, audioTracks);
   }, [isPlaying, optimizedClip, audioTracks, effects, activeModelId, updateModel]);
@@ -480,7 +481,8 @@ function App() {
     const optimized = optimizeAnimationClip(clip, tolerance) as IdentifiableClip;
     setOptimizedClip(optimized);
     // 重置觸發狀態
-    lastTimeRef.current = 0;
+    lastAudioTimeRef.current = 0;
+    lastEffectTimeRef.current = 0;
     lastAudioFrameRef.current = -1;
     lastEffectFrameRef.current = -1;
     handleSeek(0);

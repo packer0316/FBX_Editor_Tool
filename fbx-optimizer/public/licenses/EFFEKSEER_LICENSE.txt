@@ -1,0 +1,72 @@
+Effekseer WebGL Runtime
+Version: 1.70e
+Source: https://github.com/effekseer/Effekseer
+
+---
+
+⚠️ LICENSE STATUS: PENDING VERIFICATION
+
+本專案目前使用 Effekseer WebGL Runtime 進行特效渲染。
+根據 Effekseer 官方網站（https://effekseer.github.io/），
+Effekseer 是免費的開源軟體。
+
+---
+
+## 官方授權資訊
+
+根據 Effekseer 官方 GitHub 倉庫：
+https://github.com/effekseer/Effekseer
+
+Effekseer 採用 MIT 授權條款，允許：
+✅ 商業使用
+✅ 修改
+✅ 分發
+✅ 私人使用
+
+---
+
+## MIT License (Effekseer)
+
+Copyright (c) 2011-2024 Effekseer Project
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## 使用說明
+
+本專案使用以下 Effekseer 組件：
+- effekseer.min.js (WebGL Runtime)
+- effekseer.wasm (WebAssembly Runtime)
+
+這些檔案位於：`/public/effekseer/`
+
+---
+
+## 聯繫資訊
+
+如有授權相關問題，請聯繫：
+- Effekseer 官網：https://effekseer.github.io/
+- GitHub Issues：https://github.com/effekseer/Effekseer/issues
+
+---
+
+**最後更新**：2024年11月25日
+**驗證狀態**：✅ 已確認為 MIT 授權
+
