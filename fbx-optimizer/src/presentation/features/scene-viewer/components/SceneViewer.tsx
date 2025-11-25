@@ -4,6 +4,8 @@ import { OrbitControls, Grid, Environment } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
+import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/InitEffekseerRuntimeUseCase';
+import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 
 export interface ModelRef {
     play: () => void;
@@ -71,6 +73,74 @@ function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMapp
         }
     }, [environmentIntensity, scene]);
 
+    return null;
+}
+
+function EffekseerFrameBridge() {
+    const { gl, camera, scene } = useThree();
+    const [initialized, setInitialized] = React.useState(false);
+
+    // 初始化 Effekseer（使用 Three.js 的 WebGL Context）
+    React.useEffect(() => {
+        const webglContext = gl.getContext() as WebGLRenderingContext;
+        
+        console.log('[EffekseerFrameBridge] 開始初始化 Effekseer Runtime...');
+        InitEffekseerRuntimeUseCase.execute({ webglContext })
+            .then(() => {
+                console.log('[EffekseerFrameBridge] ✓ Effekseer Runtime 初始化成功');
+                setInitialized(true);
+            })
+            .catch((error) => {
+                console.error('[EffekseerFrameBridge] ✗ 初始化 Effekseer Runtime 失敗:', error);
+            });
+    }, [gl]);
+
+    // Effekseer 更新（只更新邏輯，不渲染）
+    useFrame((state, delta) => {
+        if (!initialized) return;
+        
+        const adapter = getEffekseerRuntimeAdapter();
+        const context = adapter.effekseerContext;
+        if (context) {
+            // 只更新 Effekseer 的邏輯狀態
+            context.update(delta * 60);
+        }
+    });
+
+    // 在 Three.js 渲染完成後繪製 Effekseer
+    React.useEffect(() => {
+        if (!initialized || !scene || !camera) return;
+
+        const adapter = getEffekseerRuntimeAdapter();
+        const context = adapter.effekseerContext;
+        if (!context) return;
+
+        // 掛載 onAfterRender 回調
+        const originalOnAfterRender = scene.onAfterRender;
+        
+        scene.onAfterRender = (renderer, scene, camera) => {
+            // 先呼叫原始的 onAfterRender（如果有）
+            if (originalOnAfterRender) {
+                originalOnAfterRender(renderer, scene, camera);
+            }
+
+            // 同步相機矩陣
+            context.setProjectionMatrix((camera as any).projectionMatrix.elements);
+            context.setCameraMatrix((camera as any).matrixWorldInverse.elements);
+            
+            // 繪製 Effekseer（在 Three.js 渲染完成後）
+            context.draw();
+            
+            // 重置 Three.js 狀態（避免 Effekseer 破壞 WebGL 狀態）
+            renderer.resetState();
+        };
+
+        // 清理函數
+        return () => {
+            scene.onAfterRender = originalOnAfterRender;
+        };
+    }, [initialized, scene, camera]);
+    
     return null;
 }
 
@@ -801,6 +871,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             }
         }));
 
+        // Effekseer 初始化已移至 EffekseerFrameBridge 組件中
+
         return (
             <div
                 className="w-full h-full rounded-lg overflow-hidden shadow-xl border border-gray-700 transition-colors duration-300"
@@ -823,6 +895,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             gl.toneMappingExposure = toneMappingExposure;
                         }
                     }}>
+                    <EffekseerFrameBridge />
                     <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
                     {hdriUrl && <Environment files={hdriUrl} background blur={0.5} />}
                     <ambientLight intensity={0.8 * (environmentIntensity ?? 1.0)} />

@@ -7,6 +7,7 @@ import OptimizationControls from './presentation/features/optimization-panel/com
 import MaterialShaderTool from './presentation/features/shader-panel/components/MaterialShaderTool';
 import ModelInspector from './presentation/features/model-inspector/components/ModelInspector';
 import AudioPanel from './presentation/features/audio-panel/components/AudioPanel';
+import EffectTestPanel, { type EffectItem } from './presentation/features/effect-panel/components/EffectTestPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Camera, Grid } from 'lucide-react';
@@ -20,6 +21,7 @@ import { ExportModelUseCase } from './application/use-cases/ExportModelUseCase';
 import { CreateClipUseCase } from './application/use-cases/CreateClipUseCase';
 import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
+import { EffectSyncUseCase } from './application/use-cases/EffectSyncUseCase';
 
 // Hooks
 import { useTheme, themeOptions } from './presentation/hooks/useTheme';
@@ -58,8 +60,9 @@ function App() {
   const { rightPanelWidth, handleRightPanelMouseDown } = useRightPanelResize(320);
 
   // 右側面板分頁
-  const [activeTab, setActiveTab] = useState<'optimization' | 'shader' | 'audio'>('optimization');
+  const [activeTab, setActiveTab] = useState<'optimization' | 'shader' | 'audio' | 'effect'>('optimization');
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
+  const [effects, setEffects] = useState<EffectItem[]>([]);
 
   // Theme
   const { themeMode, setThemeMode, currentTheme } = useTheme('dark');
@@ -79,6 +82,7 @@ function App() {
 
   const audioControllerRef = useRef<InstanceType<typeof AudioController>>(new AudioController());
   const lastAudioFrameRef = useRef<number>(-1);
+  const lastEffectFrameRef = useRef<number>(-1);
   const lastTimeRef = useRef<number>(0);
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
@@ -212,12 +216,34 @@ function App() {
   const handleSeek = (time: number) => {
     sceneViewerRef.current?.seekTo(time);
     setCurrentTime(time);
+    // 重置觸發狀態，避免跳過觸發
+    lastTimeRef.current = time;
+    lastAudioFrameRef.current = -1;
+    lastEffectFrameRef.current = -1;
   };
 
   const audioSyncUseCaseRef = useRef(
     new AudioSyncUseCase(audioControllerRef.current, lastTimeRef, lastAudioFrameRef)
   );
+  const effectSyncUseCaseRef = useRef(
+    new EffectSyncUseCase(
+      lastTimeRef, 
+      lastEffectFrameRef, 
+      () => model, 
+      () => bones
+    )
+  );
   const lastUIUpdateRef = useRef(0);
+
+  // 當 model 或 bones 改變時，更新 effectSyncUseCaseRef
+  useEffect(() => {
+    effectSyncUseCaseRef.current = new EffectSyncUseCase(
+      lastTimeRef, 
+      lastEffectFrameRef, 
+      () => model, 
+      () => bones
+    );
+  }, [model, bones]);
 
   const handleTimeUpdate = useCallback((time: number) => {
     // Throttle UI updates to ~30fps to prevent main thread blocking
@@ -227,14 +253,22 @@ function App() {
       lastUIUpdateRef.current = now;
     }
 
+    // 確保使用最新的 effects（避免閉包問題）
+    // 重要：先調用 effectSync，因為它和 audioSync 共享 lastTimeRef
+    // 如果 audioSync 先更新 lastTimeRef，effectSync 的 previousTime 就會和 time 相同
+    effectSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, effects);
     audioSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, audioTracks);
-  }, [isPlaying, optimizedClip, audioTracks]);
+  }, [isPlaying, optimizedClip, audioTracks, effects]);
 
   const handleSelectClip = (clip: IdentifiableClip) => {
     setOriginalClip(clip);
     setDuration(clip.duration);
     const optimized = optimizeAnimationClip(clip, tolerance) as IdentifiableClip;
     setOptimizedClip(optimized);
+    // 重置觸發狀態
+    lastTimeRef.current = 0;
+    lastAudioFrameRef.current = -1;
+    lastEffectFrameRef.current = -1;
     handleSeek(0);
     if (!isPlaying) handlePlayPause();
   };
@@ -901,6 +935,7 @@ function App() {
               isLoopEnabled={isLoopEnabled}
               onToggleLoop={() => setIsLoopEnabled(!isLoopEnabled)}
               audioTracks={audioTracks}
+              effects={effects}
             />
           </div>
         </div>
@@ -944,6 +979,15 @@ function App() {
             >
               Audio
             </button>
+            <button
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'effect'
+                ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-orange-500`
+                : `${currentTheme.button}`
+                }`}
+              onClick={() => setActiveTab('effect')}
+            >
+              Effect
+            </button>
           </div>
 
           {/* 分頁內容 */}
@@ -979,6 +1023,10 @@ function App() {
                 createdClips={createdClips}
                 audioController={audioControllerRef.current}
               />
+            )}
+
+            {activeTab === 'effect' && (
+              <EffectTestPanel model={model} bones={bones} effects={effects} setEffects={setEffects} createdClips={createdClips} />
             )}
           </div>
 

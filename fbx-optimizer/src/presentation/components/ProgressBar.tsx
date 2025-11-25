@@ -1,6 +1,7 @@
 import { useMemo, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { AudioTrack } from '../../domain/value-objects/AudioTrack';
+import type { EffectItem } from '../features/effect-panel/components/EffectTestPanel';
 
 /**
  * 進度條狀態類型
@@ -37,6 +38,13 @@ type AudioMarkerEntry = {
   audioTrack: ProgressBarMarkerTrack;
 };
 
+type EffectMarkerEntry = {
+  trigger: { id: string; frame: number };
+  effectItem: Pick<EffectItem, 'id' | 'name' | 'color' | 'boundBoneUuid'>;
+};
+
+type MarkerEntry = AudioMarkerEntry | EffectMarkerEntry;
+
 interface ProgressBarProps {
   /** 進度百分比 (0-100) */
   progress: number;
@@ -53,7 +61,10 @@ interface ProgressBarProps {
   /** Audio Markers 資料 */
   audioMarkers?: AudioMarkerEntry[];
   
-  /** 片段時長（用於計算 Audio Marker 位置，單位：秒） */
+  /** Effect Markers 資料 */
+  effectMarkers?: EffectMarkerEntry[];
+  
+  /** 片段時長（用於計算 Marker 位置，單位：秒） */
   clipDuration?: number;
   
   /** 自訂 className */
@@ -85,16 +96,17 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   size = 'md',
   showPercentage = false,
   audioMarkers = [],
+  effectMarkers = [],
   clipDuration = 0,
   className = '',
 }) => {
   const [hoveredTooltip, setHoveredTooltip] = useState<{
     x: number;
     y: number;
-    items: AudioMarkerEntry[];
+    items: MarkerEntry[];
   } | null>(null);
 
-  const handleMarkerEnter = (event: MouseEvent<HTMLDivElement>, items: AudioMarkerEntry[]) => {
+  const handleMarkerEnter = (event: MouseEvent<HTMLDivElement>, items: MarkerEntry[]) => {
     const rect = event.currentTarget.getBoundingClientRect();
     setHoveredTooltip({
       x: rect.left + rect.width / 2,
@@ -105,14 +117,19 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
 
   const handleMarkerLeave = () => setHoveredTooltip(null);
 
-  // 使用 useMemo 快取 Audio Markers 的位置計算
+  // 使用 useMemo 快取 Markers 的位置計算（合併 Audio 和 Effect）
   const renderedMarkers = useMemo(() => {
-    if (!audioMarkers.length || clipDuration === 0) return null;
+    const allMarkers: MarkerEntry[] = [
+      ...audioMarkers,
+      ...effectMarkers
+    ];
+    
+    if (!allMarkers.length || clipDuration === 0) return null;
 
     const fps = 30; // 標準幀率
     const totalFrames = clipDuration * fps;
 
-    const markersGroupedByFrame = audioMarkers.reduce<Record<number, AudioMarkerEntry[]>>(
+    const markersGroupedByFrame = allMarkers.reduce<Record<number, MarkerEntry[]>>(
       (groups, marker) => {
         const key = marker.trigger.frame;
         if (!groups[key]) {
@@ -133,10 +150,22 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         if (a.trigger.frame !== b.trigger.frame) {
           return a.trigger.frame - b.trigger.frame;
         }
-        return a.audioTrack.name.localeCompare(b.audioTrack.name);
+        // 先按類型排序（Audio 在前，Effect 在後），然後按名稱排序
+        const aType = 'audioTrack' in a ? 0 : 1;
+        const bType = 'audioTrack' in b ? 0 : 1;
+        if (aType !== bType) {
+          return aType - bType;
+        }
+        const aName = 'audioTrack' in a ? a.audioTrack.name : a.effectItem.name;
+        const bName = 'audioTrack' in b ? b.audioTrack.name : b.effectItem.name;
+        return aName.localeCompare(bName);
       });
 
-      const dominantColor = sortedGroup[0]?.audioTrack.color || '#FACC15';
+      // 決定主要顏色（優先使用 Audio，否則使用 Effect）
+      const firstItem = sortedGroup[0];
+      const dominantColor = 'audioTrack' in firstItem 
+        ? (firstItem.audioTrack.color || '#FACC15')
+        : (firstItem.effectItem.color || '#9333EA');
 
       return (
         <div
@@ -151,7 +180,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         />
       );
     });
-  }, [audioMarkers, clipDuration]);
+  }, [audioMarkers, effectMarkers, clipDuration]);
 
   // 確保進度在 0-100 範圍內
   const clampedProgress = Math.min(Math.max(progress, 0), 100);
@@ -205,29 +234,59 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
             }}
           >
             <div className="flex flex-col gap-1">
-              {hoveredTooltip.items.map(({ trigger, audioTrack }) => {
-                const noteText = audioTrack.note?.trim() ? audioTrack.note : '無備註';
-                return (
-                  <div
-                    key={`${audioTrack.id || audioTrack.name}-${trigger.id}`}
-                    className="bg-gray-900/95 text-white text-xs px-3 py-2 rounded-md border border-gray-700 shadow-2xl min-w-[200px]"
-                  >
-                    <div className="flex items-center justify-between gap-3">
-                      <span
-                        className="font-semibold"
-                        style={{ color: audioTrack.color || '#FACC15' }}
-                      >
-                        {audioTrack.name}
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-mono">
-                        Frame {trigger.frame}
-                      </span>
+              {hoveredTooltip.items.map((item) => {
+                const isAudio = 'audioTrack' in item;
+                const trigger = item.trigger;
+                
+                if (isAudio) {
+                  const { audioTrack } = item;
+                  const noteText = audioTrack.note?.trim() ? audioTrack.note : '無備註';
+                  return (
+                    <div
+                      key={`audio-${audioTrack.id || audioTrack.name}-${trigger.id}`}
+                      className="bg-gray-900/95 text-white text-xs px-3 py-2 rounded-md border border-gray-700 shadow-2xl min-w-[200px]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span
+                          className="font-semibold"
+                          style={{ color: audioTrack.color || '#FACC15' }}
+                        >
+                          {audioTrack.name}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          Frame {trigger.frame}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 mt-1">
+                        備註：{noteText}
+                      </div>
                     </div>
-                    <div className="text-[11px] text-gray-300 mt-1">
-                      備註：{noteText}
+                  );
+                } else {
+                  const { effectItem } = item;
+                  const boneInfo = effectItem.boundBoneUuid ? '綁定到 Bone' : '世界座標';
+                  return (
+                    <div
+                      key={`effect-${effectItem.id || effectItem.name}-${trigger.id}`}
+                      className="bg-gray-900/95 text-white text-xs px-3 py-2 rounded-md border border-gray-700 shadow-2xl min-w-[200px]"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span
+                          className="font-semibold"
+                          style={{ color: effectItem.color || '#9333EA' }}
+                        >
+                          {effectItem.name}
+                        </span>
+                        <span className="text-[10px] text-gray-400 font-mono">
+                          Frame {trigger.frame}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-gray-300 mt-1">
+                        位置：{boneInfo}
+                      </div>
                     </div>
-                  </div>
-                );
+                  );
+                }
               })}
               <div className="w-3 h-3 bg-gray-900/95 transform rotate-45 self-center -mt-1 border-r border-b border-gray-700" />
             </div>

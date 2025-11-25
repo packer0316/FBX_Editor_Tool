@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import * as THREE from 'three';
 import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat } from 'lucide-react';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
+import type { EffectItem } from '../../effect-panel/components/EffectTestPanel';
 import ProgressBar from '../../../components/ProgressBar';
 import { getClipId, getClipDisplayName, isSameClip, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 
@@ -29,6 +30,7 @@ interface ModelInspectorProps {
 
     onToggleLoop: () => void;
     audioTracks: AudioTrack[];
+    effects: EffectItem[];
 }
 
 // 遞迴渲染骨架樹狀圖
@@ -110,7 +112,8 @@ export default function ModelInspector({
     isLoopEnabled,
 
     onToggleLoop,
-    audioTracks
+    audioTracks,
+    effects
 }: ModelInspectorProps) {
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
@@ -342,6 +345,13 @@ export default function ModelInspector({
                                         .filter(trigger => trigger.clipId === getClipId(animationClip))
                                         .map(trigger => ({ trigger, audioTrack }))
                                 );
+                                
+                                // 計算 Effect Markers
+                                const effectMarkers = effects.flatMap(effect =>
+                                    effect.triggers
+                                        .filter(trigger => trigger.clipId === getClipId(animationClip))
+                                        .map(trigger => ({ trigger, effectItem: { id: effect.id, name: effect.name, color: effect.color, boundBoneUuid: effect.boundBoneUuid } }))
+                                );
 
                                 return (
                                     <div
@@ -392,12 +402,13 @@ export default function ModelInspector({
                                             </div>
                                         </div>
 
-                                        {/* Progress Bar with Audio Markers */}
+                                        {/* Progress Bar with Audio and Effect Markers */}
                                         <ProgressBar
                                             progress={progress}
                                             state={progressState}
                                             size="md"
                                             audioMarkers={audioMarkers}
+                                            effectMarkers={effectMarkers}
                                             clipDuration={animationClip.duration}
                                             className="mt-2"
                                         />
@@ -452,6 +463,13 @@ export default function ModelInspector({
                                     audioTrack.triggers
                                         .filter(trigger => trigger.clipId === getClipId(playlistClip))
                                         .map(trigger => ({ trigger, audioTrack }))
+                                );
+                                
+                                // 計算 Effect Markers
+                                const effectMarkers = effects.flatMap(effect =>
+                                    effect.triggers
+                                        .filter(trigger => trigger.clipId === getClipId(playlistClip))
+                                        .map(trigger => ({ trigger, effectItem: { id: effect.id, name: effect.name, color: effect.color, boundBoneUuid: effect.boundBoneUuid } }))
                                 );
 
                                 return (
