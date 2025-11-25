@@ -195,7 +195,7 @@ export default function AudioSettingsPanel({
                                             value={track[eqBand.prop]}
                                             onChange={(e) => onUpdate(eqBand.prop, parseFloat(e.target.value))}
                                             className={`h-24 w-2 bg-black/30 rounded-lg appearance-none cursor-pointer premium-slider writing-mode-vertical`}
-                                            style={{ writingMode: 'vertical-lr', WebkitAppearance: 'slider-vertical', '--slider-color': eqBand.label === 'Low' ? '#f87171' : eqBand.label === 'Mid' ? '#facc15' : '#22d3ee' } as React.CSSProperties}
+                                            style={{ writingMode: 'vertical-lr', direction: 'rtl', '--slider-color': eqBand.label === 'Low' ? '#f87171' : eqBand.label === 'Mid' ? '#facc15' : '#22d3ee' } as React.CSSProperties}
                                         />
                                         <span className={`text-[10px] ${eqBand.color}`}>{eqBand.label}</span>
                                         <span className="text-[10px] text-gray-500">{track[eqBand.prop]}dB</span>

@@ -184,8 +184,7 @@ input[type=range]:focus {
 .premium-slider[style*="writing-mode: vertical-lr"],
 .premium-slider[style*="writingMode: vertical-lr"] {
   writing-mode: vertical-lr;
-  -webkit-appearance: slider-vertical;
-  appearance: slider-vertical;
+  direction: rtl;
   width: 8px;
   height: 96px;
 }

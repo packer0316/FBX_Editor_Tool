@@ -396,7 +396,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                                                                 value={track[band.prop]}
                                                                                 onChange={(e) => updateTrackProperty(track.id, band.prop, parseFloat(e.target.value))}
                                                                                 className={`h-24 w-2 bg-gray-700 rounded-lg appearance-none cursor-pointer ${band.accent} writing-mode-vertical`}
-                                                                                style={{ writingMode: 'vertical-lr', WebkitAppearance: 'slider-vertical' }}
+                                                                                style={{ writingMode: 'vertical-lr', direction: 'rtl' }}
                                                                             />
                                                                             <span className={`text-[10px] ${band.color}`}>{band.label}</span>
                                                                             <span className="text-[10px] text-gray-500">{track[band.prop]}dB</span>
