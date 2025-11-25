@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { ShaderGroup } from '../../domain/value-objects/ShaderFeature';
 import { ModelLoaderService } from '../../domain/services/model/ModelLoaderService';
+import type { ModelInstance } from '../../domain/value-objects/ModelInstance';
+import { setClipIdentifier, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 
 /**
  * 載入模型的結果介面
@@ -82,6 +84,79 @@ export class LoadModelUseCase {
       meshNames,
       defaultShaderGroup,
       animations: model.animations || [],
+    };
+  }
+
+  /**
+   * 載入模型並創建 ModelInstance
+   * 
+   * @param files - 檔案列表，應包含至少一個 FBX 檔案和可選的貼圖檔案
+   * @param modelName - 可選的模型名稱（預設使用檔名）
+   * @returns Promise 解析為 ModelInstance
+   * @throws {Error} 當檔案列表中沒有 FBX 檔案時拋出錯誤
+   * 
+   * @example
+   * ```typescript
+   * const instance = await LoadModelUseCase.executeAndCreateInstance(files, '我的模型');
+   * console.log(instance.id); // "model_1234567890_abc"
+   * ```
+   */
+  static async executeAndCreateInstance(
+    files: FileList,
+    modelName?: string
+  ): Promise<ModelInstance> {
+    const result = await this.execute(files);
+    const { fbxFile } = ModelLoaderService.classifyFiles(files);
+    
+    // 提取骨骼
+    const bones: THREE.Object3D[] = [];
+    result.model.traverse((child) => {
+      if (child.type === 'Bone' || (child as any).isBone) {
+        bones.push(child);
+      }
+    });
+
+    // 處理動畫片段
+    let originalClip: IdentifiableClip | null = null;
+    let masterClip: IdentifiableClip | null = null;
+    let optimizedClip: IdentifiableClip | null = null;
+    
+    if (result.animations.length > 0) {
+      const clip = result.animations[0] as IdentifiableClip;
+      if (!clip.customId) {
+        setClipIdentifier(clip);
+      }
+      originalClip = clip;
+      masterClip = clip;
+    }
+
+    return {
+      id: `model_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+      name: modelName || fbxFile?.name.replace(/\.fbx$/i, '') || '未命名模型',
+      file: fbxFile || null,
+      model: result.model,
+      meshNames: result.meshNames,
+      bones,
+      originalClip,
+      masterClip,
+      optimizedClip,
+      createdClips: [],
+      tolerance: 0,
+      shaderGroups: result.defaultShaderGroup ? [result.defaultShaderGroup] : [],
+      isShaderEnabled: true,
+      audioTracks: [],
+      effects: [],
+      isPlaying: false,
+      currentTime: 0,
+      duration: originalClip?.duration || 0,
+      isLoopEnabled: true,
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+      renderPriority: 0,
+      visible: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
   }
 }

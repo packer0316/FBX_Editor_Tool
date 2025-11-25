@@ -1,10 +1,11 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
-import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, Film, CheckSquare, Square, Trash2, Repeat } from 'lucide-react';
+import { Eye, EyeOff, Play, Pause, Plus, ChevronRight, ChevronDown, ChevronUp, Film, CheckSquare, Square, Trash2, Repeat, Upload, FileUp } from 'lucide-react';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 import type { EffectItem } from '../../effect-panel/components/EffectTestPanel';
 import ProgressBar from '../../../components/ProgressBar';
 import { getClipId, getClipDisplayName, isSameClip, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
+import { parseIniFromFile, type AnimationClipInfo } from '../../../../utils/ini/iniParser';
 
 interface ModelInspectorProps {
     model: THREE.Group | null;
@@ -131,6 +132,13 @@ export default function ModelInspector({
 
     // Drag and Drop state for playlist
     const [draggedItemIndex, setDraggedItemIndex] = useState<number | null>(null);
+    
+    // INI 檔案導入相關
+    const iniFileInputRef = useRef<HTMLInputElement>(null);
+    const [isDraggingIni, setIsDraggingIni] = useState(false);
+    
+    // 新增動作片段表單的展開/縮起狀態
+    const [isClipFormExpanded, setIsClipFormExpanded] = useState(true);
 
     // 遍歷模型獲取 Mesh 和層級結構資訊
     useEffect(() => {
@@ -188,6 +196,79 @@ export default function ModelInspector({
         setNewClipName('');
         setStartFrame('');
         setEndFrame('');
+    };
+
+    // 處理 INI 檔案導入
+    const handleIniFileImport = async (file: File) => {
+        try {
+            const result = await parseIniFromFile(file);
+            
+            if (result.clips.length === 0) {
+                alert('INI 檔案中沒有找到動畫片段資訊');
+                return;
+            }
+
+            // 批量創建動畫片段
+            let successCount = 0;
+            let skipCount = 0;
+
+            for (const clipInfo of result.clips) {
+                if (!clipInfo.enabled) {
+                    skipCount++;
+                    continue;
+                }
+
+                try {
+                    onCreateClip(clipInfo.name, clipInfo.startFrame, clipInfo.endFrame);
+                    successCount++;
+                } catch (error) {
+                    console.error(`創建片段 "${clipInfo.name}" 失敗:`, error);
+                }
+            }
+
+            alert(`成功導入 ${successCount} 個動畫片段${skipCount > 0 ? `，跳過 ${skipCount} 個未啟用片段` : ''}`);
+        } catch (error) {
+            console.error('解析 INI 檔案失敗:', error);
+            alert('解析 INI 檔案失敗，請確認檔案格式正確');
+        }
+    };
+
+    // 檔案選擇處理
+    const handleIniFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            handleIniFileImport(file);
+            // 清空 input 以允許重複選擇相同檔案
+            if (iniFileInputRef.current) {
+                iniFileInputRef.current.value = '';
+            }
+        }
+    };
+
+    // 拖放處理
+    const handleIniDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingIni(true);
+    };
+
+    const handleIniDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingIni(false);
+    };
+
+    const handleIniDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDraggingIni(false);
+
+        const file = e.dataTransfer.files[0];
+        if (file && (file.name.endsWith('.ini') || file.name.endsWith('.INI'))) {
+            handleIniFileImport(file);
+        } else {
+            alert('請拖放 .ini 檔案');
+        }
     };
 
     // 播放條拖動處理
@@ -326,7 +407,30 @@ export default function ModelInspector({
                 {activeTab === 'clip' && (
                     <div className="space-y-1">
                         {createdClips.length === 0 ? (
-                            <div className="text-gray-500 text-sm text-center mt-4">尚未建立動作片段</div>
+                            <div 
+                                onDragOver={handleIniDragOver}
+                                onDragLeave={handleIniDragLeave}
+                                onDrop={handleIniDrop}
+                                className={`relative border-2 border-dashed rounded-lg p-8 text-center mt-4 transition-all ${
+                                    isDraggingIni 
+                                        ? 'border-blue-500 bg-blue-500/10' 
+                                        : 'border-gray-700 bg-gray-800/30'
+                                }`}
+                            >
+                                {isDraggingIni ? (
+                                    <div className="flex flex-col items-center">
+                                        <FileUp className="w-10 h-10 text-blue-400 mb-3" />
+                                        <p className="text-sm text-blue-300 font-medium mb-1">放開以導入 INI 檔案</p>
+                                        <p className="text-xs text-gray-400">自動創建所有動畫片段</p>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center">
+                                        <FileUp className="w-8 h-8 text-gray-600 mb-2" />
+                                        <p className="text-gray-500 text-sm mb-1">尚未建立動作片段</p>
+                                        <p className="text-gray-600 text-xs">拖放 .ini 檔案或使用下方按鈕創建</p>
+                                    </div>
+                                )}
+                            </div>
                         ) : (
                             createdClips.map((animationClip, clipIndex) => {
                                 // 使用 customId 進行精確匹配
@@ -572,45 +676,94 @@ export default function ModelInspector({
                             className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                         />
                     </div>
+
+                    {/* 展開/縮起按鈕 */}
+                    <button
+                        onClick={() => setIsClipFormExpanded(!isClipFormExpanded)}
+                        className="w-10 h-10 flex items-center justify-center bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300 transition-colors"
+                        title={isClipFormExpanded ? '縮起' : '展開'}
+                    >
+                        {isClipFormExpanded ? <ChevronDown size={20} /> : <ChevronUp size={20} />}
+                    </button>
                 </div>
 
                 {/* 剪輯建立 */}
-                <div className="bg-gray-900/50 p-3 rounded border border-gray-700">
-                    <div className="text-xs text-gray-400 mb-2 font-medium">新增動作片段</div>
-                    <div className="flex items-center space-x-2">
-                        <input
-                            type="text"
-                            placeholder="動作名稱"
-                            value={newClipName}
-                            onChange={(e) => setNewClipName(e.target.value)}
-                            className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
-                        />
-                        <div className="flex items-center space-x-1">
-                            <input
-                                type="number"
-                                placeholder="始"
-                                value={startFrame}
-                                onChange={(e) => setStartFrame(e.target.value)}
-                                className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
-                            />
-                            <span className="text-gray-500">-</span>
-                            <input
-                                type="number"
-                                placeholder="終"
-                                value={endFrame}
-                                onChange={(e) => setEndFrame(e.target.value)}
-                                className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
-                            />
+                {isClipFormExpanded && (
+                    <div 
+                        onDragOver={handleIniDragOver}
+                        onDragLeave={handleIniDragLeave}
+                        onDrop={handleIniDrop}
+                        className={`relative bg-gray-900/50 p-3 rounded border transition-colors ${
+                            isDraggingIni 
+                                ? 'border-blue-500 bg-blue-500/10' 
+                                : 'border-gray-700'
+                        }`}
+                    >
+                        {/* 拖曳提示覆蓋層 */}
+                        {isDraggingIni && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-blue-500/20 rounded z-10 pointer-events-none">
+                                <div className="flex flex-col items-center">
+                                    <FileUp className="w-8 h-8 text-blue-400 mb-2" />
+                                    <p className="text-sm text-blue-300 font-medium">放開以導入 INI 檔案</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="text-xs text-gray-400 font-medium">新增動作片段</div>
+                            <button
+                                onClick={() => iniFileInputRef.current?.click()}
+                                className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+                                title="導入 INI 檔案批量創建動作"
+                            >
+                                <Upload size={12} />
+                                <span>導入 INI</span>
+                            </button>
                         </div>
-                        <button
-                            onClick={handleCreateClip}
-                            className="bg-green-600 hover:bg-green-500 text-white p-1.5 rounded transition-colors"
-                            title="新增片段"
-                        >
-                            <Plus size={16} />
-                        </button>
+                        
+                        <input
+                            ref={iniFileInputRef}
+                            type="file"
+                            accept=".ini"
+                            onChange={handleIniFileSelect}
+                            className="hidden"
+                        />
+
+                        <div className="flex items-center space-x-2">
+                            <input
+                                type="text"
+                                placeholder="動作名稱"
+                                value={newClipName}
+                                onChange={(e) => setNewClipName(e.target.value)}
+                                className="flex-1 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white focus:outline-none focus:border-blue-500"
+                            />
+                            <div className="flex items-center space-x-1">
+                                <input
+                                    type="number"
+                                    placeholder="始"
+                                    value={startFrame}
+                                    onChange={(e) => setStartFrame(e.target.value)}
+                                    className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
+                                />
+                                <span className="text-gray-500">-</span>
+                                <input
+                                    type="number"
+                                    placeholder="終"
+                                    value={endFrame}
+                                    onChange={(e) => setEndFrame(e.target.value)}
+                                    className="w-16 bg-gray-800 border border-gray-600 rounded px-2 py-1 text-sm text-white text-center"
+                                />
+                            </div>
+                            <button
+                                onClick={handleCreateClip}
+                                className="bg-green-600 hover:bg-green-500 text-white p-1.5 rounded transition-colors"
+                                title="新增片段"
+                            >
+                                <Plus size={16} />
+                            </button>
+                        </div>
                     </div>
-                </div>
+                )}
             </div>
         </div>
     );

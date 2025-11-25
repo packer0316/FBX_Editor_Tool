@@ -1,13 +1,13 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
-import { setClipIdentifier, type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
+import { type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
 import SceneViewer, { type SceneViewerRef } from './presentation/features/scene-viewer/components/SceneViewer';
-import SceneToolbar from './presentation/features/scene-viewer/components/SceneToolbar';
-import OptimizationControls from './presentation/features/optimization-panel/components/OptimizationControls';
+import SceneToolbar, { type AspectRatio } from './presentation/features/scene-viewer/components/SceneToolbar';
 import MaterialShaderTool from './presentation/features/shader-panel/components/MaterialShaderTool';
 import ModelInspector from './presentation/features/model-inspector/components/ModelInspector';
 import AudioPanel from './presentation/features/audio-panel/components/AudioPanel';
 import EffectTestPanel, { type EffectItem } from './presentation/features/effect-panel/components/EffectTestPanel';
+import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Camera, Grid } from 'lucide-react';
@@ -17,7 +17,6 @@ import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/Ca
 
 // Use Cases
 import { LoadModelUseCase } from './application/use-cases/LoadModelUseCase';
-import { ExportModelUseCase } from './application/use-cases/ExportModelUseCase';
 import { CreateClipUseCase } from './application/use-cases/CreateClipUseCase';
 import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
@@ -29,15 +28,26 @@ import { usePanelResize, useRightPanelResize } from './presentation/hooks/usePan
 import { useFileDrop } from './presentation/hooks/useFileDrop';
 import { useClickOutside } from './presentation/hooks/useClickOutside';
 import { useBoneExtraction } from './presentation/hooks/useBoneExtraction';
+import { useModelsManager } from './presentation/hooks/useModelsManager';
 
 // Utils
-import { countKeyframes } from './utils/animation/animationUtils';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
 export type { AudioTrack } from './domain/value-objects/AudioTrack';
 
 function App() {
+  // 多模型管理
+  const {
+    models,
+    activeModel,
+    activeModelId,
+    setActiveModelId,
+    addModel,
+    removeModel,
+    updateModel,
+  } = useModelsManager();
+
   const [file, setFile] = useState<File | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
   const [originalClip, setOriginalClip] = useState<IdentifiableClip | null>(null);
@@ -45,7 +55,6 @@ function App() {
   const [optimizedClip, setOptimizedClip] = useState<IdentifiableClip | null>(null);
   const [tolerance, setTolerance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [exporting, setExporting] = useState<boolean>(false);
 
   // 動畫控制狀態
   const sceneViewerRef = useRef<SceneViewerRef>(null);
@@ -101,6 +110,16 @@ function App() {
   const [enableShadows, setEnableShadows] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
 
+  // Recording state
+  const [isRecording, setIsRecording] = useState(false);
+
+  // Aspect Ratio state
+  const [aspectRatio, setAspectRatio] = useState<AspectRatio>('free');
+  const [customWidth, setCustomWidth] = useState(1920);
+  const [customHeight, setCustomHeight] = useState(1080);
+  const aspectRatioContainerRef = useRef<HTMLDivElement>(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
   // Tone Mapping & Exposure Settings
   // 預設曝光調整為 1.5，作為視覺上較中性的基準亮度
   const [toneMappingExposure, setToneMappingExposure] = useState(1.5);
@@ -117,6 +136,81 @@ function App() {
     setSelectedPreset(presetType);
   };
 
+  // 監聽容器尺寸變化和比例變化
+  useEffect(() => {
+    const updateContainerSize = () => {
+      if (aspectRatioContainerRef.current) {
+        const rect = aspectRatioContainerRef.current.getBoundingClientRect();
+        setContainerSize({ width: rect.width, height: rect.height });
+      }
+    };
+
+    updateContainerSize();
+
+    const resizeObserver = new ResizeObserver(updateContainerSize);
+    if (aspectRatioContainerRef.current) {
+      resizeObserver.observe(aspectRatioContainerRef.current);
+    }
+
+    // 添加窗口大小變化監聽
+    window.addEventListener('resize', updateContainerSize);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateContainerSize);
+    };
+  }, [aspectRatio, customWidth, customHeight]);
+
+  // 計算實際的預覽區域尺寸
+  const viewerSize = useMemo(() => {
+    if (aspectRatio === 'free') {
+      return { width: containerSize.width, height: containerSize.height };
+    }
+
+    let targetRatio: number;
+    if (aspectRatio === 'custom') {
+      targetRatio = customWidth / customHeight;
+    } else {
+      const [w, h] = aspectRatio.split(':').map(Number);
+      targetRatio = w / h;
+    }
+
+    const containerRatio = containerSize.width / containerSize.height;
+
+    let finalWidth: number;
+    let finalHeight: number;
+
+    // 根據容器和目標比例，計算最合適的尺寸
+    if (containerRatio > targetRatio) {
+      // 容器更寬，高度受限
+      finalHeight = containerSize.height;
+      finalWidth = finalHeight * targetRatio;
+    } else {
+      // 容器更高，寬度受限
+      finalWidth = containerSize.width;
+      finalHeight = finalWidth / targetRatio;
+    }
+
+    console.log(`[AspectRatio] Container: ${containerSize.width}x${containerSize.height}, Target: ${aspectRatio} (${targetRatio.toFixed(2)}), Result: ${Math.round(finalWidth)}x${Math.round(finalHeight)}`);
+
+    return { width: finalWidth, height: finalHeight };
+  }, [aspectRatio, customWidth, customHeight, containerSize]);
+
+  // 計算 aspect ratio 容器樣式
+  const getAspectRatioStyle = (): React.CSSProperties => {
+    if (aspectRatio === 'free' || viewerSize.width === 0) {
+      return {
+        width: '100%',
+        height: '100%',
+      };
+    }
+
+    return {
+      width: `${viewerSize.width}px`,
+      height: `${viewerSize.height}px`,
+    };
+  };
+
   // Reset bone binding when model changes
   useEffect(() => {
     if (model) {
@@ -127,7 +221,7 @@ function App() {
 
   // Click outside to close popovers
   useClickOutside(
-    [cameraSettingsRef, groundSettingsRef, themeMenuRef],
+    [cameraSettingsRef as React.RefObject<HTMLElement>, groundSettingsRef as React.RefObject<HTMLElement>, themeMenuRef as React.RefObject<HTMLElement>],
     () => {
       setShowCameraSettings(false);
       setShowGroundSettings(false);
@@ -136,38 +230,26 @@ function App() {
     showCameraSettings || showGroundSettings || showThemeMenu
   );
 
-  // 處理檔案上傳
+  // 處理檔案上傳（多模型版本）
   const handleFileUpload = async (files: FileList) => {
     setIsLoading(true);
     try {
-      const loadModelResult = await LoadModelUseCase.execute(files);
+      const instance = await LoadModelUseCase.executeAndCreateInstance(files);
 
-      setFile(files[0]); // Assume first file is FBX
-      setModel(loadModelResult.model);
-      setMeshNames(loadModelResult.meshNames);
-
-      if (loadModelResult.defaultShaderGroup) {
-        setShaderGroups([loadModelResult.defaultShaderGroup]);
+      // 優化動畫（如果有）
+      if (instance.originalClip) {
+        const optimized = optimizeAnimationClip(instance.originalClip, instance.tolerance) as IdentifiableClip;
+        instance.optimizedClip = optimized;
+        instance.duration = instance.originalClip.duration;
       }
 
-      if (loadModelResult.animations.length > 0) {
-        const clip = loadModelResult.animations[0] as IdentifiableClip;
-        if (!clip.customId) {
-          setClipIdentifier(clip);
-        }
-        setMasterClip(clip);
-        setOriginalClip(clip);
-        setDuration(clip.duration);
-        const optimized = optimizeAnimationClip(clip, tolerance);
-        setOptimizedClip(optimized);
-        setCreatedClips([]);
-      } else {
-        setMasterClip(null);
-        setOriginalClip(null);
-        setOptimizedClip(null);
-        setDuration(0);
-        setCreatedClips([]);
-      }
+      // 添加到模型列表
+      addModel(instance);
+
+      // 設為活動模型
+      setActiveModelId(instance.id);
+
+      console.log('✅ 模型載入成功:', instance.name);
     } catch (error) {
       console.error('Error loading FBX:', error);
       alert('讀取 FBX 檔案失敗，請確認檔案格式是否正確。');
@@ -175,6 +257,135 @@ function App() {
       setIsLoading(false);
     }
   };
+
+  // 追蹤是否正在同步，避免循環更新
+  const isSyncingRef = useRef(false);
+
+  // 同步活動模型狀態到舊狀態（向後兼容）
+  useEffect(() => {
+    if (activeModel && !isSyncingRef.current) {
+      isSyncingRef.current = true;
+      setFile(activeModel.file);
+      setModel(activeModel.model);
+      setMeshNames(activeModel.meshNames);
+      setShaderGroups(activeModel.shaderGroups);
+      setIsShaderEnabled(activeModel.isShaderEnabled);
+      setOriginalClip(activeModel.originalClip);
+      setMasterClip(activeModel.masterClip);
+      setOptimizedClip(activeModel.optimizedClip);
+      setCreatedClips(activeModel.createdClips);
+      setTolerance(activeModel.tolerance);
+      setAudioTracks(activeModel.audioTracks);
+      setEffects(activeModel.effects);
+
+      // 切換模型時只同步狀態，不觸發播放或暫停動作
+      // 每個模型會保持自己的播放狀態和時間，不會因為切換而改變
+      setIsPlaying(activeModel.isPlaying);
+      setCurrentTime(activeModel.currentTime);
+      setDuration(activeModel.duration);
+      setIsLoopEnabled(activeModel.isLoopEnabled);
+
+      // 不調用 seekTo，讓每個模型保持自己的時間位置
+      // 每個模型的播放狀態完全獨立，切換時不會影響
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 0);
+    } else if (!activeModel) {
+      // 沒有活動模型時重置
+      setModel(null);
+      setMeshNames([]);
+      setShaderGroups([]);
+      setOriginalClip(null);
+      setMasterClip(null);
+      setOptimizedClip(null);
+      setCreatedClips([]);
+      setAudioTracks([]);
+      setEffects([]);
+      setDuration(0);
+      setIsPlaying(false);
+      sceneViewerRef.current?.pause();
+    }
+  }, [activeModelId]); // 只監聽 activeModelId，避免循環
+
+  // 當活動模型的狀態改變時，同步回 ModelInstance（只在用戶操作時）
+  // 使用 useRef 來追蹤上一次的值，只在真正改變時才更新
+  const prevStateRef = useRef<{
+    shaderGroups: ShaderGroup[];
+    isShaderEnabled: boolean;
+    originalClip: IdentifiableClip | null;
+    masterClip: IdentifiableClip | null;
+    optimizedClip: IdentifiableClip | null;
+    createdClips: IdentifiableClip[];
+    tolerance: number;
+    audioTracks: AudioTrack[];
+    effects: EffectItem[];
+    isPlaying: boolean;
+    currentTime: number;
+    duration: number;
+    isLoopEnabled: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!activeModelId || !activeModel || isSyncingRef.current) return;
+
+    const currentState = {
+      shaderGroups,
+      isShaderEnabled,
+      originalClip,
+      masterClip,
+      optimizedClip,
+      createdClips,
+      tolerance,
+      audioTracks,
+      effects,
+      isPlaying,
+      currentTime,
+      duration,
+      isLoopEnabled
+    };
+
+    // 檢查是否有實際改變
+    if (prevStateRef.current) {
+      const hasChanged =
+        prevStateRef.current.shaderGroups !== currentState.shaderGroups ||
+        prevStateRef.current.isShaderEnabled !== currentState.isShaderEnabled ||
+        prevStateRef.current.originalClip !== currentState.originalClip ||
+        prevStateRef.current.masterClip !== currentState.masterClip ||
+        prevStateRef.current.optimizedClip !== currentState.optimizedClip ||
+        prevStateRef.current.createdClips !== currentState.createdClips ||
+        prevStateRef.current.tolerance !== currentState.tolerance ||
+        prevStateRef.current.audioTracks !== currentState.audioTracks ||
+        prevStateRef.current.effects !== currentState.effects ||
+        prevStateRef.current.isPlaying !== currentState.isPlaying ||
+        prevStateRef.current.currentTime !== currentState.currentTime ||
+        prevStateRef.current.duration !== currentState.duration ||
+        prevStateRef.current.isLoopEnabled !== currentState.isLoopEnabled;
+
+      if (hasChanged) {
+        updateModel(activeModelId, currentState);
+        prevStateRef.current = currentState;
+      }
+    } else {
+      // 第一次設置
+      prevStateRef.current = currentState;
+    }
+  }, [
+    activeModelId,
+    shaderGroups,
+    isShaderEnabled,
+    originalClip,
+    masterClip,
+    optimizedClip,
+    createdClips,
+    tolerance,
+    audioTracks,
+    effects,
+    isPlaying,
+    currentTime,
+    duration,
+    isLoopEnabled,
+    activeModel
+  ]);
 
   // 當 tolerance 改變時重新優化
   useEffect(() => {
@@ -188,29 +399,22 @@ function App() {
     }
   }, [tolerance, originalClip]);
 
-  // 導出功能
-  const handleExport = async () => {
-    if (!model || !optimizedClip || !file) return;
-    setExporting(true);
-    try {
-      await ExportModelUseCase.execute(model, optimizedClip, file.name);
-    } catch (error) {
-      console.error('Export failed:', error);
-      alert('導出失敗');
-    } finally {
-      setExporting(false);
-    }
-  };
 
 
   // 動畫控制處理
   const handlePlayPause = () => {
-    if (isPlaying) {
-      sceneViewerRef.current?.pause();
-    } else {
+    const newPlayingState = !isPlaying;
+    if (newPlayingState) {
       sceneViewerRef.current?.play();
+    } else {
+      sceneViewerRef.current?.pause();
     }
-    setIsPlaying(!isPlaying);
+    setIsPlaying(newPlayingState);
+
+    // 同步到活動模型
+    if (activeModelId) {
+      updateModel(activeModelId, { isPlaying: newPlayingState });
+    }
   };
 
   const handleSeek = (time: number) => {
@@ -220,6 +424,11 @@ function App() {
     lastTimeRef.current = time;
     lastAudioFrameRef.current = -1;
     lastEffectFrameRef.current = -1;
+
+    // 同步到活動模型
+    if (activeModelId) {
+      updateModel(activeModelId, { currentTime: time });
+    }
   };
 
   const audioSyncUseCaseRef = useRef(
@@ -227,9 +436,9 @@ function App() {
   );
   const effectSyncUseCaseRef = useRef(
     new EffectSyncUseCase(
-      lastTimeRef, 
-      lastEffectFrameRef, 
-      () => model, 
+      lastTimeRef,
+      lastEffectFrameRef,
+      () => model,
       () => bones
     )
   );
@@ -238,9 +447,9 @@ function App() {
   // 當 model 或 bones 改變時，更新 effectSyncUseCaseRef
   useEffect(() => {
     effectSyncUseCaseRef.current = new EffectSyncUseCase(
-      lastTimeRef, 
-      lastEffectFrameRef, 
-      () => model, 
+      lastTimeRef,
+      lastEffectFrameRef,
+      () => model,
       () => bones
     );
   }, [model, bones]);
@@ -251,6 +460,11 @@ function App() {
     if (now - lastUIUpdateRef.current > 32) {
       setCurrentTime(time);
       lastUIUpdateRef.current = now;
+
+      // 同步到活動模型（節流更新，避免過於頻繁）
+      if (activeModelId) {
+        updateModel(activeModelId, { currentTime: time });
+      }
     }
 
     // 確保使用最新的 effects（避免閉包問題）
@@ -258,7 +472,7 @@ function App() {
     // 如果 audioSync 先更新 lastTimeRef，effectSync 的 previousTime 就會和 time 相同
     effectSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, effects);
     audioSyncUseCaseRef.current.handleTimeUpdate(time, isPlaying, optimizedClip, audioTracks);
-  }, [isPlaying, optimizedClip, audioTracks, effects]);
+  }, [isPlaying, optimizedClip, audioTracks, effects, activeModelId, updateModel]);
 
   const handleSelectClip = (clip: IdentifiableClip) => {
     setOriginalClip(clip);
@@ -853,40 +1067,102 @@ function App() {
         <div className="flex-1 relative flex flex-col">
           {/* 3D Canvas */}
           <div className="flex-1 relative">
-            <SceneToolbar onResetCamera={() => {
-              console.log('Toolbar reset clicked', sceneViewerRef.current);
-              if (sceneViewerRef.current && typeof sceneViewerRef.current.resetCamera === 'function') {
-                sceneViewerRef.current.resetCamera();
-              } else {
-                console.error('resetCamera function not found on ref');
-              }
-            }} />
-            <div className="absolute inset-0">
-              <SceneViewer
-                ref={sceneViewerRef}
-                model={model}
-                playingClip={optimizedClip}
-                onTimeUpdate={handleTimeUpdate}
-                shaderGroups={shaderGroups}
-                isShaderEnabled={isShaderEnabled}
-                loop={isPlaylistPlaying ? false : isLoopEnabled}
-                onFinish={handleClipFinish}
-                backgroundColor={currentTheme.sceneBg}
-                cameraSettings={cameraSettings}
-                boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
-                isCameraBound={isCameraBound}
-                showGroundPlane={showGroundPlane}
-                groundPlaneColor={groundPlaneColor}
-                groundPlaneOpacity={groundPlaneOpacity}
-                enableShadows={enableShadows}
-                showGrid={showGrid}
-                gridColor={currentTheme.gridColor}
-                gridCellColor={currentTheme.gridCellColor}
-                toneMappingExposure={toneMappingExposure}
-                whitePoint={whitePoint}
-                hdriUrl={hdriUrl || undefined}
-                environmentIntensity={environmentIntensity}
-              />
+            <SceneToolbar
+              onResetCamera={() => {
+                console.log('Toolbar reset clicked', sceneViewerRef.current);
+                if (sceneViewerRef.current && typeof sceneViewerRef.current.resetCamera === 'function') {
+                  sceneViewerRef.current.resetCamera();
+                } else {
+                  console.error('resetCamera function not found on ref');
+                }
+              }}
+              onTakeScreenshot={() => {
+                console.log('Screenshot button clicked', sceneViewerRef.current);
+                if (sceneViewerRef.current && typeof sceneViewerRef.current.takeScreenshot === 'function') {
+                  sceneViewerRef.current.takeScreenshot();
+                } else {
+                  console.error('takeScreenshot function not found on ref');
+                }
+              }}
+              onStartRecording={() => {
+                console.log('Start recording button clicked', sceneViewerRef.current);
+                if (sceneViewerRef.current && typeof sceneViewerRef.current.startRecording === 'function') {
+                  sceneViewerRef.current.startRecording();
+                  setIsRecording(true);
+                } else {
+                  console.error('startRecording function not found on ref');
+                }
+              }}
+              onStopRecording={() => {
+                console.log('Stop recording button clicked', sceneViewerRef.current);
+                if (sceneViewerRef.current && typeof sceneViewerRef.current.stopRecording === 'function') {
+                  sceneViewerRef.current.stopRecording();
+                  setIsRecording(false);
+                } else {
+                  console.error('stopRecording function not found on ref');
+                }
+              }}
+              isRecording={isRecording}
+              aspectRatio={aspectRatio}
+              onAspectRatioChange={setAspectRatio}
+              customWidth={customWidth}
+              customHeight={customHeight}
+              onCustomSizeChange={(width, height) => {
+                setCustomWidth(width);
+                setCustomHeight(height);
+              }}
+            />
+            <div
+              ref={aspectRatioContainerRef}
+              className="absolute inset-0 bg-black flex items-center justify-center p-0"
+            >
+              <div
+                style={getAspectRatioStyle()}
+                className="relative"
+              >
+                <SceneViewer
+                  ref={sceneViewerRef}
+                  // 多模型模式
+                  models={models.length > 0 ? models.map(m => ({
+                    id: m.id, // 添加 ID 用於識別活動模型
+                    model: m.model,
+                    clip: m.optimizedClip || m.masterClip || m.originalClip,
+                    shaderGroups: m.shaderGroups,
+                    isShaderEnabled: m.isShaderEnabled,
+                    position: m.position,
+                    rotation: m.rotation,
+                    scale: m.scale,
+                    visible: m.visible,
+                    isPlaying: m.isPlaying, // 傳遞播放狀態
+                    currentTime: m.currentTime, // 傳遞當前時間
+                    isLoopEnabled: m.isLoopEnabled // 傳遞循環設置
+                  })) : undefined}
+                  activeModelId={models.length > 0 ? activeModelId : undefined}
+                  // 單模型模式（向後兼容）
+                  model={models.length === 0 ? model : undefined}
+                  playingClip={models.length === 0 ? optimizedClip : undefined}
+                  onTimeUpdate={handleTimeUpdate}
+                  shaderGroups={models.length === 0 ? shaderGroups : undefined}
+                  isShaderEnabled={models.length === 0 ? isShaderEnabled : undefined}
+                  loop={isPlaylistPlaying ? false : isLoopEnabled}
+                  onFinish={handleClipFinish}
+                  backgroundColor={currentTheme.sceneBg}
+                  cameraSettings={cameraSettings}
+                  boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
+                  isCameraBound={isCameraBound}
+                  showGroundPlane={showGroundPlane}
+                  groundPlaneColor={groundPlaneColor}
+                  groundPlaneOpacity={groundPlaneOpacity}
+                  enableShadows={enableShadows}
+                  showGrid={showGrid}
+                  gridColor={currentTheme.gridColor}
+                  gridCellColor={currentTheme.gridCellColor}
+                  toneMappingExposure={toneMappingExposure}
+                  whitePoint={whitePoint}
+                  hdriUrl={hdriUrl || undefined}
+                  environmentIntensity={environmentIntensity}
+                />
+              </div>
             </div>
 
             {/* 載入中遮罩 */}
@@ -933,7 +1209,14 @@ function App() {
               onPausePlaylist={handlePausePlaylist}
 
               isLoopEnabled={isLoopEnabled}
-              onToggleLoop={() => setIsLoopEnabled(!isLoopEnabled)}
+              onToggleLoop={() => {
+                const newLoopState = !isLoopEnabled;
+                setIsLoopEnabled(newLoopState);
+                // 同步更新 activeModel 的循環設置
+                if (activeModelId) {
+                  updateModel(activeModelId, { isLoopEnabled: newLoopState });
+                }
+              }}
               audioTracks={audioTracks}
               effects={effects}
             />
@@ -959,7 +1242,7 @@ function App() {
                 }`}
               onClick={() => setActiveTab('optimization')}
             >
-              關鍵幀優化
+              模型管理
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'shader'
@@ -968,7 +1251,7 @@ function App() {
                 }`}
               onClick={() => setActiveTab('shader')}
             >
-              Material Shader
+              Shader
             </button>
             <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'audio'
@@ -986,22 +1269,34 @@ function App() {
                 }`}
               onClick={() => setActiveTab('effect')}
             >
-              Effect
+              Efk
             </button>
           </div>
 
           {/* 分頁內容 */}
           <div className="flex-1 overflow-y-auto p-4">
             {activeTab === 'optimization' && (
-              <OptimizationControls
-                fileName={file?.name || null}
-                onFileUpload={handleFileUpload}
-                tolerance={tolerance}
-                setTolerance={setTolerance}
-                originalKeyframeCount={countKeyframes(originalClip)}
-                optimizedKeyframeCount={countKeyframes(optimizedClip)}
-                onExport={handleExport}
-                isExporting={exporting}
+              <ModelManagerPanel
+                models={models}
+                activeModelId={activeModelId}
+                onSelectModel={(id) => {
+                  setActiveModelId(id);
+                }}
+                onAddModel={handleFileUpload}
+                onRemoveModel={(id) => {
+                  removeModel(id);
+                  // 如果刪除的是活動模型，已經在 hook 中處理了
+                }}
+                onRenameModel={(id, newName) => {
+                  updateModel(id, { name: newName });
+                }}
+                onUpdateModelTransform={(id, updates) => {
+                  updateModel(id, updates);
+                }}
+                isLoading={isLoading}
+                toneMappingExposure={toneMappingExposure}
+                environmentIntensity={environmentIntensity}
+                hdriUrl={hdriUrl || undefined}
               />
             )}
 

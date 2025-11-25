@@ -17,3 +17,4 @@
 當你打開瀏覽器 DevTools Console，應該能看到全域的 `effekseer` 物件（之後 Step 1-2 我們會包成 TypeScript Adapter）。
 
 
+

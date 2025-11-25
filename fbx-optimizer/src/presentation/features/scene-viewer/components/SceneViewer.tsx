@@ -17,14 +17,34 @@ export interface ModelRef {
 
 export interface SceneViewerRef extends ModelRef {
     resetCamera: () => void;
+    takeScreenshot: () => void;
+    startRecording: () => void;
+    stopRecording: () => void;
+    isRecording: () => boolean;
+}
+
+interface ModelInstanceForRender {
+    id?: string; // 模型 ID，用於識別活動模型
+    model: THREE.Group | null;
+    clip: THREE.AnimationClip | null;
+    shaderGroups: ShaderGroup[];
+    isShaderEnabled: boolean;
+    position: [number, number, number];
+    rotation: [number, number, number];
+    scale: [number, number, number];
+    visible: boolean;
 }
 
 interface SceneViewerProps {
-    model: THREE.Group | null;
-    playingClip: THREE.AnimationClip | null;
-    onTimeUpdate?: (time: number) => void;
-    shaderGroups: ShaderGroup[];
+    // 單模型模式（向後兼容）
+    model?: THREE.Group | null;
+    playingClip?: THREE.AnimationClip | null;
+    shaderGroups?: ShaderGroup[];
     isShaderEnabled?: boolean;
+    // 多模型模式
+    models?: ModelInstanceForRender[];
+    activeModelId?: string | null; // 活動模型 ID
+    onTimeUpdate?: (time: number) => void;
     loop?: boolean;
     onFinish?: () => void;
     backgroundColor?: string;
@@ -76,6 +96,12 @@ function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMapp
     return null;
 }
 
+// 創建一個全局的錄影狀態管理
+const recordingState = {
+    isRecording: false,
+    captureStream: null as MediaStream | null
+};
+
 function EffekseerFrameBridge() {
     const { gl, camera, scene } = useThree();
     const [initialized, setInitialized] = React.useState(false);
@@ -96,7 +122,7 @@ function EffekseerFrameBridge() {
     }, [gl]);
 
     // Effekseer 更新（只更新邏輯，不渲染）
-    useFrame((state, delta) => {
+    useFrame((_state, delta) => {
         if (!initialized) return;
         
         const adapter = getEffekseerRuntimeAdapter();
@@ -118,21 +144,33 @@ function EffekseerFrameBridge() {
         // 掛載 onAfterRender 回調
         const originalOnAfterRender = scene.onAfterRender;
         
-        scene.onAfterRender = (renderer, scene, camera) => {
+        scene.onAfterRender = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => {
             // 先呼叫原始的 onAfterRender（如果有）
             if (originalOnAfterRender) {
-                originalOnAfterRender(renderer, scene, camera);
+                // Scene.onAfterRender 只需要 3 個參數，但 Object3D 的類型定義要求 6 個
+                // 使用類型斷言來避免類型錯誤
+                (originalOnAfterRender as (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void)(renderer, scene, camera);
             }
 
             // 同步相機矩陣
-            context.setProjectionMatrix((camera as any).projectionMatrix.elements);
-            context.setCameraMatrix((camera as any).matrixWorldInverse.elements);
+            const projMatrix = (camera as any).projectionMatrix.elements;
+            const camMatrix = (camera as any).matrixWorldInverse.elements;
+            context.setProjectionMatrix(projMatrix);
+            context.setCameraMatrix(camMatrix);
             
             // 繪製 Effekseer（在 Three.js 渲染完成後）
             context.draw();
             
             // 重置 Three.js 狀態（避免 Effekseer 破壞 WebGL 狀態）
             renderer.resetState();
+            
+            // 如果正在錄影，手動請求新幀（確保 Effekseer 渲染內容被捕獲）
+            if (recordingState.isRecording && recordingState.captureStream) {
+                const videoTrack = recordingState.captureStream.getVideoTracks()[0];
+                if (videoTrack && typeof (videoTrack as any).requestFrame === 'function') {
+                    (videoTrack as any).requestFrame();
+                }
+            }
         };
 
         // 清理函數
@@ -178,6 +216,28 @@ function CameraController({
     return null;
 }
 
+// Camera State Broadcaster - 廣播相機狀態給外部組件
+function CameraStateBroadcaster() {
+    const { camera, controls } = useThree();
+
+    useFrame(() => {
+        if (camera && controls) {
+            const orbitControls = controls as any;
+            // 廣播相機狀態
+            const event = new CustomEvent('camera-update', {
+                detail: {
+                    position: camera.position.toArray(),
+                    target: orbitControls.target ? orbitControls.target.toArray() : [0, 0, 0],
+                    zoom: (camera as THREE.PerspectiveCamera).zoom || 1
+                }
+            });
+            window.dispatchEvent(event);
+        }
+    });
+
+    return null;
+}
+
 type ModelProps = {
     model: THREE.Group;
     clip: THREE.AnimationClip | null;
@@ -187,10 +247,12 @@ type ModelProps = {
     loop?: boolean;
     onFinish?: () => void;
     enableShadows?: boolean;
+    initialPlaying?: boolean; // 初始播放狀態
+    initialTime?: number; // 初始時間位置
 };
 
 const Model = forwardRef<ModelRef, ModelProps>(
-    ({ model, clip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop = true, onFinish, enableShadows }, ref) => {
+    ({ model, clip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop = true, onFinish, enableShadows, initialPlaying = false, initialTime }, ref) => {
         const mixerRef = useRef<THREE.AnimationMixer | null>(null);
         const actionRef: React.MutableRefObject<THREE.AnimationAction | null> = useRef<THREE.AnimationAction | null>(null);
         const isPlayingRef = useRef(true);
@@ -220,17 +282,63 @@ const Model = forwardRef<ModelRef, ModelProps>(
         }, [model, enableShadows]);
 
         const onFinishRef = useRef(onFinish);
+        const loopRef = useRef(loop);
 
         useEffect(() => {
             onFinishRef.current = onFinish;
         }, [onFinish]);
 
         useEffect(() => {
+            loopRef.current = loop;
+        }, [loop]);
+
+        // 追蹤當前的 clip 和 loop，避免不必要的重置
+        const currentClipRef = useRef<THREE.AnimationClip | null>(null);
+        const currentLoopRef = useRef<boolean>(loop);
+        const initializedRef = useRef(false);
+
+        useEffect(() => {
             if (mixerRef.current && clip) {
+                // 如果 clip 和 loop 都沒有改變且已經初始化，保持當前狀態，不重置
+                const clipChanged = currentClipRef.current !== clip;
+                const loopChanged = currentLoopRef.current !== loop;
+                
+                if (!clipChanged && !loopChanged && initializedRef.current && actionRef.current) {
+                    // clip 和 loop 都相同且已初始化，不重置，讓模型繼續自己的播放狀態
+                    return;
+                }
+
                 // Clean up previous listeners
                 const handleFinish = () => {
                     if (onFinishRef.current) onFinishRef.current();
                 };
+
+                // 如果只是 loop 改變，不需要重新創建 action，只需要更新 loop 設置
+                if (!clipChanged && loopChanged && actionRef.current) {
+                    // 移除舊的 finished 監聽器
+                    if (mixerRef.current) {
+                        mixerRef.current.removeEventListener('finished', handleFinish);
+                    }
+                    
+                    // 更新 loop 設置
+                    if (!loop) {
+                        actionRef.current.setLoop(THREE.LoopOnce, 1);
+                        actionRef.current.clampWhenFinished = true;
+                        mixerRef.current.addEventListener('finished', handleFinish);
+                    } else {
+                        actionRef.current.setLoop(THREE.LoopRepeat, Infinity);
+                        actionRef.current.clampWhenFinished = false;
+                    }
+                    
+                    currentLoopRef.current = loop;
+                    
+                    // 返回清理函數
+                    return () => {
+                        if (mixerRef.current) {
+                            mixerRef.current.removeEventListener('finished', handleFinish);
+                        }
+                    };
+                }
 
                 // Stop only the current action instead of all actions for smoother transition
                 if (actionRef.current) {
@@ -245,19 +353,40 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     mixerRef.current.addEventListener('finished', handleFinish);
                 } else {
                     action.setLoop(THREE.LoopRepeat, Infinity);
+                    action.clampWhenFinished = false;
                 }
 
                 action.reset();
-                action.play();
+                // 根據 initialPlaying 設置初始播放狀態
+                action.paused = !initialPlaying;
+                isPlayingRef.current = initialPlaying;
+                // 設置初始時間位置（如果有的話）
+                if (initialTime !== undefined && initialTime !== null && !isNaN(initialTime)) {
+                    action.time = initialTime;
+                }
+                if (initialPlaying) {
+                    action.play();
+                }
                 actionRef.current = action;
+                currentClipRef.current = clip;
+                currentLoopRef.current = loop;
+                initializedRef.current = true;
 
                 return () => {
                     if (mixerRef.current) {
                         mixerRef.current.removeEventListener('finished', handleFinish);
                     }
                 };
+            } else if (!clip && actionRef.current) {
+                // 如果 clip 被移除，停止 action
+                actionRef.current.stop();
+                actionRef.current = null;
+                currentClipRef.current = null;
+                currentLoopRef.current = loop;
+                initializedRef.current = false;
+                isPlayingRef.current = false;
             }
-        }, [clip, model, loop]);
+        }, [clip, model, loop, initialPlaying, initialTime]);
 
         useImperativeHandle(ref, () => ({
             play: () => {
@@ -272,7 +401,24 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         actionRef.current.reset();
                     }
 
+                    // 確保 action 已經啟動
+                    if (!actionRef.current.isRunning()) {
+                        actionRef.current.play();
+                    }
                     actionRef.current.paused = false;
+                    isPlayingRef.current = true;
+                } else if (mixerRef.current && clip) {
+                    // 如果 action 還沒有創建，創建它
+                    const action = mixerRef.current.clipAction(clip);
+                    if (!loop) {
+                        action.setLoop(THREE.LoopOnce, 1);
+                        action.clampWhenFinished = true;
+                    } else {
+                        action.setLoop(THREE.LoopRepeat, Infinity);
+                    }
+                    action.reset();
+                    action.play();
+                    actionRef.current = action;
                     isPlayingRef.current = true;
                 }
             },
@@ -308,6 +454,17 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 if (onTimeUpdateRef.current && actionRef.current) {
                     // console.log('SceneViewer: sending time', actionRef.current.time);
                     onTimeUpdateRef.current(actionRef.current.time);
+                    
+                    // 檢查動畫是否結束（非循環模式下）
+                    if (!loopRef.current && actionRef.current.time >= actionRef.current.getClip().duration) {
+                        // 動畫已結束，觸發 onFinish 回調並停止播放
+                        if (onFinishRef.current) {
+                            onFinishRef.current();
+                        }
+                        // 停止播放
+                        actionRef.current.paused = true;
+                        isPlayingRef.current = false;
+                    }
                 }
             }
         });
@@ -852,10 +1009,129 @@ const Model = forwardRef<ModelRef, ModelProps>(
     }
 );
 
+// MultiModel Component for rendering multiple models with individual transforms
+type MultiModelProps = {
+    modelInstance: {
+        model: THREE.Group | null;
+        clip: THREE.AnimationClip | null;
+        shaderGroups: ShaderGroup[];
+        isShaderEnabled: boolean;
+        position: [number, number, number];
+        rotation: [number, number, number];
+        scale: [number, number, number];
+        visible: boolean;
+        isPlaying?: boolean; // 播放狀態
+        currentTime?: number; // 當前時間
+        isLoopEnabled?: boolean; // 循環設置
+    };
+    onTimeUpdate?: (time: number) => void;
+    loop?: boolean;
+    onFinish?: () => void;
+    enableShadows?: boolean;
+};
+
+const MultiModel = forwardRef<ModelRef, MultiModelProps>(
+    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows }, ref) => {
+        const { model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, isPlaying = false, currentTime, isLoopEnabled } = modelInstance;
+        // 使用模型自己的 loop 設置，如果有的話
+        const modelLoop = isLoopEnabled !== undefined ? isLoopEnabled : loop;
+        
+        // 使用現有的 Model 組件處理動畫和 shader
+        const modelRef = useRef<ModelRef>(null);
+        
+        // 每個模型都應該更新時間，即使不是活動模型
+        // 但只有活動模型的時間更新會觸發 onTimeUpdate 回調（用於 UI 同步）
+        const handleTimeUpdate = (time: number) => {
+            // 只有當有 onTimeUpdate 回調時才調用（活動模型）
+            if (onTimeUpdate) {
+                onTimeUpdate(time);
+            }
+            // 所有模型都會繼續播放和更新，但只有活動模型會同步到 UI
+        };
+        
+        useImperativeHandle(ref, () => ({
+            play: () => modelRef.current?.play(),
+            pause: () => modelRef.current?.pause(),
+            seekTo: (time: number) => modelRef.current?.seekTo(time),
+            getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
+            getDuration: () => modelRef.current?.getDuration() ?? 0,
+        }));
+
+        if (!model || !visible) return null;
+
+        // 將度數轉換為弧度
+        const rotationRad = rotation.map(deg => (deg * Math.PI) / 180) as [number, number, number];
+
+        return (
+            <group
+                position={position}
+                rotation={rotationRad}
+                scale={scale}
+            >
+                <Model
+                    ref={modelRef}
+                    model={model}
+                    clip={clip}
+                    onTimeUpdate={handleTimeUpdate}
+                    shaderGroups={shaderGroups}
+                    isShaderEnabled={isShaderEnabled}
+                    loop={modelLoop}
+                    onFinish={onFinish}
+                    enableShadows={enableShadows}
+                    initialPlaying={isPlaying}
+                    initialTime={currentTime}
+                />
+            </group>
+        );
+    }
+);
+
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ model, playingClip, onTimeUpdate, shaderGroups, isShaderEnabled = true, loop, onFinish, backgroundColor = '#111827', cameraSettings, boundBone, isCameraBound, showGroundPlane, groundPlaneColor = '#444444', groundPlaneOpacity = 1.0, enableShadows = false, showGrid = true, gridColor = '#4a4a4a', gridCellColor = '#2a2a2a', toneMappingExposure, whitePoint, hdriUrl, environmentIntensity }, ref) => {
+    ({ 
+        model, 
+        playingClip, 
+        models,
+        activeModelId,
+        onTimeUpdate, 
+        shaderGroups = [], 
+        isShaderEnabled = true, 
+        loop, 
+        onFinish, 
+        backgroundColor = '#111827', 
+        cameraSettings, 
+        boundBone, 
+        isCameraBound, 
+        showGroundPlane, 
+        groundPlaneColor = '#444444', 
+        groundPlaneOpacity = 1.0, 
+        enableShadows = false, 
+        showGrid = true, 
+        gridColor = '#4a4a4a', 
+        gridCellColor = '#2a2a2a', 
+        toneMappingExposure, 
+        whitePoint: _whitePoint, 
+        hdriUrl, 
+        environmentIntensity 
+    }, ref) => {
+        // 決定使用單模型還是多模型模式
+        const isMultiModelMode = models && models.length > 0;
+        const activeModel = isMultiModelMode ? null : model;
+        const activeClip = isMultiModelMode ? null : playingClip;
+        const activeShaderGroups = isMultiModelMode ? [] : shaderGroups;
+        const activeIsShaderEnabled = isMultiModelMode ? true : isShaderEnabled;
+
+        // 在多模型模式下，找到活動模型的索引
+        const activeModelIndex = isMultiModelMode && activeModelId && models
+            ? models.findIndex(m => m.id === activeModelId)
+            : 0;
+
         const modelRef = useRef<ModelRef>(null);
         const orbitControlsRef = useRef<any>(null);
+        const glRef = useRef<THREE.WebGLRenderer | null>(null);
+        const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+        const recordedChunksRef = useRef<Blob[]>([]);
+        const isRecordingRef = useRef<boolean>(false);
+        const captureStreamRef = useRef<MediaStream | null>(null);
 
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
@@ -868,7 +1144,169 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                 if (orbitControlsRef.current) {
                     orbitControlsRef.current.reset();
                 }
-            }
+            },
+            takeScreenshot: () => {
+                if (glRef.current) {
+                    try {
+                        // 獲取 canvas 元素
+                        const canvas = glRef.current.domElement;
+                        
+                        console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+                        
+                        // 使用 canvas.toDataURL 生成圖片
+                        const dataURL = canvas.toDataURL('image/png', 1.0);
+                        
+                        console.log('DataURL length:', dataURL.length);
+                        
+                        // 驗證截圖不是空白的
+                        if (dataURL === 'data:,' || dataURL.length < 100) {
+                            throw new Error('Canvas appears to be empty');
+                        }
+                        
+                        // 創建下載連結
+                        const link = document.createElement('a');
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                        link.download = `screenshot_${timestamp}.png`;
+                        link.href = dataURL;
+                        document.body.appendChild(link);
+                        link.click();
+                        document.body.removeChild(link);
+                        
+                        console.log('Screenshot saved successfully:', link.download);
+                    } catch (error) {
+                        console.error('Failed to take screenshot:', error);
+                        alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+                    }
+                } else {
+                    console.error('WebGL renderer not available');
+                    alert('渲染器未就緒，請稍後再試');
+                }
+            },
+            startRecording: () => {
+                if (!glRef.current) {
+                    console.error('WebGL renderer not available');
+                    alert('渲染器未就緒，請稍後再試');
+                    return;
+                }
+
+                if (isRecordingRef.current) {
+                    console.warn('Recording already in progress');
+                    return;
+                }
+
+                try {
+                    const canvas = glRef.current.domElement;
+                    
+                    // 從 canvas 獲取視頻流（使用 0 FPS 表示手動捕獲模式）
+                    // 這樣可以確保在 Effekseer 渲染完成後才捕獲畫面
+                    const stream = canvas.captureStream(0); // 0 FPS = 手動捕獲
+                    captureStreamRef.current = stream;
+                    
+                    // 設置 MediaRecorder
+                    let mimeType = 'video/webm;codecs=vp9';
+                    
+                    // 檢查瀏覽器支持的格式
+                    if (!MediaRecorder.isTypeSupported(mimeType)) {
+                        console.warn('vp9 not supported, trying vp8');
+                        mimeType = 'video/webm;codecs=vp8';
+                        if (!MediaRecorder.isTypeSupported(mimeType)) {
+                            console.warn('vp8 not supported, using default');
+                            mimeType = 'video/webm';
+                        }
+                    }
+                    
+                    const options: MediaRecorderOptions = {
+                        mimeType: mimeType,
+                        videoBitsPerSecond: 8000000 // 8 Mbps
+                    };
+                    
+                    const mediaRecorder = new MediaRecorder(stream, options);
+                    recordedChunksRef.current = [];
+                    
+                    // 更新全局錄影狀態
+                    recordingState.isRecording = true;
+                    recordingState.captureStream = stream;
+                    
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            recordedChunksRef.current.push(event.data);
+                            console.log('Recorded chunk:', event.data.size, 'bytes');
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        console.log('Recording stopped, total chunks:', recordedChunksRef.current.length);
+                        
+                        if (recordedChunksRef.current.length > 0) {
+                            const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+                            const url = URL.createObjectURL(blob);
+                            
+                            // 創建下載連結
+                            const link = document.createElement('a');
+                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                            link.download = `recording_${timestamp}.webm`;
+                            link.href = url;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            
+                            // 清理
+                            setTimeout(() => URL.revokeObjectURL(url), 100);
+                            
+                            console.log('Recording saved successfully:', link.download);
+                        } else {
+                            console.error('No recorded data');
+                            alert('錄影失敗：沒有錄製到資料');
+                        }
+                        
+                        recordedChunksRef.current = [];
+                        isRecordingRef.current = false;
+                        // 清理全局錄影狀態
+                        recordingState.isRecording = false;
+                        recordingState.captureStream = null;
+                    };
+                    
+                    mediaRecorder.onerror = (event: Event) => {
+                        console.error('MediaRecorder error:', event);
+                        alert('錄影過程中發生錯誤');
+                        isRecordingRef.current = false;
+                    };
+                    
+                    mediaRecorder.start(100); // 每 100ms 收集一次數據
+                    mediaRecorderRef.current = mediaRecorder;
+                    isRecordingRef.current = true;
+                    
+                    console.log('Recording started with', mimeType);
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    alert(`開始錄影失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+                    isRecordingRef.current = false;
+                }
+            },
+            stopRecording: () => {
+                if (!isRecordingRef.current || !mediaRecorderRef.current) {
+                    console.warn('No recording in progress');
+                    return;
+                }
+
+                try {
+                    mediaRecorderRef.current.stop();
+                    console.log('Stop recording requested');
+                    captureStreamRef.current = null;
+                    // 更新全局錄影狀態
+                    recordingState.isRecording = false;
+                    recordingState.captureStream = null;
+                } catch (error) {
+                    console.error('Failed to stop recording:', error);
+                    alert(`停止錄影失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+                    isRecordingRef.current = false;
+                    captureStreamRef.current = null;
+                    // 更新全局錄影狀態
+                    recordingState.isRecording = false;
+                    recordingState.captureStream = null;
+                }
+            },
+            isRecording: () => isRecordingRef.current
         }));
 
         // Effekseer 初始化已移至 EffekseerFrameBridge 組件中
@@ -886,6 +1324,10 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         near: cameraSettings?.near || 0.1,
                         far: cameraSettings?.far || 1000
                     }}
+                    gl={{ 
+                        preserveDrawingBuffer: true,
+                        antialias: true 
+                    }}
                     onCreated={({ gl }) => {
                         // 統一輸出色彩空間為 sRGB
                         gl.outputColorSpace = THREE.SRGBColorSpace;
@@ -894,6 +1336,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         if (toneMappingExposure !== undefined) {
                             gl.toneMappingExposure = toneMappingExposure;
                         }
+                        // 保存 gl 引用以供截圖使用
+                        glRef.current = gl;
                     }}>
                     <EffekseerFrameBridge />
                     <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
@@ -917,6 +1361,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
                     <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
+                    <CameraStateBroadcaster />
                     {showGrid && <Grid args={[30, 30]} sectionColor={gridColor} cellColor={gridCellColor} side={THREE.DoubleSide} />}
 
                     {/* Ground Plane */}
@@ -932,17 +1377,39 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             />
                         </mesh>
                     )}
-                    {model && (
+                    {/* 多模型模式 */}
+                    {isMultiModelMode && models && models.map((modelInstance, index) => {
+                        const clip = modelInstance.clip || null;
+                        // 只有活動模型才綁定 ref 和 onTimeUpdate
+                        const isActive = index === activeModelIndex;
+                        return (
+                            <MultiModel
+                                key={`model-${modelInstance.id || index}`}
+                                ref={isActive ? modelRef : undefined}
+                                modelInstance={{
+                                    ...modelInstance,
+                                    clip
+                                }}
+                                onTimeUpdate={isActive ? onTimeUpdate : undefined}
+                                loop={loop}
+                                onFinish={isActive ? onFinish : undefined}
+                                enableShadows={enableShadows}
+                            />
+                        );
+                    })}
+                    {/* 單模型模式（向後兼容） */}
+                    {!isMultiModelMode && activeModel && (
                         <Model
                             ref={modelRef}
-                            model={model}
-                            clip={playingClip}
+                            model={activeModel}
+                            clip={activeClip || null}
                             onTimeUpdate={onTimeUpdate}
-                            shaderGroups={shaderGroups}
-                            isShaderEnabled={isShaderEnabled}
+                            shaderGroups={activeShaderGroups}
+                            isShaderEnabled={activeIsShaderEnabled}
                             loop={loop}
                             onFinish={onFinish}
                             enableShadows={enableShadows}
+                            initialPlaying={false}
                         />
                     )}
                     <OrbitControls
