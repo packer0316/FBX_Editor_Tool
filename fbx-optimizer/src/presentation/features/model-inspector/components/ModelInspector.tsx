@@ -144,6 +144,10 @@ export default function ModelInspector({
     const [isClipFormExpanded, setIsClipFormExpanded] = useState(true);
     const [isDraggingSlider, setIsDraggingSlider] = useState(false);
     const [sliderValue, setSliderValue] = useState(0);
+    
+    // 用於節流 seek 操作
+    const seekAnimationFrameRef = useRef<number | null>(null);
+    const lastSeekTimeRef = useRef<number>(0);
 
     // Sync slider value with current time when not dragging
     useEffect(() => {
@@ -151,6 +155,15 @@ export default function ModelInspector({
             setSliderValue(duration > 0 ? currentTime % duration : 0);
         }
     }, [currentTime, duration, isDraggingSlider]);
+
+    // 清理 requestAnimationFrame
+    useEffect(() => {
+        return () => {
+            if (seekAnimationFrameRef.current !== null) {
+                cancelAnimationFrame(seekAnimationFrameRef.current);
+            }
+        };
+    }, []);
 
     // 遍歷模型獲取 Mesh 和層級結構資訊
     useEffect(() => {
@@ -286,7 +299,21 @@ export default function ModelInspector({
     const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = parseFloat(e.target.value);
         setSliderValue(val);
-        onSeek(val);
+        
+        // 使用 requestAnimationFrame 節流 seek 操作
+        if (seekAnimationFrameRef.current !== null) {
+            cancelAnimationFrame(seekAnimationFrameRef.current);
+        }
+        
+        seekAnimationFrameRef.current = requestAnimationFrame(() => {
+            // 限制 seek 頻率至最多每 16ms (約 60fps)
+            const now = performance.now();
+            if (now - lastSeekTimeRef.current >= 16) {
+                onSeek(val);
+                lastSeekTimeRef.current = now;
+            }
+            seekAnimationFrameRef.current = null;
+        });
     };
 
     const handleSliderMouseDown = () => {
@@ -297,7 +324,11 @@ export default function ModelInspector({
         }
     };
 
-    const handleSliderMouseUp = () => {
+    const handleSliderMouseUp = (e: React.MouseEvent<HTMLInputElement>) => {
+        // 確保執行最後一次 seek
+        const finalValue = parseFloat((e.target as HTMLInputElement).value);
+        onSeek(finalValue);
+        
         setIsDraggingSlider(false);
         if (wasPlayingBeforeDrag && !isPlaying) {
             onPlayPause();
