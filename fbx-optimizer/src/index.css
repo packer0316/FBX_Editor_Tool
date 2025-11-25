@@ -236,3 +236,58 @@ input[type=range]:focus {
   transform: scale(1.2);
   background: #60a5fa;
 }
+
+/* Custom Range Slider - 完全隱藏原生樣式 */
+.range-slider-custom {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  opacity: 0;
+}
+
+.range-slider-custom::-webkit-slider-runnable-track {
+  -webkit-appearance: none;
+  background: transparent;
+  border: none;
+  height: 24px;
+  cursor: pointer;
+}
+
+.range-slider-custom::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-top: 0;
+}
+
+.range-slider-custom::-moz-range-track {
+  appearance: none;
+  background: transparent;
+  border: none;
+  height: 24px;
+  cursor: pointer;
+}
+
+.range-slider-custom::-moz-range-thumb {
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+
+.range-slider-custom:focus {
+  outline: none;
+}
+
+.range-slider-custom:focus::-webkit-slider-thumb {
+  outline: none;
+}
+
+.range-slider-custom:focus::-moz-range-thumb {
+  outline: none;
+}
