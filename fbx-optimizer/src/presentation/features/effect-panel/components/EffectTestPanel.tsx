@@ -3,8 +3,10 @@ import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X } from 'lucide-react';
+import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
+import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
 // 定義單個特效卡片的狀態介面
 export interface EffectItem {
@@ -16,32 +18,32 @@ export interface EffectItem {
     isPlaying: boolean;  // 是否正在播放 (主要用於 UI 狀態)
     isLooping: boolean;  // 是否開啟循環
     loopIntervalId: number | null; // 循環計時器 ID
-    
+
     // Transform & Playback
     position: [number, number, number];
     rotation: [number, number, number]; // Degrees
     scale: [number, number, number];
     speed: number;
-    
+
     // Bone Binding
     boundBoneUuid: string | null; // 綁定的骨骼 UUID
-    
+
     // Frame Triggers
     triggers: EffectTrigger[]; // 觸發設定
     color: string; // 特效顏色（用於時間軸顯示）
 }
 
 // 向量輸入組件
-const Vector3Input = ({ 
-    label, 
-    values, 
-    onChange, 
+const Vector3Input = ({
+    label,
+    values,
+    onChange,
     step = 0.1,
     min,
     icon: Icon
-}: { 
-    label: string, 
-    values: [number, number, number], 
+}: {
+    label: string,
+    values: [number, number, number],
     onChange: (newValues: [number, number, number]) => void,
     step?: number,
     min?: number,
@@ -69,13 +71,12 @@ const Vector3Input = ({
                             <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-500 font-mono pointer-events-none group-hover:text-blue-400 transition-colors">
                                 {axis}
                             </div>
-                            <input
-                                type="number"
+                            <NumberInput
                                 value={values[index]}
-                                onChange={(e) => handleChange(index, e.target.value)}
+                                onChange={(val) => handleChange(index, val)}
                                 step={step}
                                 min={min}
-                                className="w-full pl-5 pr-1 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500 text-right font-mono"
+                                className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
                             />
                         </div>
                     );
@@ -88,33 +89,35 @@ const Vector3Input = ({
 /**
  * 單個特效卡片組件
  */
-const EffectCard = ({ 
-    item, 
-    isRuntimeReady, 
-    onUpdate, 
+const EffectCard = ({
+    item,
+    isRuntimeReady,
+    onUpdate,
     onRemove,
     model,
     bones,
-    createdClips
-}: { 
-    item: EffectItem, 
-    isRuntimeReady: boolean, 
-    onUpdate: (id: string, updates: Partial<EffectItem>) => void, 
+    createdClips,
+    theme
+}: {
+    item: EffectItem,
+    isRuntimeReady: boolean,
+    onUpdate: (id: string, updates: Partial<EffectItem>) => void,
     onRemove: (id: string) => void,
     model: THREE.Group | null,
     bones: THREE.Object3D[],
-    createdClips: IdentifiableClip[]
+    createdClips: IdentifiableClip[],
+    theme: ThemeStyle
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
     const [newTriggerState, setNewTriggerState] = useState<{ clipId: string, frame: string }>({ clipId: '', frame: '' });
-    
+
     // 追蹤當前播放的 Handle，以便即時更新參數
     const currentHandleRef = useRef<effekseer.EffekseerHandle | null>(null);
     const animationFrameRef = useRef<number | null>(null);
-    
+
     // 找到綁定的 bone
-    const boundBone = item.boundBoneUuid 
+    const boundBone = item.boundBoneUuid
         ? bones.find(b => b.uuid === item.boundBoneUuid) || null
         : null;
 
@@ -126,11 +129,11 @@ const EffectCard = ({
         try {
             const adapter = getEffekseerRuntimeAdapter();
             const context = adapter.effekseerContext;
-            
+
             if (!context) throw new Error('Effekseer Context 未初始化');
 
             const effectUrl = `/effekseer/${localPath}`;
-            
+
             await new Promise<void>((resolve, reject) => {
                 const effect = context.loadEffect(
                     effectUrl,
@@ -146,12 +149,12 @@ const EffectCard = ({
             });
 
             const fileName = localPath.split('/').pop()?.split('.')[0] || localPath;
-            
-            onUpdate(item.id, { 
-                isLoaded: true, 
-                isLoading: false, 
+
+            onUpdate(item.id, {
+                isLoaded: true,
+                isLoading: false,
                 name: fileName,
-                path: localPath 
+                path: localPath
             });
         } catch (error) {
             console.error('[EffectCard] 載入失敗:', error);
@@ -176,17 +179,17 @@ const EffectCard = ({
         if (!currentHandleRef.current || !currentHandleRef.current.exists) {
             return;
         }
-        
+
         const currentItem = itemRef.current;
         const currentBoundBone = boundBoneRef.current;
-        
+
         const h = currentHandleRef.current;
-        
+
         // 計算位置
         let x = currentItem.position[0];
         let y = currentItem.position[1];
         let z = currentItem.position[2];
-        
+
         if (currentBoundBone && model) {
             // 獲取 bone 的世界位置
             const boneWorldPos = new THREE.Vector3();
@@ -196,30 +199,30 @@ const EffectCard = ({
             y = boneWorldPos.y + currentItem.position[1];
             z = boneWorldPos.z + currentItem.position[2];
         }
-        
+
         h.setLocation(x, y, z);
-        
+
         // 計算旋轉
         let rx = currentItem.rotation[0];
         let ry = currentItem.rotation[1];
         let rz = currentItem.rotation[2];
-        
+
         if (currentBoundBone && model) {
             // 獲取 bone 的世界旋轉（Euler）
             const boneWorldQuat = new THREE.Quaternion();
             currentBoundBone.getWorldQuaternion(boneWorldQuat);
             const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-            
+
             // 結合 bone 旋轉和特效旋轉
             rx = (boneEuler.x * 180 / Math.PI) + currentItem.rotation[0];
             ry = (boneEuler.y * 180 / Math.PI) + currentItem.rotation[1];
             rz = (boneEuler.z * 180 / Math.PI) + currentItem.rotation[2];
         }
-        
+
         // Convert degrees to radians
         h.setRotation(
-            rx * Math.PI / 180, 
-            ry * Math.PI / 180, 
+            rx * Math.PI / 180,
+            ry * Math.PI / 180,
             rz * Math.PI / 180
         );
         h.setScale(currentItem.scale[0], currentItem.scale[1], currentItem.scale[2]);
@@ -245,7 +248,7 @@ const EffectCard = ({
                 }
             };
             animationFrameRef.current = requestAnimationFrame(updateLoop);
-            
+
             return () => {
                 if (animationFrameRef.current !== null) {
                     cancelAnimationFrame(animationFrameRef.current);
@@ -258,12 +261,12 @@ const EffectCard = ({
     // 播放
     const handlePlay = () => {
         if (!item.isLoaded) return;
-        
+
         // 計算位置
         let x = item.position[0];
         let y = item.position[1];
         let z = item.position[2];
-        
+
         if (boundBone && model) {
             // 獲取 bone 的世界位置
             const boneWorldPos = new THREE.Vector3();
@@ -273,24 +276,24 @@ const EffectCard = ({
             y = boneWorldPos.y + item.position[1];
             z = boneWorldPos.z + item.position[2];
         }
-        
+
         // 計算旋轉
         let rx = item.rotation[0];
         let ry = item.rotation[1];
         let rz = item.rotation[2];
-        
+
         if (boundBone && model) {
             // 獲取 bone 的世界旋轉（Euler）
             const boneWorldQuat = new THREE.Quaternion();
             boundBone.getWorldQuaternion(boneWorldQuat);
             const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-            
+
             // 結合 bone 旋轉和特效旋轉
             rx = (boneEuler.x * 180 / Math.PI) + item.rotation[0];
             ry = (boneEuler.y * 180 / Math.PI) + item.rotation[1];
             rz = (boneEuler.z * 180 / Math.PI) + item.rotation[2];
         }
-        
+
         const handle = PlayEffectUseCase.execute({
             id: item.id,
             x, y, z,
@@ -300,11 +303,11 @@ const EffectCard = ({
             sx: item.scale[0], sy: item.scale[1], sz: item.scale[2],
             speed: item.speed
         });
-        
+
         if (handle) {
             currentHandleRef.current = handle;
         }
-        
+
         onUpdate(item.id, { isPlaying: true });
         setTimeout(() => onUpdate(item.id, { isPlaying: false }), 500);
     };
@@ -314,21 +317,21 @@ const EffectCard = ({
         if (item.loopIntervalId) {
             clearInterval(item.loopIntervalId);
         }
-        
+
         if (animationFrameRef.current !== null) {
             cancelAnimationFrame(animationFrameRef.current);
             animationFrameRef.current = null;
         }
-        
+
         if (currentHandleRef.current) {
             currentHandleRef.current.stop();
             currentHandleRef.current = null;
         }
 
-        onUpdate(item.id, { 
-            isLooping: false, 
+        onUpdate(item.id, {
+            isLooping: false,
             loopIntervalId: null,
-            isPlaying: false 
+            isPlaying: false
         });
     };
 
@@ -341,12 +344,12 @@ const EffectCard = ({
         } else {
             handlePlay(); // 先播放一次
             const intervalId = window.setInterval(() => {
-            handlePlay();
+                handlePlay();
             }, 2000); // 固定 2 秒循環
 
-            onUpdate(item.id, { 
-                isLooping: true, 
-                loopIntervalId: intervalId 
+            onUpdate(item.id, {
+                isLooping: true,
+                loopIntervalId: intervalId
             });
         }
     };
@@ -390,31 +393,31 @@ const EffectCard = ({
     }, [item.loopIntervalId]);
 
     return (
-        <div className="bg-gray-900 border border-gray-700 rounded-lg overflow-visible transition-colors hover:border-gray-600">
+        <div className={`${theme.panelBg} border ${theme.panelBorder} rounded-lg overflow-visible transition-colors hover:border-gray-600`}>
             {/* Header */}
-            <div className="flex items-center justify-between p-3 bg-gray-800/50 border-b border-gray-700">
+            <div className={`flex items-center justify-between p-3 ${theme.toolbarBg} border-b ${theme.toolbarBorder}`}>
                 <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <button 
+                    <button
                         onClick={() => setIsExpanded(!isExpanded)}
                         className="text-gray-400 hover:text-white transition-colors"
                     >
                         {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                     </button>
                     <Sparkles className={`w-4 h-4 ${item.isLooping ? 'text-orange-400 animate-pulse' : 'text-purple-400'}`} />
-                    <input 
+                    <input
                         type="text"
                         value={item.name}
                         onChange={(e) => onUpdate(item.id, { name: e.target.value })}
-                        className="bg-transparent text-sm font-medium text-gray-200 focus:outline-none focus:text-white truncate w-full"
+                        className={`bg-transparent text-sm font-medium ${theme.text} focus:outline-none focus:text-white truncate w-full`}
                         placeholder="特效名稱"
                     />
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                     {item.isLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                     {item.isLoaded && !item.isLoading && <CheckCircle2 className="w-4 h-4 text-green-500" />}
-                    
-                    <button 
+
+                    <button
                         onClick={() => onRemove(item.id)}
                         className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-700/50 rounded transition-colors"
                     >
@@ -429,27 +432,27 @@ const EffectCard = ({
                     {/* Path Input */}
                     <div className="flex gap-2">
                         <div className="flex-1 relative">
-                <input
-                    type="text"
+                            <input
+                                type="text"
                                 value={localPath}
                                 onChange={(e) => setLocalPath(e.target.value)}
                                 disabled={item.isLoaded || item.isLoading}
                                 placeholder="path/to/effect.efk"
-                                className="w-full pl-8 pr-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-xs text-gray-300 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+                                className={`w-full pl-8 pr-3 py-1.5 ${theme.toolbarBg} border ${theme.toolbarBorder} rounded text-xs text-white bg-gray-800/90 focus:outline-none focus:border-blue-500 disabled:opacity-50 placeholder:text-gray-400`}
                             />
                             <FolderOpen className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                         </div>
-                <button
+                        <button
                             onClick={handleLoad}
                             disabled={item.isLoaded || item.isLoading || !isRuntimeReady}
                             className={`px-3 py-1.5 text-xs rounded font-medium transition-colors flex items-center gap-1
-                                ${item.isLoaded 
-                                    ? 'bg-gray-700 text-gray-400 cursor-default' 
+                                ${item.isLoaded
+                                    ? 'bg-gray-700 text-gray-400 cursor-default'
                                     : 'bg-blue-600 hover:bg-blue-500 text-white'}`}
                         >
                             {item.isLoaded ? '已載入' : '載入'}
-                </button>
-            </div>
+                        </button>
+                    </div>
 
                     {/* Bone Binding */}
                     {item.isLoaded && (
@@ -488,26 +491,26 @@ const EffectCard = ({
                     {/* Transform Controls */}
                     {item.isLoaded && (
                         <div className="space-y-3 p-3 bg-gray-950/30 rounded border border-gray-800">
-                            <Vector3Input 
-                                label="位置 (Position)" 
-                                values={item.position} 
+                            <Vector3Input
+                                label="位置 (Position)"
+                                values={item.position}
                                 onChange={(v) => onUpdate(item.id, { position: v })}
                                 icon={Move3d}
                             />
-                            
-                            <Vector3Input 
-                                label="旋轉 (Rotation °)" 
-                                values={item.rotation} 
+
+                            <Vector3Input
+                                label="旋轉 (Rotation °)"
+                                values={item.rotation}
                                 onChange={(v) => onUpdate(item.id, { rotation: v })}
                                 step={15}
                                 icon={RefreshCcw}
                             />
-                            
+
                             <div className="flex gap-3">
                                 <div className="flex-1">
-                                    <Vector3Input 
-                                        label="縮放 (Scale)" 
-                                        values={item.scale} 
+                                    <Vector3Input
+                                        label="縮放 (Scale)"
+                                        values={item.scale}
                                         onChange={(v) => onUpdate(item.id, { scale: v })}
                                         step={0.5}
                                         icon={Maximize}
@@ -520,13 +523,12 @@ const EffectCard = ({
                                             <span>速度</span>
                                         </div>
                                         <div className="relative">
-                                            <input 
-                                                type="number" 
+                                            <NumberInput
                                                 value={item.speed}
-                                                onChange={(e) => onUpdate(item.id, { speed: parseFloat(e.target.value) })}
+                                                onChange={(val) => onUpdate(item.id, { speed: parseFloat(val) })}
                                                 step={0.1}
                                                 min={0}
-                                                className="w-full pl-2 pr-1 py-1 bg-gray-800 border border-gray-700 rounded text-xs text-gray-200 focus:outline-none focus:border-blue-500 text-right font-mono"
+                                                className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
                                             />
                                             <span className="absolute right-6 top-1/2 -translate-y-1/2 text-[10px] text-gray-500">x</span>
                                         </div>
@@ -537,17 +539,17 @@ const EffectCard = ({
                     )}
 
                     {/* Playback Controls */}
-            <div className="flex gap-2">
-                <button
-                    onClick={handlePlay}
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handlePlay}
                             disabled={!item.isLoaded}
                             className="flex-1 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
                         >
                             <Play className="w-3.5 h-3.5 fill-current" />
                             Play
-                </button>
-                <button
-                    onClick={handleStop}
+                        </button>
+                        <button
+                            onClick={handleStop}
                             disabled={!item.isLoaded}
                             className="flex-1 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
                         >
@@ -571,7 +573,7 @@ const EffectCard = ({
                     {item.isLoaded && (
                         <div className="space-y-2 p-3 bg-gray-950/30 rounded border border-gray-800">
                             <div className="text-xs text-gray-400 font-medium">觸發設定</div>
-                            
+
                             {/* Triggers List */}
                             {item.triggers.length > 0 && (
                                 <div className="space-y-2">
@@ -616,12 +618,11 @@ const EffectCard = ({
                                 </div>
                                 <div className="w-20">
                                     <label className="text-[10px] text-gray-500 block mb-1">幀數</label>
-                                    <input
-                                        type="number"
+                                    <NumberInput
                                         placeholder="Frame"
                                         value={newTriggerState.frame}
-                                        onChange={(e) => setNewTriggerState(prev => ({ ...prev, frame: e.target.value }))}
-                                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+                                        onChange={(val) => setNewTriggerState(prev => ({ ...prev, frame: val }))}
+                                        className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
                                     />
                                 </div>
                                 <button
@@ -649,9 +650,10 @@ interface EffectTestPanelProps {
     effects: EffectItem[];
     setEffects: React.Dispatch<React.SetStateAction<EffectItem[]>>;
     createdClips: IdentifiableClip[];
+    theme: ThemeStyle;
 }
 
-export default function EffectTestPanel({ model = null, bones = [], effects, setEffects, createdClips }: EffectTestPanelProps) {
+export default function EffectTestPanel({ model = null, bones = [], effects, setEffects, createdClips, theme }: EffectTestPanelProps) {
     const [isRuntimeReady, setIsRuntimeReady] = useState(false);
 
     // 檢查 Runtime 狀態
@@ -686,7 +688,7 @@ export default function EffectTestPanel({ model = null, bones = [], effects, set
 
     // 更新特效狀態
     const updateEffect = (id: string, updates: Partial<EffectItem>) => {
-        setEffects(prev => prev.map(item => 
+        setEffects(prev => prev.map(item =>
             item.id === id ? { ...item, ...updates } : item
         ));
     };
@@ -710,7 +712,7 @@ export default function EffectTestPanel({ model = null, bones = [], effects, set
                         {isRuntimeReady ? 'Runtime Ready' : 'Initializing...'}
                     </span>
                 </div>
-                <button 
+                <button
                     onClick={addEffectCard}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
                 >
@@ -728,7 +730,7 @@ export default function EffectTestPanel({ model = null, bones = [], effects, set
                     </div>
                 ) : (
                     effects.map(effect => (
-                        <EffectCard 
+                        <EffectCard
                             key={effect.id}
                             item={effect}
                             isRuntimeReady={isRuntimeReady}
@@ -737,6 +739,7 @@ export default function EffectTestPanel({ model = null, bones = [], effects, set
                             model={model}
                             bones={bones}
                             createdClips={createdClips}
+                            theme={theme}
                         />
                     ))
                 )}

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2 } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { updateShaderGroupById, updateShaderGroupFeatureParam } from '../../../../utils/shader/shaderGroupUtils';
+import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
 interface MaterialShaderToolProps {
     fileName: string | null;
@@ -10,6 +11,7 @@ interface MaterialShaderToolProps {
     onGroupsChange: (groups: ShaderGroup[]) => void;
     isShaderEnabled: boolean;
     onToggleShaderEnabled: (enabled: boolean) => void;
+    theme: ThemeStyle;
 }
 
 // 可用的 Shader 功能列表
@@ -147,7 +149,7 @@ const getParamLabel = (paramName: string): string => {
     return labels[paramName] || paramName;
 };
 
-export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange, isShaderEnabled, onToggleShaderEnabled }: MaterialShaderToolProps) {
+export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, meshNames, onGroupsChange, isShaderEnabled, onToggleShaderEnabled, theme }: MaterialShaderToolProps) {
     const [showFeatureMenu, setShowFeatureMenu] = useState<{ groupId: string } | null>(null);
     const [showMeshMenu, setShowMeshMenu] = useState<string | null>(null);
     const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
@@ -288,7 +290,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
     // 渲染參數控制項
     const renderParamControl = (groupId: string, feature: ShaderFeature, paramName: string, value: any) => {
-        const commonInputClass = "w-full px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:outline-none focus:border-purple-500";
+        const commonInputClass = "w-full px-2 py-1.5 bg-black/30 border border-white/10 rounded text-sm text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500/50 transition-all";
 
         // 貼圖參數
         if (paramName.includes('texture') || paramName.includes('Texture')) {
@@ -312,14 +314,14 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                         />
                         <label
                             htmlFor={`${groupId}_${feature.id}_${paramName}`}
-                            className="flex-1 px-2 py-1 bg-gray-700 border border-gray-600 rounded text-sm text-gray-400 cursor-pointer hover:border-purple-500 transition-colors text-center"
+                            className="flex-1 px-3 py-1.5 bg-black/30 border border-white/10 rounded text-sm text-gray-400 cursor-pointer hover:border-purple-500 hover:text-white transition-all text-center truncate"
                         >
                             {value ? value.name : '選擇貼圖...'}
                         </label>
                         {value && (
                             <button
                                 onClick={() => updateFeatureParam(groupId, feature.id, paramName, null)}
-                                className="px-2 py-1 bg-red-600/20 border border-red-600 rounded text-red-400 hover:bg-red-600/30 transition-colors"
+                                className="px-2 py-1 bg-red-500/10 border border-red-500/30 rounded text-red-400 hover:bg-red-500/20 transition-colors"
                             >
                                 <X size={14} />
                             </button>
@@ -340,7 +342,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             type="color"
                             value={value}
                             onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.value)}
-                            className="w-12 h-8 bg-gray-700 border border-gray-600 rounded cursor-pointer"
+                            className="w-12 h-8 bg-transparent border border-white/10 rounded cursor-pointer p-0.5"
                         />
                         <input
                             type="text"
@@ -382,7 +384,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                         step={step}
                         value={value}
                         onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, parseFloat(e.target.value))}
-                        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer slider-purple"
+                        className="w-full h-2 bg-black/30 rounded-lg appearance-none cursor-pointer slider-purple"
                     />
                 </div>
             );
@@ -398,7 +400,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             type="checkbox"
                             checked={value}
                             onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.checked)}
-                            className="w-4 h-4 bg-gray-700 border-2 border-gray-600 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500"
+                            className="w-4 h-4 bg-black/30 border-2 border-white/20 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
                         />
                         <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
                             {label}
@@ -412,14 +414,14 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
     };
 
     return (
-        <div className="h-full flex flex-col bg-gray-800">
+        <div className={`h-full flex flex-col ${theme.panelBg}`}>
             {/* Header */}
-            <div className="p-4 border-b border-gray-700 flex items-center justify-between">
+            <div className={`p-4 border-b ${theme.panelBorder} flex items-center justify-between`}>
                 <div className="flex items-center gap-2">
                     <Palette className="text-purple-400" size={20} />
-                    <h2 className="text-white font-semibold">Material Shader 工具</h2>
+                    <h2 className={`${theme.text} font-semibold`}>Material Shader 工具</h2>
                 </div>
-                
+
                 <label className="flex items-center gap-2 cursor-pointer">
                     <div className="relative">
                         <input
@@ -428,7 +430,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             checked={isShaderEnabled}
                             onChange={(e) => onToggleShaderEnabled(e.target.checked)}
                         />
-                        <div className="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                        <div className="w-11 h-6 bg-black/30 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
                     </div>
                     {/* <span className="text-xs text-gray-400">{isShaderEnabled ? '開啟' : '關閉'}</span> */}
                 </label>
@@ -437,9 +439,9 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             {/* Groups List */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
                 {shaderGroups.map((group, groupIndex) => (
-                    <div key={group.id} className="bg-gray-700/50 rounded-lg border border-gray-600">
+                    <div key={group.id} className={`glass-panel rounded-xl border border-white/5 transition-all duration-300 relative ${!group.expanded ? 'hover:bg-white/5' : ''} ${showFeatureMenu?.groupId === group.id || showMeshMenu === group.id ? 'z-20' : 'z-0'}`}>
                         {/* Group Header */}
-                        <div className="p-3 flex items-center justify-between border-b border-gray-600">
+                        <div className={`p-3 flex items-center justify-between border-b border-white/5 ${!group.expanded ? 'border-transparent' : ''}`}>
                             <div className="flex items-center gap-2 flex-1">
                                 <button
                                     onClick={() => toggleGroupExpanded(group.id)}
@@ -459,7 +461,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                             if (e.key === 'Escape') setEditingGroupId(null);
                                         }}
                                         autoFocus
-                                        className="bg-gray-800 text-white px-2 py-1 rounded border border-purple-500 text-sm focus:outline-none"
+                                        className="bg-black/30 text-white px-2 py-1 rounded border border-purple-500/50 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                 ) : (
@@ -495,12 +497,12 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                 <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
                                     <button
                                         onClick={() => setShowMeshMenu(showMeshMenu === group.id ? null : group.id)}
-                                        className="px-2 py-1 bg-gray-600 hover:bg-gray-500 text-white text-xs rounded transition-colors"
+                                        className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs rounded-full transition-colors backdrop-blur-sm"
                                     >
                                         Mesh 選單 ▼
                                     </button>
                                     {showMeshMenu === group.id && (
-                                        <div className="absolute right-0 top-full mt-1 w-64 bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                        <div className="absolute right-0 top-full mt-2 w-64 glass-panel border border-white/10 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto animate-slide-up">
                                             {meshNames.length === 0 ? (
                                                 <div className="p-3 text-gray-400 text-sm">沒有可用的 mesh</div>
                                             ) : (
@@ -511,14 +513,14 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                                     return (
                                                         <label
                                                             key={meshName}
-                                                            className={`flex items-center gap-2 p-2 hover:bg-gray-700 cursor-pointer ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
+                                                            className={`flex items-center gap-2 p-2.5 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0 ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
                                                         >
                                                             <input
                                                                 type="checkbox"
                                                                 checked={isSelected}
                                                                 disabled={isUsedByOther && !isSelected}
                                                                 onChange={() => toggleMeshSelection(group.id, meshName)}
-                                                                className="w-4 h-4"
+                                                                className="w-4 h-4 rounded border-white/20 bg-black/30 checked:bg-purple-500 checked:border-purple-500"
                                                             />
                                                             <span className="text-sm text-white flex-1">{meshName}</span>
                                                             {isSelected && <Check size={14} className="text-green-400" />}
@@ -554,8 +556,8 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             <div className="p-3 space-y-3">
                                 {/* Features List */}
                                 {group.features.map(feature => (
-                                    <div key={feature.id} className="bg-gray-800 rounded-lg border border-gray-600">
-                                        <div className="p-2 flex items-center gap-2 border-b border-gray-600">
+                                    <div key={feature.id} className={`bg-black/20 rounded-lg border border-white/5`}>
+                                        <div className={`p-2.5 flex items-center gap-2 border-b border-white/5`}>
                                             <button
                                                 onClick={() => toggleFeatureExpanded(group.id, feature.id)}
                                                 className="text-gray-400 hover:text-white transition-colors"
@@ -563,7 +565,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                                 {feature.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                             </button>
                                             <span className="text-lg">{feature.icon}</span>
-                                            <span className="flex-1 text-white text-sm font-medium">{feature.name}</span>
+                                            <span className={`flex-1 ${theme.text} text-sm font-medium`}>{feature.name}</span>
                                             <button
                                                 onClick={() => removeFeatureFromGroup(group.id, feature.id)}
                                                 className="p-1 text-red-400 hover:text-red-300 transition-colors"
@@ -587,19 +589,19 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                 <div className="relative" ref={showFeatureMenu?.groupId === group.id ? featureMenuRef : null}>
                                     <button
                                         onClick={() => setShowFeatureMenu(showFeatureMenu?.groupId === group.id ? null : { groupId: group.id })}
-                                        className="w-full py-2 bg-purple-600/20 hover:bg-purple-600/30 border border-purple-600 rounded text-purple-400 text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                                        className="w-full py-2.5 bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/30 hover:border-purple-500/50 rounded-lg text-purple-300 text-sm font-medium transition-all flex items-center justify-center gap-2 group"
                                     >
                                         <Plus size={16} />
                                         添加功能
                                     </button>
 
                                     {showFeatureMenu?.groupId === group.id && (
-                                        <div className="absolute left-0 top-full mt-1 w-full bg-gray-800 border border-gray-600 rounded-lg shadow-xl z-50 max-h-64 overflow-y-auto">
+                                        <div className="absolute left-0 top-full mt-2 w-full glass-panel border border-white/10 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto animate-slide-up">
                                             {AVAILABLE_FEATURES.map(feature => (
                                                 <button
                                                     key={feature.type}
                                                     onClick={() => addFeatureToGroup(group.id, feature)}
-                                                    className="w-full p-3 hover:bg-gray-700 text-left transition-colors border-b border-gray-700 last:border-b-0"
+                                                    className="w-full p-3 hover:bg-white/10 text-left transition-colors border-b border-white/5 last:border-b-0 group"
                                                 >
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-xl">{feature.icon}</span>
@@ -620,10 +622,10 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             </div>
 
             {/* Add Group Button */}
-            <div className="p-4 border-t border-gray-700">
+            <div className={`p-4 border-t ${theme.panelBorder}`}>
                 <button
                     onClick={addGroup}
-                    className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-medium rounded-xl transition-all shadow-lg shadow-purple-900/20 hover:shadow-purple-500/30 hover:scale-[1.01] flex items-center justify-center gap-2"
                 >
                     <Plus size={20} />
                     添加組合

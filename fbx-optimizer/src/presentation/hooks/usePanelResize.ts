@@ -98,13 +98,35 @@ export function useRightPanelResize(
     setIsResizingRight(true);
   };
 
+  // 響應式調整：監聽視窗大小變化
+  useEffect(() => {
+    const handleResize = () => {
+      const availableWidth = window.innerWidth - 64; // 64px 為左側工具列和間距
+      const responsiveMaxWidth = Math.min(maxWidth, availableWidth);
+      
+      // 如果當前寬度超過可用寬度，自動調整
+      if (rightPanelWidth > responsiveMaxWidth) {
+        setRightPanelWidth(Math.max(minWidth, responsiveMaxWidth));
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    handleResize(); // 初始檢查
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [rightPanelWidth, minWidth, maxWidth]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingRight) return;
 
       const newWidth = window.innerWidth - e.clientX;
+      const availableWidth = window.innerWidth - 64;
+      const responsiveMaxWidth = Math.min(maxWidth, availableWidth);
       // 限制最小和最大寬度
-      const clampedWidth = Math.max(minWidth, Math.min(newWidth, maxWidth));
+      const clampedWidth = Math.max(minWidth, Math.min(newWidth, responsiveMaxWidth));
       setRightPanelWidth(clampedWidth);
     };
 

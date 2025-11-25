@@ -190,7 +190,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       {/* 進度條容器 */}
       <div className={`flex-1 relative ${SIZE_CLASSES[size]}`}>
         {/* 背景層 */}
-        <div className="absolute inset-0 bg-gray-900 rounded-full" />
+        <div className="absolute inset-0 bg-gray-700/50 rounded-full border border-gray-600/30" />
 
         {/* 進度填充層（保持裁切以符合圓角） */}
         <div className="absolute inset-0 rounded-full overflow-hidden">

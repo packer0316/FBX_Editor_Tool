@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Upload, Package, Loader2 } from 'lucide-react';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import ModelCard from './ModelCard';
+import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
 interface ModelManagerPanelProps {
   models: ModelInstance[];
@@ -24,6 +25,7 @@ interface ModelManagerPanelProps {
   toneMappingExposure?: number;
   environmentIntensity?: number;
   hdriUrl?: string;
+  theme: ThemeStyle;
 }
 
 export default function ModelManagerPanel({
@@ -37,7 +39,8 @@ export default function ModelManagerPanel({
   isLoading = false,
   toneMappingExposure,
   environmentIntensity,
-  hdriUrl
+  hdriUrl,
+  theme
 }: ModelManagerPanelProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -54,8 +57,8 @@ export default function ModelManagerPanel({
   return (
     <div className="flex flex-col gap-4 h-full">
       {/* 標題 */}
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+      <div className="flex items-center justify-between px-1">
+        <h2 className={`text-lg font-bold ${theme.text} flex items-center gap-2`}>
           <Package className="w-5 h-5" />
           模型管理
         </h2>
@@ -63,7 +66,7 @@ export default function ModelManagerPanel({
       </div>
 
       {/* 上傳按鈕 */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2 px-1">
         <input
           ref={fileInputRef}
           type="file"
@@ -75,11 +78,10 @@ export default function ModelManagerPanel({
         />
         <label
           htmlFor="model-file-upload"
-          className={`flex items-center justify-center gap-2 w-full py-3 px-4 rounded-md cursor-pointer transition-colors shadow-lg font-medium ${
-            isLoading
-              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-              : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-900/20'
-          }`}
+          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl cursor-pointer transition-all shadow-lg font-medium border-2 border-dashed ${isLoading
+            ? 'bg-gray-600 text-gray-400 cursor-not-allowed border-gray-600'
+            : `${theme.activeButton} border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/30`
+            }`}
         >
           {isLoading ? (
             <>
@@ -99,7 +101,7 @@ export default function ModelManagerPanel({
       </div>
 
       {/* 模型列表 */}
-      <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
         {models.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-gray-500">
             <Package className="w-12 h-12 mb-2 opacity-50" />
@@ -119,6 +121,7 @@ export default function ModelManagerPanel({
               toneMappingExposure={toneMappingExposure}
               environmentIntensity={environmentIntensity}
               hdriUrl={hdriUrl}
+              theme={theme}
             />
           ))
         )}

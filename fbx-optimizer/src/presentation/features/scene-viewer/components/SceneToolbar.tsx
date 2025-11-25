@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { RotateCcw, Camera, Video, Square, Monitor, X } from 'lucide-react';
+import { type ThemeStyle } from '../../../hooks/useTheme';
 
 export type AspectRatio = '16:9' | '16:10' | '21:9' | '32:9' | 'custom' | 'free';
 
@@ -14,19 +15,21 @@ interface SceneToolbarProps {
     customWidth?: number;
     customHeight?: number;
     onCustomSizeChange?: (width: number, height: number) => void;
+    theme: ThemeStyle;
 }
 
-const SceneToolbar: React.FC<SceneToolbarProps> = ({ 
-    onResetCamera, 
-    onTakeScreenshot, 
-    onStartRecording, 
-    onStopRecording, 
+const SceneToolbar: React.FC<SceneToolbarProps> = ({
+    onResetCamera,
+    onTakeScreenshot,
+    onStartRecording,
+    onStopRecording,
     isRecording,
     aspectRatio,
     onAspectRatioChange,
     customWidth = 1920,
     customHeight = 1080,
-    onCustomSizeChange
+    onCustomSizeChange,
+    theme
 }) => {
     const [showAspectMenu, setShowAspectMenu] = useState(false);
     const [showCustomDialog, setShowCustomDialog] = useState(false);
@@ -93,90 +96,92 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     };
 
     return (
-        <div className="absolute top-4 left-4 flex gap-2 z-10">
-            <div className="bg-gray-900/80 backdrop-blur-sm border border-gray-700 rounded-lg p-1 flex items-center gap-1 shadow-lg">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+            <div className={`glass rounded-full px-2 py-1.5 flex items-center gap-1 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}>
                 <button
                     onClick={onResetCamera}
-                    className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors group relative"
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
                     title="Reset Camera"
                 >
-                    <RotateCcw size={20} />
+                    <RotateCcw size={18} />
                     <span className="sr-only">Reset Camera</span>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
                         重置相機
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-6 bg-gray-700"></div>
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
 
                 <button
                     onClick={onTakeScreenshot}
-                    className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors group relative"
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
                     title="Take Screenshot"
                 >
-                    <Camera size={20} />
+                    <Camera size={18} />
                     <span className="sr-only">Take Screenshot</span>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
                         拍照下載
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-6 bg-gray-700"></div>
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
 
                 <button
                     onClick={isRecording ? onStopRecording : onStartRecording}
-                    className={`p-2 rounded-md transition-colors group relative ${
-                        isRecording 
-                            ? 'text-red-500 hover:text-red-400 hover:bg-gray-700 animate-pulse' 
-                            : 'text-gray-300 hover:text-white hover:bg-gray-700'
-                    }`}
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${isRecording
+                        ? 'text-red-500 hover:text-red-400 bg-red-500/10 animate-pulse'
+                        : `${theme.button} hover:scale-110`
+                        }`}
                     title={isRecording ? "Stop Recording" : "Start Recording"}
                 >
-                    {isRecording ? <Square size={20} /> : <Video size={20} />}
+                    {isRecording ? <Square size={18} /> : <Video size={18} />}
                     <span className="sr-only">{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
 
                     {/* Tooltip */}
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
                         {isRecording ? '停止錄影' : '開始錄影'}
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-6 bg-gray-700"></div>
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
 
                 {/* 比例選擇器 */}
                 <div className="relative" ref={aspectMenuRef}>
                     <button
                         onClick={() => setShowAspectMenu(!showAspectMenu)}
-                        className="p-2 text-gray-300 hover:text-white hover:bg-gray-700 rounded-md transition-colors group relative"
+                        className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
                         title="調整比例"
                     >
-                        <Monitor size={20} />
+                        <Monitor size={18} />
 
                         {/* Tooltip */}
-                        <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-black text-white text-xs rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50">
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
                             {getAspectRatioLabel()}
+                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
                         </div>
                     </button>
 
                     {/* 比例選單 */}
                     {showAspectMenu && (
-                        <div className="absolute top-full left-0 mt-2 bg-gray-900 border border-gray-700 rounded-lg shadow-xl py-1 min-w-[140px]">
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-4 ${theme.panelBg} border ${theme.panelBorder} rounded-xl shadow-2xl py-2 min-w-[160px] z-50 overflow-hidden animate-slide-up`}>
                             {aspectRatioOptions.map((option) => (
                                 <button
                                     key={option.value}
                                     onClick={() => handleAspectRatioSelect(option.value)}
-                                    className={`w-full px-4 py-2 text-left text-sm transition-colors ${
-                                        aspectRatio === option.value
-                                            ? 'bg-blue-600 text-white'
-                                            : 'text-gray-300 hover:bg-gray-700'
-                                    }`}
+                                    className={`w-full px-4 py-2.5 text-left text-sm transition-all ${aspectRatio === option.value
+                                        ? theme.activeButton
+                                        : `${theme.text} hover:bg-white/5`
+                                        }`}
                                 >
                                     {option.label}
                                 </button>
@@ -188,57 +193,57 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
 
             {/* 自訂尺寸對話框 */}
             {showCustomDialog && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-                    <div className="bg-gray-900 border border-gray-700 rounded-lg shadow-2xl p-6 w-[320px]">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-white font-semibold">自訂尺寸</h3>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
+                    <div className={`glass-panel rounded-2xl shadow-2xl p-8 w-[360px] transform transition-all scale-100`}>
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className={`${theme.text} text-lg font-bold`}>自訂尺寸</h3>
                             <button
                                 onClick={() => setShowCustomDialog(false)}
-                                className="text-gray-400 hover:text-white transition-colors"
+                                className={`${theme.text} opacity-60 hover:opacity-100 transition-colors p-1 hover:bg-white/10 rounded-full`}
                             >
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="space-y-4">
+                        <div className="space-y-5">
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">寬度 (Width)</label>
+                                <label className={`block text-sm ${theme.text} opacity-70 mb-2 font-medium`}>寬度 (Width)</label>
                                 <input
                                     type="number"
                                     value={tempWidth}
                                     onChange={(e) => setTempWidth(e.target.value)}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                                    className={`w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
                                     placeholder="1920"
                                     min="1"
                                 />
                             </div>
 
                             <div>
-                                <label className="block text-sm text-gray-400 mb-1">高度 (Height)</label>
+                                <label className={`block text-sm ${theme.text} opacity-70 mb-2 font-medium`}>高度 (Height)</label>
                                 <input
                                     type="number"
                                     value={tempHeight}
                                     onChange={(e) => setTempHeight(e.target.value)}
-                                    className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-white focus:outline-none focus:border-blue-500"
+                                    className={`w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
                                     placeholder="1080"
                                     min="1"
                                 />
                             </div>
 
-                            <div className="text-xs text-gray-500">
+                            <div className={`text-xs ${theme.text} opacity-50 text-center font-mono`}>
                                 比例: {tempWidth && tempHeight ? `${(parseInt(tempWidth) / parseInt(tempHeight)).toFixed(2)}:1` : '--'}
                             </div>
 
-                            <div className="flex gap-2 pt-2">
+                            <div className="flex gap-3 pt-2">
                                 <button
                                     onClick={() => setShowCustomDialog(false)}
-                                    className="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded transition-colors"
+                                    className={`flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 ${theme.text} rounded-lg transition-colors font-medium`}
                                 >
                                     取消
                                 </button>
                                 <button
                                     onClick={handleCustomSizeApply}
-                                    className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded transition-colors"
+                                    className="flex-1 px-4 py-2.5 bg-neon-blue hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/30 font-medium"
                                 >
                                     確定
                                 </button>

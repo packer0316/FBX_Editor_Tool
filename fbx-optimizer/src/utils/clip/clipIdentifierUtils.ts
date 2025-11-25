@@ -143,10 +143,11 @@ export function getClipDisplayName(clip: IdentifiableClip): string {
 /**
  * 取得 Clip 的唯一識別碼
  * 
- * @param clip - 動畫片段
- * @returns 唯一識別碼（優先使用 customId，fallback 到 uuid）
+ * @param clip - 動畫片段（可為 null 或 undefined）
+ * @returns 唯一識別碼（優先使用 customId，fallback 到 uuid），若 clip 為空則返回空字串
  */
-export function getClipId(clip: IdentifiableClip): string {
+export function getClipId(clip: IdentifiableClip | null | undefined): string {
+  if (!clip) return '';
   return clip.customId || clip.uuid;
 }
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
-import { Moon, Sun, Zap, Terminal, Sunset, Snowflake, Ghost } from 'lucide-react';
+import { Moon, Sun, Zap, Snowflake, Ghost } from 'lucide-react';
 
-export type ThemeMode = 'dark' | 'light' | 'cyberpunk' | 'matrix' | 'synthwave' | 'nord' | 'dracula';
+export type ThemeMode = 'dark' | 'light' | 'cyberpunk' | 'nord' | 'dracula';
 
 export interface ThemeStyle {
   bg: string;
@@ -26,79 +26,53 @@ export interface ThemeOption {
 
 const themeStyles: Record<ThemeMode, ThemeStyle> = {
   dark: {
-    bg: 'bg-gray-900',
-    text: 'text-white',
-    toolbarBg: 'bg-gray-900',
-    toolbarBorder: 'border-gray-700',
-    panelBg: 'bg-gray-800',
-    panelBorder: 'border-gray-700',
-    button: 'text-gray-400 hover:bg-gray-800 hover:text-white',
-    activeButton: 'bg-blue-600 text-white',
-    sceneBg: '#111827',
-    gridColor: '#4a4a4a',
-    gridCellColor: '#2a2a2a'
+    bg: 'bg-premium-dark-900',
+    text: 'text-gray-100',
+    toolbarBg: 'glass',
+    toolbarBorder: 'border-white/10',
+    panelBg: 'glass-panel',
+    panelBorder: 'border-white/10',
+    button: 'glass-button text-gray-300',
+    activeButton: 'bg-neon-blue text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-neon-blue/50',
+    sceneBg: '#0f172a',
+    gridColor: '#334155',
+    gridCellColor: '#1e293b'
   },
   light: {
-    bg: 'bg-gray-900',
-    text: 'text-white',
-    toolbarBg: 'bg-gray-900',
-    toolbarBorder: 'border-gray-700',
-    panelBg: 'bg-gray-800',
-    panelBorder: 'border-gray-700',
-    button: 'text-gray-400 hover:bg-gray-800 hover:text-white',
-    activeButton: 'bg-blue-600 text-white',
-    sceneBg: '#f0f0f0',
-    gridColor: '#cccccc',
-    gridCellColor: '#e5e5e5'
+    bg: 'bg-slate-50',
+    text: 'text-slate-800',
+    toolbarBg: 'bg-white/80 backdrop-blur-md border border-slate-200/60 shadow-lg',
+    toolbarBorder: 'border-slate-200/60',
+    panelBg: 'bg-white/90 backdrop-blur-xl shadow-2xl',
+    panelBorder: 'border-slate-200/60',
+    button: 'bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all duration-200',
+    activeButton: 'bg-blue-500 text-white shadow-lg shadow-blue-500/30',
+    sceneBg: '#f1f5f9',
+    gridColor: '#cbd5e1',
+    gridCellColor: '#e2e8f0'
   },
   cyberpunk: {
     bg: 'bg-[#050510]',
-    text: 'text-[#00f3ff]',
-    toolbarBg: 'bg-[#0a0a1a]',
-    toolbarBorder: 'border-[#ff00ff]/30',
-    panelBg: 'bg-[#0a0a1a]/90',
-    panelBorder: 'border-[#00f3ff]/30',
-    button: 'text-[#ff00ff] hover:text-[#00f3ff] hover:shadow-[0_0_10px_#00f3ff] transition-all duration-300',
-    activeButton: 'bg-[#ff00ff]/20 text-[#00f3ff] shadow-[0_0_15px_#ff00ff]',
+    text: 'text-neon-blue-glow',
+    toolbarBg: 'bg-[#0a0a1a]/60 backdrop-blur-xl border border-neon-blue/30 shadow-[0_0_20px_rgba(59,130,246,0.2)]',
+    toolbarBorder: 'border-neon-blue/30',
+    panelBg: 'bg-[#0a0a1a]/80 backdrop-blur-2xl border border-neon-purple/30 shadow-[0_0_30px_rgba(168,85,247,0.15)]',
+    panelBorder: 'border-neon-purple/30',
+    button: 'text-neon-purple hover:text-neon-blue hover:bg-neon-blue/10 hover:shadow-[0_0_15px_rgba(59,130,246,0.4)] transition-all duration-300',
+    activeButton: 'bg-neon-blue/20 text-neon-blue border border-neon-blue shadow-[0_0_20px_rgba(59,130,246,0.5)]',
     sceneBg: '#020205',
-    gridColor: '#ff00ff',
-    gridCellColor: '#00f3ff'
-  },
-  matrix: {
-    bg: 'bg-black',
-    text: 'text-[#00ff41]',
-    toolbarBg: 'bg-[#0d0d0d]',
-    toolbarBorder: 'border-[#008f11]',
-    panelBg: 'bg-[#0d0d0d]/90',
-    panelBorder: 'border-[#008f11]',
-    button: 'text-[#008f11] hover:text-[#00ff41] hover:bg-[#003b00]',
-    activeButton: 'bg-[#003b00] text-[#00ff41] shadow-[0_0_10px_#00ff41]',
-    sceneBg: '#000000',
-    gridColor: '#003b00',
-    gridCellColor: '#008f11'
-  },
-  synthwave: {
-    bg: 'bg-[#2b003b]',
-    text: 'text-[#ff9e00]',
-    toolbarBg: 'bg-[#240030]',
-    toolbarBorder: 'border-[#ff0090]',
-    panelBg: 'bg-[#240030]/90',
-    panelBorder: 'border-[#ff0090]',
-    button: 'text-[#ff0090] hover:text-[#00f3ff] hover:bg-[#ff0090]/20',
-    activeButton: 'bg-[#ff0090]/30 text-[#ff9e00] shadow-[0_0_15px_#ff0090]',
-    sceneBg: '#1a0024',
-    gridColor: '#ff0090',
-    gridCellColor: '#570a57'
+    gridColor: '#a855f7',
+    gridCellColor: '#3b82f6'
   },
   nord: {
     bg: 'bg-[#2e3440]',
     text: 'text-[#eceff4]',
-    toolbarBg: 'bg-[#3b4252]',
-    toolbarBorder: 'border-[#88c0d0]',
-    panelBg: 'bg-[#3b4252]/95',
-    panelBorder: 'border-[#81a1c1]',
-    button: 'text-[#d8dee9] hover:text-[#88c0d0] hover:bg-[#4c566a]',
-    activeButton: 'bg-[#88c0d0]/20 text-[#88c0d0] border border-[#88c0d0]',
+    toolbarBg: 'bg-[#3b4252]/80 backdrop-blur-md border border-[#4c566a]',
+    toolbarBorder: 'border-[#4c566a]',
+    panelBg: 'bg-[#3b4252]/90 backdrop-blur-xl border border-[#4c566a] shadow-xl',
+    panelBorder: 'border-[#4c566a]',
+    button: 'text-[#d8dee9] hover:text-[#88c0d0] hover:bg-[#434c5e] transition-colors duration-200',
+    activeButton: 'bg-[#88c0d0] text-[#2e3440] font-semibold shadow-md shadow-[#88c0d0]/20',
     sceneBg: '#2e3440',
     gridColor: '#4c566a',
     gridCellColor: '#434c5e'
@@ -106,12 +80,12 @@ const themeStyles: Record<ThemeMode, ThemeStyle> = {
   dracula: {
     bg: 'bg-[#282a36]',
     text: 'text-[#f8f8f2]',
-    toolbarBg: 'bg-[#44475a]',
-    toolbarBorder: 'border-[#bd93f9]',
-    panelBg: 'bg-[#44475a]/95',
-    panelBorder: 'border-[#ff79c6]',
-    button: 'text-[#bd93f9] hover:text-[#ff79c6] hover:bg-[#6272a4]',
-    activeButton: 'bg-[#bd93f9]/20 text-[#50fa7b] border border-[#bd93f9]',
+    toolbarBg: 'bg-[#44475a]/80 backdrop-blur-md border border-[#6272a4]',
+    toolbarBorder: 'border-[#6272a4]',
+    panelBg: 'bg-[#44475a]/90 backdrop-blur-xl border border-[#bd93f9]/30 shadow-xl',
+    panelBorder: 'border-[#bd93f9]/30',
+    button: 'text-[#bd93f9] hover:text-[#ff79c6] hover:bg-[#6272a4]/50 transition-all duration-200',
+    activeButton: 'bg-[#ff79c6] text-[#282a36] font-bold shadow-lg shadow-[#ff79c6]/30',
     sceneBg: '#282a36',
     gridColor: '#6272a4',
     gridCellColor: '#44475a'
@@ -120,10 +94,8 @@ const themeStyles: Record<ThemeMode, ThemeStyle> = {
 
 export const themeOptions: ThemeOption[] = [
   { id: 'dark', name: '深色', icon: Moon, color: '#111827' },
-  { id: 'light', name: '亮色', icon: Sun, color: '#f0f0f0' },
+  { id: 'light', name: '亮色', icon: Sun, color: '#d0d0d0' },
   { id: 'cyberpunk', name: 'Cyberpunk', icon: Zap, color: '#050510' },
-  { id: 'matrix', name: 'Matrix', icon: Terminal, color: '#000000' },
-  { id: 'synthwave', name: 'Synthwave', icon: Sunset, color: '#2b003b' },
   { id: 'nord', name: 'Nord', icon: Snowflake, color: '#2e3440' },
   { id: 'dracula', name: 'Dracula', icon: Ghost, color: '#282a36' },
 ];
@@ -131,7 +103,7 @@ export const themeOptions: ThemeOption[] = [
 /**
  * 主題管理 Hook
  * 
- * 提供應用程式主題切換功能，支援多種預設主題（深色、亮色、Cyberpunk、Matrix 等）。
+ * 提供應用程式主題切換功能，支援多種預設主題（深色、亮色、Cyberpunk、Nord、Dracula）。
  * 此 Hook 管理當前主題狀態，並提供對應的樣式類別和選項。
  * 
  * @param initialTheme - 初始主題模式，預設為 'dark'
