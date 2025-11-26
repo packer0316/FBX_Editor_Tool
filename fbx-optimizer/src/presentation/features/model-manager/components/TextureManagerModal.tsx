@@ -85,15 +85,43 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
       loader.load(
         url,
         (newTexture) => {
-          // 複製原貼圖的設置
-          newTexture.wrapS = textureInfo.texture.wrapS;
-          newTexture.wrapT = textureInfo.texture.wrapT;
-          newTexture.repeat.copy(textureInfo.texture.repeat);
-          newTexture.offset.copy(textureInfo.texture.offset);
-          newTexture.rotation = textureInfo.texture.rotation;
-          newTexture.flipY = textureInfo.texture.flipY;
-          newTexture.encoding = textureInfo.texture.encoding;
+          // 完整複製原貼圖的所有關鍵屬性
+          const oldTexture = textureInfo.texture;
+          
+          // 基本屬性
           newTexture.name = file.name;
+          newTexture.wrapS = oldTexture.wrapS;
+          newTexture.wrapT = oldTexture.wrapT;
+          newTexture.repeat.copy(oldTexture.repeat);
+          newTexture.offset.copy(oldTexture.offset);
+          newTexture.rotation = oldTexture.rotation;
+          newTexture.center.copy(oldTexture.center);
+          
+          // 翻轉設置
+          newTexture.flipY = oldTexture.flipY;
+          
+          // 顏色空間和編碼（關鍵！）
+          // Three.js r152+ 使用 colorSpace，舊版使用 encoding
+          if ('colorSpace' in oldTexture) {
+            (newTexture as any).colorSpace = (oldTexture as any).colorSpace;
+          } else if ('encoding' in oldTexture) {
+            (newTexture as any).encoding = (oldTexture as any).encoding;
+          }
+          
+          // 過濾設置
+          newTexture.minFilter = oldTexture.minFilter;
+          newTexture.magFilter = oldTexture.magFilter;
+          newTexture.anisotropy = oldTexture.anisotropy;
+          
+          // Alpha 和混合設置
+          newTexture.premultiplyAlpha = oldTexture.premultiplyAlpha;
+          newTexture.format = oldTexture.format;
+          newTexture.type = oldTexture.type;
+          
+          // 生成 mipmap
+          newTexture.generateMipmaps = oldTexture.generateMipmaps;
+          
+          // 標記需要更新
           newTexture.needsUpdate = true;
 
           // 更新模型中的貼圖
