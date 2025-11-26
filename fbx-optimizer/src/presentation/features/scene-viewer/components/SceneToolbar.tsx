@@ -96,7 +96,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     };
 
     return (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-10">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-[350]">
             <div className={`glass rounded-full px-2 py-1.5 flex items-center gap-1 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}>
                 <button
                     onClick={onResetCamera}

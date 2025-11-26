@@ -1214,6 +1214,18 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         const isRecordingRef = useRef<boolean>(false);
         const captureStreamRef = useRef<MediaStream | null>(null);
 
+        useEffect(() => {
+            if (!glRef.current) {
+                return;
+            }
+            if (backgroundColor === 'transparent') {
+                glRef.current.setClearAlpha(0);
+            } else {
+                glRef.current.setClearAlpha(1);
+                glRef.current.setClearColor(new THREE.Color(backgroundColor), 1);
+            }
+        }, [backgroundColor]);
+
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
             pause: () => modelRef.current?.pause(),
@@ -1405,15 +1417,22 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         near: cameraSettings?.near || 0.1,
                         far: cameraSettings?.far || 1000
                     }}
-                    gl={{ 
+                    gl={{
                         preserveDrawingBuffer: true,
-                        antialias: true 
+                        antialias: true,
+                        alpha: true
                     }}
                     onCreated={({ gl }) => {
                         // 統一輸出色彩空間為 sRGB
                         gl.outputColorSpace = THREE.SRGBColorSpace;
                         // 設定 ACES Filmic Tone Mapping
                         gl.toneMapping = THREE.ACESFilmicToneMapping;
+                        if (backgroundColor === 'transparent') {
+                            gl.setClearAlpha(0);
+                        } else {
+                            gl.setClearAlpha(1);
+                            gl.setClearColor(new THREE.Color(backgroundColor), 1);
+                        }
                         if (toneMappingExposure !== undefined) {
                             gl.toneMappingExposure = toneMappingExposure;
                         }

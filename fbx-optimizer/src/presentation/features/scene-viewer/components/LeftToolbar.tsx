@@ -156,7 +156,7 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     return (
         <div
             ref={toolbarRef}
-            className={`absolute left-4 w-14 ${currentTheme.toolbarBg} ${currentTheme.toolbarBorder} rounded-2xl flex flex-col items-center py-4 space-y-4 z-20 shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/10 transition-colors duration-300`}
+            className={`absolute left-4 w-14 ${currentTheme.toolbarBg} ${currentTheme.toolbarBorder} rounded-2xl flex flex-col items-center py-4 space-y-4 z-[400] shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/10 transition-colors duration-300`}
             style={{
                 top: `${positionY}%`,
                 transform: 'translateY(-50%)'

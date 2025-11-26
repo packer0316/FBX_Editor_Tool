@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
+import html2canvas from 'html2canvas';
 import { type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
 import SceneViewer, { type SceneViewerRef } from './presentation/features/scene-viewer/components/SceneViewer';
 import SceneToolbar, { type AspectRatio } from './presentation/features/scene-viewer/components/SceneToolbar';
@@ -15,6 +16,8 @@ import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
 import LeftToolbar from './presentation/features/scene-viewer/components/LeftToolbar';
+import type { Layer } from './domain/value-objects/Layer';
+import type { Element2D } from './domain/value-objects/Element2D';
 
 // Use Cases
 import { LoadModelUseCase } from './application/use-cases/LoadModelUseCase';
@@ -22,6 +25,16 @@ import { CreateClipUseCase } from './application/use-cases/CreateClipUseCase';
 import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
 import { EffectSyncUseCase } from './application/use-cases/EffectSyncUseCase';
+import { InitializeLayerStackUseCase } from './application/use-cases/InitializeLayerStackUseCase';
+import { CreateLayerUseCase } from './application/use-cases/CreateLayerUseCase';
+import { UpdateLayerUseCase } from './application/use-cases/UpdateLayerUseCase';
+import { DeleteLayerUseCase } from './application/use-cases/DeleteLayerUseCase';
+import { ReorderLayersUseCase } from './application/use-cases/ReorderLayersUseCase';
+import { UpdateLayerPriorityUseCase } from './application/use-cases/UpdateLayerPriorityUseCase';
+import { AddElement2DUseCase } from './application/use-cases/AddElement2DUseCase';
+import { UpdateElement2DUseCase } from './application/use-cases/UpdateElement2DUseCase';
+import { RemoveElement2DUseCase } from './application/use-cases/RemoveElement2DUseCase';
+import { ReorderElement2DUseCase } from './application/use-cases/ReorderElement2DUseCase';
 
 // Hooks
 import { useTheme } from './presentation/hooks/useTheme';
@@ -32,10 +45,18 @@ import { useBoneExtraction } from './presentation/hooks/useBoneExtraction';
 import { useModelsManager } from './presentation/hooks/useModelsManager';
 
 // Utils
+import { sortLayersByPriority } from './utils/layer/layerUtils';
+
+// Layer Composer
+import { LayerManagerPanel } from './presentation/features/layer-composer/components/LayerManagerPanel';
+import { PreviewModeToggle } from './presentation/features/layer-composer/components/PreviewModeToggle';
+import { Layer2DRenderer } from './presentation/features/layer-composer/components/Layer2DRenderer';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
 export type { AudioTrack } from './domain/value-objects/AudioTrack';
+
+const BASE_LAYER_ID = 'layer_3d_base';
 
 function App() {
   // 多模型管理
@@ -78,7 +99,7 @@ function App() {
   );
 
   // 右側面板分頁
-  const [activeTab, setActiveTab] = useState<'optimization' | 'shader' | 'audio' | 'effect'>('optimization');
+  const [activeTab, setActiveTab] = useState<'layer' | 'optimization' | 'shader' | 'audio' | 'effect'>('layer');
   const [audioTracks, setAudioTracks] = useState<AudioTrack[]>([]);
   const [effects, setEffects] = useState<EffectItem[]>([]);
 
@@ -127,11 +148,20 @@ function App() {
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
 
+  // Layer Composer state
+  const [layers, setLayers] = useState<Layer[]>(() => InitializeLayerStackUseCase.execute());
+  const [activeLayerId, setActiveLayerId] = useState<string>(BASE_LAYER_ID);
+  const [activeElementId, setActiveElementId] = useState<string | null>(null);
+  const [is2DFrontEnabled, setIs2DFrontEnabled] = useState(true);
+  const [is2DBackEnabled, setIs2DBackEnabled] = useState(true);
+  const [is3DEnabled, setIs3DEnabled] = useState(true);
+
   // Aspect Ratio state
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('free');
   const [customWidth, setCustomWidth] = useState(1920);
   const [customHeight, setCustomHeight] = useState(1080);
   const aspectRatioContainerRef = useRef<HTMLDivElement>(null);
+  const previewContainerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   // Tone Mapping & Exposure Settings
@@ -232,6 +262,20 @@ function App() {
       setIsCameraBound(false);
     }
   }, [model]);
+
+  useEffect(() => {
+    const nextName = activeModel?.name ? `${activeModel.name} | 3D Scene` : '3D Scene';
+    setLayers(prev => {
+      const layer = prev.find(item => item.id === BASE_LAYER_ID);
+      if (!layer || layer.name === nextName) {
+        return prev;
+      }
+      return UpdateLayerUseCase.execute(prev, {
+        layerId: BASE_LAYER_ID,
+        updates: { name: nextName }
+      });
+    });
+  }, [activeModel?.name]);
 
   // Click outside to close popovers
   useClickOutside(
@@ -610,6 +654,187 @@ function App() {
     });
   };
 
+  const visibleFrontLayers = useMemo(
+    () => sortLayersByPriority(layers.filter(layer => layer.type === '2d' && layer.priority > 0 && layer.visible)),
+    [layers]
+  );
+
+  const visibleBackLayers = useMemo(
+    () => sortLayersByPriority(layers.filter(layer => layer.type === '2d' && layer.priority < 0 && layer.visible)),
+    [layers]
+  );
+
+  const hasBackContent = useMemo(
+    () => visibleBackLayers.some(layer => layer.children.some(element => element.visible)),
+    [visibleBackLayers]
+  );
+
+  const viewerBackgroundColor = is2DBackEnabled && hasBackContent ? 'transparent' : currentTheme.sceneBg;
+  const isPointerEditing = activeTab === 'layer';
+
+  // 切換分頁時，如果離開 layer 分頁，取消選定的 2D 元素
+  const handleTabChange = useCallback((tab: typeof activeTab) => {
+    setActiveTab(tab);
+    if (tab !== 'layer') {
+      setActiveElementId(null);
+    }
+  }, []);
+
+  const handleSelectLayer = useCallback((layerId: string) => {
+    setActiveLayerId(layerId);
+    setActiveElementId(null);
+  }, []);
+
+  const handleCreateLayer = useCallback((direction: 'front' | 'back') => {
+    let createdLayerId: string | null = null;
+    setLayers(prev => {
+      const next = CreateLayerUseCase.execute(prev, { type: '2d', direction });
+      const newLayer = next.find(layer => !prev.some(item => item.id === layer.id));
+      if (newLayer) {
+        createdLayerId = newLayer.id;
+      }
+      return next;
+    });
+    if (createdLayerId) {
+      setActiveLayerId(createdLayerId);
+      setActiveElementId(null);
+    }
+  }, []);
+
+  const handleDeleteLayer = useCallback((layerId: string) => {
+    if (layerId === BASE_LAYER_ID) return;
+    setLayers(prev => {
+      const next = DeleteLayerUseCase.execute(prev, layerId);
+      if (activeLayerId === layerId) {
+        setActiveLayerId(BASE_LAYER_ID);
+        setActiveElementId(null);
+      }
+      return next;
+    });
+  }, [activeLayerId]);
+
+  const toggleLayerProperty = useCallback((layerId: string, key: keyof Layer) => {
+    setLayers(prev => {
+      const target = prev.find(layer => layer.id === layerId);
+      if (!target) return prev;
+
+      const updates: Partial<Layer> = {};
+      if (key === 'visible') {
+        updates.visible = !target.visible;
+      } else if (key === 'locked') {
+        updates.locked = !target.locked;
+      } else if (key === 'expanded') {
+        updates.expanded = !target.expanded;
+      }
+
+      return UpdateLayerUseCase.execute(prev, { layerId, updates });
+    });
+  }, []);
+
+  const handleRenameLayer = useCallback((layerId: string, name: string) => {
+    setLayers(prev => UpdateLayerUseCase.execute(prev, { layerId, updates: { name } }));
+  }, []);
+
+  const handleToggleLayerVisibility = useCallback((layerId: string) => {
+    toggleLayerProperty(layerId, 'visible');
+  }, [toggleLayerProperty]);
+
+  const handleToggleLayerLock = useCallback((layerId: string) => {
+    toggleLayerProperty(layerId, 'locked');
+  }, [toggleLayerProperty]);
+
+  const handleToggleLayerExpand = useCallback((layerId: string) => {
+    toggleLayerProperty(layerId, 'expanded');
+  }, [toggleLayerProperty]);
+
+  const handleUpdateLayerPriority = useCallback((layerId: string, priority: number) => {
+    setLayers(prev => UpdateLayerPriorityUseCase.execute(prev, { layerId, priority }));
+  }, []);
+
+  const handleUpdateLayerOpacity = useCallback((layerId: string, opacity: number) => {
+    setLayers(prev => UpdateLayerUseCase.execute(prev, { layerId, updates: { opacity } }));
+  }, []);
+
+  const handleReorderLayer = useCallback((direction: 'front' | 'back', fromIndex: number, toIndex: number) => {
+    setLayers(prev => ReorderLayersUseCase.execute(prev, { direction, fromIndex, toIndex }));
+  }, []);
+
+  const handleAddTextElement = useCallback((layerId: string) => {
+    let newElementId: string | null = null;
+    setLayers(prev => {
+      const target = prev.find(layer => layer.id === layerId && layer.type === '2d');
+      if (!target) return prev;
+      const next = AddElement2DUseCase.execute(prev, { layerId, mode: { kind: 'text' } });
+      const layerAfter = next.find(layer => layer.id === layerId);
+      const latestElement = layerAfter?.children[layerAfter.children.length - 1];
+      if (latestElement) {
+        newElementId = latestElement.id;
+      }
+      return next;
+    });
+    if (newElementId) {
+      setActiveLayerId(layerId);
+      setActiveElementId(newElementId);
+    }
+  }, []);
+
+  const handleAddImageElement = useCallback((layerId: string, dataUrl: string) => {
+    let newElementId: string | null = null;
+    setLayers(prev => {
+      const target = prev.find(layer => layer.id === layerId && layer.type === '2d');
+      if (!target) return prev;
+      const next = AddElement2DUseCase.execute(prev, { layerId, mode: { kind: 'image', dataUrl } });
+      const layerAfter = next.find(layer => layer.id === layerId);
+      const latestElement = layerAfter?.children[layerAfter.children.length - 1];
+      if (latestElement) {
+        newElementId = latestElement.id;
+      }
+      return next;
+    });
+    if (newElementId) {
+      setActiveLayerId(layerId);
+      setActiveElementId(newElementId);
+    }
+  }, []);
+
+  const handleSelectElement = useCallback((layerId: string, elementId: string) => {
+    setActiveLayerId(layerId);
+    // 空字串表示取消選取
+    setActiveElementId(elementId || null);
+  }, []);
+
+  const handleReorderElement = useCallback((layerId: string, fromIndex: number, toIndex: number) => {
+    setLayers(prev => ReorderElement2DUseCase.execute(prev, { layerId, fromIndex, toIndex }));
+  }, []);
+
+  /** 透過 layerId 和 elementId 更新元素（供 LayerManagerPanel 內嵌編輯使用） */
+  const handleUpdateElementById = useCallback((layerId: string, elementId: string, updates: Partial<Element2D>) => {
+    setLayers(prev => {
+      const layer = prev.find(l => l.id === layerId);
+      const element = layer?.children.find(e => e.id === elementId);
+      if (!layer || !element || element.locked) return prev;
+      return UpdateElement2DUseCase.execute(prev, { layerId, elementId, updates });
+    });
+  }, []);
+
+  /** 透過 layerId 和 elementId 移除元素（供 LayerManagerPanel 內嵌編輯使用） */
+  const handleRemoveElementById = useCallback((layerId: string, elementId: string) => {
+    setLayers(prev => {
+      const layer = prev.find(l => l.id === layerId);
+      const element = layer?.children.find(e => e.id === elementId);
+      if (!layer || !element || element.locked) return prev;
+      return RemoveElement2DUseCase.execute(prev, { layerId, elementId });
+    });
+    // 如果移除的是當前選中的元素，清除選擇
+    if (activeElementId === elementId) {
+      setActiveElementId(null);
+    }
+  }, [activeElementId]);
+
+  const handleToggle2DFront = useCallback(() => setIs2DFrontEnabled(prev => !prev), []);
+  const handleToggle2DBack = useCallback(() => setIs2DBackEnabled(prev => !prev), []);
+  const handleToggle3D = useCallback(() => setIs3DEnabled(prev => !prev), []);
+
   // File Drop
   const { isFileDragging, handleDragOver, handleDragLeave, handleDrop } = useFileDrop(handleFileUpload);
 
@@ -693,12 +918,65 @@ function App() {
                   console.error('resetCamera function not found on ref');
                 }
               }}
-              onTakeScreenshot={() => {
-                console.log('Screenshot button clicked', sceneViewerRef.current);
-                if (sceneViewerRef.current && typeof sceneViewerRef.current.takeScreenshot === 'function') {
-                  sceneViewerRef.current.takeScreenshot();
-                } else {
-                  console.error('takeScreenshot function not found on ref');
+              onTakeScreenshot={async () => {
+                console.log('Screenshot button clicked');
+                if (!previewContainerRef.current) {
+                  console.error('Preview container not available');
+                  alert('預覽容器未就緒，請稍後再試');
+                  return;
+                }
+                
+                try {
+                  // 使用 html2canvas 截取整個預覽區（包含 3D canvas 和 2D 圖層）
+                  const canvas = await html2canvas(previewContainerRef.current, {
+                    useCORS: true,
+                    allowTaint: true,
+                    backgroundColor: null,
+                    scale: 2, // 2x 解析度提升品質
+                    logging: false,
+                    // 確保 WebGL canvas 被正確捕獲，並隱藏編輯輔助 UI
+                    onclone: (_clonedDoc, element) => {
+                      // 找到原始的 WebGL canvas 並複製其內容
+                      const originalCanvas = previewContainerRef.current?.querySelector('canvas');
+                      const clonedCanvas = element.querySelector('canvas');
+                      if (originalCanvas && clonedCanvas) {
+                        const ctx = clonedCanvas.getContext('2d');
+                        if (ctx) {
+                          clonedCanvas.width = originalCanvas.width;
+                          clonedCanvas.height = originalCanvas.height;
+                          ctx.drawImage(originalCanvas, 0, 0);
+                        }
+                      }
+                      
+                      // 隱藏編輯輔助 UI（選取框、XY 軸指示器）
+                      // 移除虛線選取框
+                      element.querySelectorAll('[style*="outline"]').forEach((el) => {
+                        (el as HTMLElement).style.outline = 'none';
+                      });
+                      // 隱藏 XY 軸指示器（SVG）
+                      element.querySelectorAll('svg').forEach((svg) => {
+                        // 檢查是否是 XY 軸指示器（包含特定的圓點和軸線）
+                        if (svg.querySelector('circle') && svg.querySelector('line')) {
+                          (svg as SVGElement).style.display = 'none';
+                        }
+                      });
+                    }
+                  });
+                  
+                  // 創建下載連結
+                  const dataURL = canvas.toDataURL('image/png', 1.0);
+                  const link = document.createElement('a');
+                  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                  link.download = `screenshot_${timestamp}.png`;
+                  link.href = dataURL;
+                  document.body.appendChild(link);
+                  link.click();
+                  document.body.removeChild(link);
+                  
+                  console.log('Screenshot saved successfully:', link.download);
+                } catch (error) {
+                  console.error('Failed to take screenshot:', error);
+                  alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
                 }
               }}
               onStartRecording={() => {
@@ -732,60 +1010,117 @@ function App() {
             />
             <div
               ref={aspectRatioContainerRef}
-              className="absolute inset-0 bg-black flex items-center justify-center p-0"
+              className="absolute inset-0 bg-black flex items-center justify-center p-0 z-0"
             >
               <div
                 style={getAspectRatioStyle()}
-                className="relative"
+                className="relative z-[10]"
               >
-                <SceneViewer
-                  ref={sceneViewerRef}
-                  // 多模型模式
-                  models={models.length > 0 ? models.map(m => ({
-                    id: m.id, // 添加 ID 用於識別活動模型
-                    model: m.model,
-                    clip: m.optimizedClip || m.masterClip || m.originalClip,
-                    shaderGroups: m.shaderGroups,
-                    isShaderEnabled: m.isShaderEnabled,
-                    position: m.position,
-                    rotation: m.rotation,
-                    scale: m.scale,
-                    visible: m.visible,
-                    isPlaying: m.isPlaying, // 傳遞播放狀態
-                    currentTime: m.currentTime, // 傳遞當前時間
-                    isLoopEnabled: m.isLoopEnabled, // 傳遞循環設置
-                    isCameraOrbiting: m.isCameraOrbiting, // 傳遞相機公轉狀態
-                    cameraOrbitSpeed: m.cameraOrbitSpeed, // 傳遞相機公轉速度
-                    isModelRotating: m.isModelRotating, // 傳遞模型自轉狀態
-                    modelRotationSpeed: m.modelRotationSpeed // 傳遞模型自轉速度
-                  })) : undefined}
-                  activeModelId={models.length > 0 ? activeModelId : undefined}
-                  // 單模型模式（向後兼容）
-                  model={models.length === 0 ? model : undefined}
-                  playingClip={models.length === 0 ? optimizedClip : undefined}
-                  onTimeUpdate={handleTimeUpdate}
-                  shaderGroups={models.length === 0 ? shaderGroups : undefined}
-                  isShaderEnabled={models.length === 0 ? isShaderEnabled : undefined}
-                  loop={isPlaylistPlaying ? false : isLoopEnabled}
-                  onFinish={handleClipFinish}
-                  backgroundColor={currentTheme.sceneBg}
-                  cameraSettings={cameraSettings}
-                  boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
-                  isCameraBound={isCameraBound}
-                  keyboardControlsEnabled={keyboardControlsEnabled}
-                  cameraMoveSpeed={cameraMoveSpeed}
-                  showGroundPlane={showGroundPlane}
-                  groundPlaneColor={groundPlaneColor}
-                  groundPlaneOpacity={groundPlaneOpacity}
-                  enableShadows={enableShadows}
-                  showGrid={showGrid}
-                  gridColor={currentTheme.gridColor}
-                  gridCellColor={currentTheme.gridCellColor}
-                  toneMappingExposure={toneMappingExposure}
-                  whitePoint={whitePoint}
-                  hdriUrl={hdriUrl || undefined}
-                  environmentIntensity={environmentIntensity}
+                <PreviewModeToggle
+                  show2DFront={is2DFrontEnabled}
+                  show2DBack={is2DBackEnabled}
+                  show3D={is3DEnabled}
+                  onToggle2DFront={handleToggle2DFront}
+                  onToggle2DBack={handleToggle2DBack}
+                  onToggle3D={handleToggle3D}
                 />
+                <div
+                  ref={previewContainerRef}
+                  className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/80"
+                  onDragOver={(e) => e.stopPropagation()}
+                  onDragLeave={(e) => e.stopPropagation()}
+                  onDrop={(e) => e.stopPropagation()}
+                  onClick={() => {
+                    // 點擊預覽區空白處時，取消選定的 2D 元素
+                    if (isPointerEditing && activeElementId) {
+                      setActiveElementId(null);
+                    }
+                  }}
+                >
+                  {is2DBackEnabled && visibleBackLayers.map((layer, index) => (
+                    <Layer2DRenderer
+                      key={layer.id}
+                      layer={layer}
+                      zIndex={20 + index}
+                      isActiveLayer={layer.id === activeLayerId}
+                      activeElementId={activeElementId}
+                      onSelectElement={isPointerEditing ? handleSelectElement : undefined}
+                      onUpdateElement={isPointerEditing ? handleUpdateElementById : undefined}
+                      pointerEnabled={isPointerEditing}
+                    />
+                  ))}
+                  {is3DEnabled ? (
+                    <div className="absolute inset-0 z-[100]">
+                      <SceneViewer
+                        ref={sceneViewerRef}
+                        models={models.length > 0 ? models.map(m => ({
+                          id: m.id,
+                          model: m.model,
+                          clip: m.optimizedClip || m.masterClip || m.originalClip,
+                          shaderGroups: m.shaderGroups,
+                          isShaderEnabled: m.isShaderEnabled,
+                          position: m.position,
+                          rotation: m.rotation,
+                          scale: m.scale,
+                          visible: m.visible,
+                          isPlaying: m.isPlaying,
+                          currentTime: m.currentTime,
+                          isLoopEnabled: m.isLoopEnabled,
+                          isCameraOrbiting: m.isCameraOrbiting,
+                          cameraOrbitSpeed: m.cameraOrbitSpeed,
+                          isModelRotating: m.isModelRotating,
+                          modelRotationSpeed: m.modelRotationSpeed
+                        })) : undefined}
+                        activeModelId={models.length > 0 ? activeModelId : undefined}
+                        model={models.length === 0 ? model : undefined}
+                        playingClip={models.length === 0 ? optimizedClip : undefined}
+                        onTimeUpdate={handleTimeUpdate}
+                        shaderGroups={models.length === 0 ? shaderGroups : undefined}
+                        isShaderEnabled={models.length === 0 ? isShaderEnabled : undefined}
+                        loop={isPlaylistPlaying ? false : isLoopEnabled}
+                        onFinish={handleClipFinish}
+                        backgroundColor={viewerBackgroundColor}
+                        cameraSettings={cameraSettings}
+                        boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
+                        isCameraBound={isCameraBound}
+                        keyboardControlsEnabled={keyboardControlsEnabled}
+                        cameraMoveSpeed={cameraMoveSpeed}
+                        showGroundPlane={showGroundPlane}
+                        groundPlaneColor={groundPlaneColor}
+                        groundPlaneOpacity={groundPlaneOpacity}
+                        enableShadows={enableShadows}
+                        showGrid={showGrid}
+                        gridColor={currentTheme.gridColor}
+                        gridCellColor={currentTheme.gridCellColor}
+                        toneMappingExposure={toneMappingExposure}
+                        whitePoint={whitePoint}
+                        hdriUrl={hdriUrl || undefined}
+                        environmentIntensity={environmentIntensity}
+                      />
+                    </div>
+                  ) : (
+                    <div className="absolute inset-0 z-[90] flex items-center justify-center text-sm text-gray-400 bg-black/70">
+                      3D 預覽已關閉
+                    </div>
+                  )}
+                  {is2DFrontEnabled && visibleFrontLayers.map((layer, index) => (
+                    <Layer2DRenderer
+                      key={layer.id}
+                      layer={layer}
+                      zIndex={200 + index}
+                      isActiveLayer={layer.id === activeLayerId}
+                      activeElementId={activeElementId}
+                      onSelectElement={isPointerEditing ? handleSelectElement : undefined}
+                      onUpdateElement={isPointerEditing ? handleUpdateElementById : undefined}
+                      pointerEnabled={isPointerEditing}
+                    />
+                  ))}
+                  {!is2DFrontEnabled && !is2DBackEnabled && !is3DEnabled && (
+                    <div className="absolute inset-0 z-[150] flex items-center justify-center text-sm text-gray-300 bg-black/70">
+                      請開啟 2D 或 3D 預覽
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -849,7 +1184,13 @@ function App() {
         </div>
 
         {/* 右側：控制面板 */}
-        <div className={`relative ${currentTheme.panelBg} border-l ${currentTheme.panelBorder} flex flex-col`} style={{ width: `${rightPanelWidth}px`, minWidth: '280px', maxWidth: 'calc(100vw - 4rem)' }}>
+        <div
+          className={`relative ${currentTheme.panelBg} border-l ${currentTheme.panelBorder} flex flex-col`}
+          style={{ width: `${rightPanelWidth}px`, minWidth: '280px', maxWidth: 'calc(100vw - 4rem)' }}
+          onDragOver={(e) => e.stopPropagation()}
+          onDragLeave={(e) => e.stopPropagation()}
+          onDrop={(e) => e.stopPropagation()}
+        >
           {/* 左側調整寬度的把手 */}
           <div
             className="absolute top-0 left-0 bottom-0 w-1 bg-gray-700 hover:bg-blue-500 cursor-ew-resize transition-colors z-10"
@@ -861,11 +1202,20 @@ function App() {
           {/* 分頁切換 */}
           <div className={`flex border-b ${currentTheme.panelBorder} ${currentTheme.toolbarBg}/30`}>
             <button
+              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'layer'
+                ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-cyan-400`
+                : `${currentTheme.button}`
+                }`}
+              onClick={() => handleTabChange('layer')}
+            >
+              2D Layers
+            </button>
+            <button
               className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'optimization'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-blue-500`
                 : `${currentTheme.button}`
                 }`}
-              onClick={() => setActiveTab('optimization')}
+              onClick={() => handleTabChange('optimization')}
             >
               模型管理
             </button>
@@ -874,7 +1224,7 @@ function App() {
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-purple-500`
                 : `${currentTheme.button}`
                 }`}
-              onClick={() => setActiveTab('shader')}
+              onClick={() => handleTabChange('shader')}
             >
               Shader
             </button>
@@ -883,7 +1233,7 @@ function App() {
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-green-500`
                 : `${currentTheme.button}`
                 }`}
-              onClick={() => setActiveTab('audio')}
+              onClick={() => handleTabChange('audio')}
             >
               Audio
             </button>
@@ -892,7 +1242,7 @@ function App() {
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-orange-500`
                 : `${currentTheme.button}`
                 }`}
-              onClick={() => setActiveTab('effect')}
+              onClick={() => handleTabChange('effect')}
             >
               Efk
             </button>
@@ -900,6 +1250,32 @@ function App() {
 
           {/* 分頁內容 */}
           <div className="flex-1 overflow-y-auto p-4">
+            {activeTab === 'layer' && (
+              <div className="space-y-8">
+                <LayerManagerPanel
+                  layers={layers}
+                  activeLayerId={activeLayerId}
+                  activeElementId={activeElementId}
+                  onSelectLayer={handleSelectLayer}
+                  onSelectElement={handleSelectElement}
+                  onCreateLayer={handleCreateLayer}
+                  onDeleteLayer={handleDeleteLayer}
+                  onToggleLayerVisibility={handleToggleLayerVisibility}
+                  onToggleLayerLock={handleToggleLayerLock}
+                  onRenameLayer={handleRenameLayer}
+                  onToggleExpand={handleToggleLayerExpand}
+                  onUpdateLayerPriority={handleUpdateLayerPriority}
+                  onUpdateLayerOpacity={handleUpdateLayerOpacity}
+                  onReorderLayer={handleReorderLayer}
+                  onAddTextElement={handleAddTextElement}
+                  onAddImageElement={handleAddImageElement}
+                  onReorderElement={handleReorderElement}
+                  onUpdateElement={handleUpdateElementById}
+                  onRemoveElement={handleRemoveElementById}
+                />
+              </div>
+            )}
+
             {activeTab === 'optimization' && (
               <ModelManagerPanel
                 models={models}

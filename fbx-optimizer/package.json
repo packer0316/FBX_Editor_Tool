@@ -15,6 +15,7 @@
     "@types/three": "^0.181.0",
     "autoprefixer": "^10.4.22",
     "clsx": "^2.1.1",
+    "html2canvas": "^1.4.1",
     "lamejs": "^1.2.1",
     "lucide-react": "^0.554.0",
     "postcss": "^8.5.6",
