@@ -11,7 +11,7 @@ import EffectTestPanel, { type EffectItem } from './presentation/features/effect
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
 import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
@@ -864,46 +864,46 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar (Floating Glass) */}
-                <LeftToolbar
-                  currentTheme={currentTheme}
-                  showGrid={showGrid}
-                  setShowGrid={setShowGrid}
-                  themeMode={themeMode}
-                  setThemeMode={setThemeMode}
-                  activeSidebarPanel={activeSidebarPanel}
-                  toggleSidebarPanel={toggleSidebarPanel}
-                  cameraSettings={cameraSettings}
-                  setCameraSettings={setCameraSettings}
-                  applyPreset={applyPreset}
-                  selectedPreset={selectedPreset}
-                  toneMappingExposure={toneMappingExposure}
-                  setToneMappingExposure={setToneMappingExposure}
-                  whitePoint={whitePoint}
-                  setWhitePoint={setWhitePoint}
-                  hdriUrl={hdriUrl}
-                  setHdriUrl={setHdriUrl}
-                  environmentIntensity={environmentIntensity}
-                  setEnvironmentIntensity={setEnvironmentIntensity}
-                  bones={bones}
-                  boneSearchQuery={boneSearchQuery}
-                  setBoneSearchQuery={setBoneSearchQuery}
-                  selectedBoneUuid={selectedBoneUuid}
-                  setSelectedBoneUuid={setSelectedBoneUuid}
-                  isCameraBound={isCameraBound}
-                  setIsCameraBound={setIsCameraBound}
-                  showGroundPlane={showGroundPlane}
-                  setShowGroundPlane={setShowGroundPlane}
-                  groundPlaneColor={groundPlaneColor}
-                  setGroundPlaneColor={setGroundPlaneColor}
-                  groundPlaneOpacity={groundPlaneOpacity}
-                  setGroundPlaneOpacity={setGroundPlaneOpacity}
-                  enableShadows={enableShadows}
-                  setEnableShadows={setEnableShadows}
-                  keyboardControlsEnabled={keyboardControlsEnabled}
-                  setKeyboardControlsEnabled={setKeyboardControlsEnabled}
-                  cameraMoveSpeed={cameraMoveSpeed}
-                  setCameraMoveSpeed={setCameraMoveSpeed}
-                />
+        <LeftToolbar
+          currentTheme={currentTheme}
+          showGrid={showGrid}
+          setShowGrid={setShowGrid}
+          themeMode={themeMode}
+          setThemeMode={setThemeMode}
+          activeSidebarPanel={activeSidebarPanel}
+          toggleSidebarPanel={toggleSidebarPanel}
+          cameraSettings={cameraSettings}
+          setCameraSettings={setCameraSettings}
+          applyPreset={applyPreset}
+          selectedPreset={selectedPreset}
+          toneMappingExposure={toneMappingExposure}
+          setToneMappingExposure={setToneMappingExposure}
+          whitePoint={whitePoint}
+          setWhitePoint={setWhitePoint}
+          hdriUrl={hdriUrl}
+          setHdriUrl={setHdriUrl}
+          environmentIntensity={environmentIntensity}
+          setEnvironmentIntensity={setEnvironmentIntensity}
+          bones={bones}
+          boneSearchQuery={boneSearchQuery}
+          setBoneSearchQuery={setBoneSearchQuery}
+          selectedBoneUuid={selectedBoneUuid}
+          setSelectedBoneUuid={setSelectedBoneUuid}
+          isCameraBound={isCameraBound}
+          setIsCameraBound={setIsCameraBound}
+          showGroundPlane={showGroundPlane}
+          setShowGroundPlane={setShowGroundPlane}
+          groundPlaneColor={groundPlaneColor}
+          setGroundPlaneColor={setGroundPlaneColor}
+          groundPlaneOpacity={groundPlaneOpacity}
+          setGroundPlaneOpacity={setGroundPlaneOpacity}
+          enableShadows={enableShadows}
+          setEnableShadows={setEnableShadows}
+          keyboardControlsEnabled={keyboardControlsEnabled}
+          setKeyboardControlsEnabled={setKeyboardControlsEnabled}
+          cameraMoveSpeed={cameraMoveSpeed}
+          setCameraMoveSpeed={setCameraMoveSpeed}
+        />
 
         {/* 左側：3D 預覽區 */}
         <div className="flex-1 relative flex flex-col">
@@ -925,7 +925,7 @@ function App() {
                   alert('預覽容器未就緒，請稍後再試');
                   return;
                 }
-                
+
                 try {
                   // 使用 html2canvas 截取整個預覽區（包含 3D canvas 和 2D 圖層）
                   const canvas = await html2canvas(previewContainerRef.current, {
@@ -947,7 +947,7 @@ function App() {
                           ctx.drawImage(originalCanvas, 0, 0);
                         }
                       }
-                      
+
                       // 隱藏編輯輔助 UI（選取框、XY 軸指示器）
                       // 移除虛線選取框
                       element.querySelectorAll('[style*="outline"]').forEach((el) => {
@@ -962,7 +962,7 @@ function App() {
                       });
                     }
                   });
-                  
+
                   // 創建下載連結
                   const dataURL = canvas.toDataURL('image/png', 1.0);
                   const link = document.createElement('a');
@@ -972,7 +972,7 @@ function App() {
                   document.body.appendChild(link);
                   link.click();
                   document.body.removeChild(link);
-                  
+
                   console.log('Screenshot saved successfully:', link.download);
                 } catch (error) {
                   console.error('Failed to take screenshot:', error);
@@ -1202,49 +1202,59 @@ function App() {
           {/* 分頁切換 */}
           <div className={`flex border-b ${currentTheme.panelBorder} ${currentTheme.toolbarBg}/30`}>
             <button
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'layer'
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'layer'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-cyan-400`
-                : `${currentTheme.button}`
+                : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('layer')}
+              title="2D Layers"
             >
-              2D Layers
+              <Layers size={18} />
+              <span>2D</span>
             </button>
             <button
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'optimization'
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'optimization'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-blue-500`
-                : `${currentTheme.button}`
+                : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('optimization')}
+              title="Model Manager"
             >
-              模型管理
+              <Box size={18} />
+              <span>Model</span>
             </button>
             <button
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'shader'
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'shader'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-purple-500`
-                : `${currentTheme.button}`
+                : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('shader')}
+              title="Shader Tools"
             >
-              Shader
+              <Wand2 size={18} />
+              <span>Shader</span>
             </button>
             <button
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'audio'
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'audio'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-green-500`
-                : `${currentTheme.button}`
+                : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('audio')}
+              title="Audio Settings"
             >
-              Audio
+              <Music size={18} />
+              <span>Audio</span>
             </button>
             <button
-              className={`flex-1 px-4 py-3 text-sm font-medium transition-colors ${activeTab === 'effect'
+              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'effect'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-orange-500`
-                : `${currentTheme.button}`
+                : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('effect')}
+              title="Visual Effects"
             >
-              Efk
+              <Sparkles size={18} />
+              <span>Efk</span>
             </button>
           </div>
 
