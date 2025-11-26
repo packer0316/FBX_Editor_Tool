@@ -81,6 +81,16 @@ export interface ModelInstance {
   /** 是否可見 */
   visible: boolean;
   
+  // 自動旋轉設定
+  /** 相機是否繞模型公轉 */
+  isCameraOrbiting: boolean;
+  /** 相機公轉速度（度/秒） */
+  cameraOrbitSpeed: number;
+  /** 模型是否自轉 */
+  isModelRotating: boolean;
+  /** 模型自轉速度（度/秒） */
+  modelRotationSpeed: number;
+  
   // 元資料
   /** 建立時間戳 */
   createdAt: number;

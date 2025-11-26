@@ -45,6 +45,12 @@ interface LeftToolbarProps {
     setGroundPlaneOpacity: (opacity: number) => void;
     enableShadows: boolean;
     setEnableShadows: (enable: boolean) => void;
+
+    // Keyboard Camera Controls
+    keyboardControlsEnabled: boolean;
+    setKeyboardControlsEnabled: (enabled: boolean) => void;
+    cameraMoveSpeed: number;
+    setCameraMoveSpeed: (speed: number) => void;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -81,7 +87,11 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     groundPlaneOpacity,
     setGroundPlaneOpacity,
     enableShadows,
-    setEnableShadows
+    setEnableShadows,
+    keyboardControlsEnabled,
+    setKeyboardControlsEnabled,
+    cameraMoveSpeed,
+    setCameraMoveSpeed
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -434,6 +444,64 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                                             onChange={(e) => setEnvironmentIntensity(parseFloat(e.target.value))}
                                             className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
                                         />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Keyboard Controls Section */}
+                            <div className="pt-4 border-t border-white/10">
+                                <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">鍵盤控制</h4>
+                                
+                                {/* Enable Keyboard Controls */}
+                                <div className="mb-3">
+                                    <label className="flex items-center justify-between cursor-pointer group">
+                                        <span className="text-xs text-gray-300 group-hover:text-white transition-colors">啟用 WASD 移動</span>
+                                        <div className="relative">
+                                            <input
+                                                type="checkbox"
+                                                checked={keyboardControlsEnabled}
+                                                onChange={(e) => setKeyboardControlsEnabled(e.target.checked)}
+                                                className="sr-only"
+                                            />
+                                            <div className={`w-10 h-5 rounded-full transition-all ${keyboardControlsEnabled ? 'bg-neon-blue' : 'bg-gray-700'}`}>
+                                                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${keyboardControlsEnabled ? 'translate-x-5' : ''}`}></div>
+                                            </div>
+                                        </div>
+                                    </label>
+                                </div>
+
+                                {/* Camera Move Speed */}
+                                {keyboardControlsEnabled && (
+                                    <div className="mb-4">
+                                        <div className="flex justify-between items-center mb-2">
+                                            <label className="text-xs text-gray-400 font-medium">移動速度</label>
+                                            <span className="text-xs text-neon-blue font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">{cameraMoveSpeed.toFixed(1)}</span>
+                                        </div>
+                                        <input
+                                            type="range"
+                                            min="1"
+                                            max="20"
+                                            step="0.5"
+                                            value={cameraMoveSpeed}
+                                            onChange={(e) => setCameraMoveSpeed(parseFloat(e.target.value))}
+                                            className="w-full h-1.5 slider-blue-track appearance-none cursor-pointer rounded-full"
+                                        />
+                                        <div className="mt-2 px-2 py-1.5 bg-blue-500/5 border border-blue-500/20 rounded text-xs text-gray-400">
+                                            <div className="space-y-0.5">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-semibold text-neon-blue">W/A/S/D</span>
+                                                    <span>- 前後左右</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-semibold text-neon-blue">Q/E</span>
+                                                    <span>- 上下移動</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-mono font-semibold text-neon-blue">Shift</span>
+                                                    <span>- 加速移動</span>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import ModelPreview from './ModelPreview';
+import TextureManagerModal from './TextureManagerModal';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
 interface ModelCardProps {
@@ -16,6 +17,10 @@ interface ModelCardProps {
     rotation?: [number, number, number];
     scale?: [number, number, number];
     visible?: boolean;
+    isCameraOrbiting?: boolean;
+    cameraOrbitSpeed?: number;
+    isModelRotating?: boolean;
+    modelRotationSpeed?: number;
   }) => void;
   // 場景設置參數
   toneMappingExposure?: number;
@@ -39,6 +44,24 @@ export default function ModelCard({
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(modelInstance.name);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showTextureManager, setShowTextureManager] = useState(false);
+  
+  // 滑動條顯示狀態：position-x, position-y, position-z, rotation-x, rotation-y, rotation-z
+  const [showSlider, setShowSlider] = useState<{
+    positionX: boolean;
+    positionY: boolean;
+    positionZ: boolean;
+    rotationX: boolean;
+    rotationY: boolean;
+    rotationZ: boolean;
+  }>({
+    positionX: false,
+    positionY: false,
+    positionZ: false,
+    rotationX: false,
+    rotationY: false,
+    rotationZ: false,
+  });
 
   const handleRename = () => {
     if (editName.trim() && editName !== modelInstance.name) {
@@ -161,7 +184,20 @@ export default function ModelCard({
         <div className="px-3 pb-3 pt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
           {/* 3D 預覽 */}
           <div className="space-y-1">
-            <label className="text-xs text-gray-400">模型預覽</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-400">模型預覽</label>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowTextureManager(true);
+                }}
+                className="p-1.5 rounded transition-all bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white flex items-center gap-1"
+                title="管理貼圖"
+              >
+                <Image className="w-3 h-3" />
+                <span className="text-[10px]">貼圖</span>
+              </button>
+            </div>
             <ModelPreview
               model={modelInstance.model}
               position={modelInstance.position}
@@ -182,46 +218,144 @@ export default function ModelCard({
           <div className="space-y-1">
             <label className="text-xs text-gray-400">位置 (Position)</label>
             <div className="grid grid-cols-3 gap-2">
-              {(['x', 'y', 'z'] as const).map((axis, idx) => (
-                <div key={axis} className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
-                  <NumberInput
-                    value={modelInstance.position[idx].toFixed(2)}
-                    onChange={(val) => {
-                      const value = parseFloat(val) || 0;
-                      const newPosition: [number, number, number] = [...modelInstance.position];
-                      newPosition[idx] = value;
-                      onUpdateTransform({ position: newPosition });
-                    }}
-                    className="w-full bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
-                    step={0.1}
-                  />
-                </div>
-              ))}
+              {(['x', 'y', 'z'] as const).map((axis, idx) => {
+                const sliderKey = `position${axis.toUpperCase()}` as keyof typeof showSlider;
+                const isSliderVisible = showSlider[sliderKey];
+                
+                return (
+                  <div key={axis} className="flex flex-col">
+                    <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
+                    <div className="flex items-center gap-1">
+                      <NumberInput
+                        value={modelInstance.position[idx].toFixed(2)}
+                        onChange={(val) => {
+                          const value = parseFloat(val) || 0;
+                          const newPosition: [number, number, number] = [...modelInstance.position];
+                          newPosition[idx] = value;
+                          onUpdateTransform({ position: newPosition });
+                        }}
+                        className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
+                        step={0.1}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSlider(prev => ({ ...prev, [sliderKey]: !prev[sliderKey] }));
+                        }}
+                        className={`p-1.5 rounded transition-all ${
+                          isSliderVisible 
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                        title="使用滑動條調整"
+                      >
+                        <Sliders className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {/* Position Sliders - 跨越整行 */}
+            {(['x', 'y', 'z'] as const).map((axis, idx) => {
+              const sliderKey = `position${axis.toUpperCase()}` as keyof typeof showSlider;
+              const isSliderVisible = showSlider[sliderKey];
+              
+              return isSliderVisible && (
+                <div key={`slider-${axis}`} className="pt-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="text-[10px] text-gray-400 font-mono w-3">{axis.toUpperCase()}</span>
+                    <input
+                      type="range"
+                      min="-50"
+                      max="50"
+                      step="0.05"
+                      value={modelInstance.position[idx]}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        const newPosition: [number, number, number] = [...modelInstance.position];
+                        newPosition[idx] = value;
+                        onUpdateTransform({ position: newPosition });
+                      }}
+                      className="flex-1 h-1 slider-blue-track appearance-none cursor-pointer rounded-full"
+                    />
+                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{modelInstance.position[idx].toFixed(2)}</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Rotation */}
           <div className="space-y-1">
             <label className="text-xs text-gray-400">旋轉 (Rotation) - 度數</label>
             <div className="grid grid-cols-3 gap-2">
-              {(['x', 'y', 'z'] as const).map((axis, idx) => (
-                <div key={axis} className="flex flex-col">
-                  <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
-                  <NumberInput
-                    value={modelInstance.rotation[idx].toFixed(1)}
-                    onChange={(val) => {
-                      const value = parseFloat(val) || 0;
-                      const newRotation: [number, number, number] = [...modelInstance.rotation];
-                      newRotation[idx] = value;
-                      onUpdateTransform({ rotation: newRotation });
-                    }}
-                    className="w-full bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
-                    step={1}
-                  />
-                </div>
-              ))}
+              {(['x', 'y', 'z'] as const).map((axis, idx) => {
+                const sliderKey = `rotation${axis.toUpperCase()}` as keyof typeof showSlider;
+                const isSliderVisible = showSlider[sliderKey];
+                
+                return (
+                  <div key={axis} className="flex flex-col">
+                    <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
+                    <div className="flex items-center gap-1">
+                      <NumberInput
+                        value={modelInstance.rotation[idx].toFixed(1)}
+                        onChange={(val) => {
+                          const value = parseFloat(val) || 0;
+                          const newRotation: [number, number, number] = [...modelInstance.rotation];
+                          newRotation[idx] = value;
+                          onUpdateTransform({ rotation: newRotation });
+                        }}
+                        className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
+                        step={1}
+                      />
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowSlider(prev => ({ ...prev, [sliderKey]: !prev[sliderKey] }));
+                        }}
+                        className={`p-1.5 rounded transition-all ${
+                          isSliderVisible 
+                            ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30' 
+                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                        title="使用滑動條調整"
+                      >
+                        <Sliders className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+            {/* Rotation Sliders - 跨越整行 */}
+            {(['x', 'y', 'z'] as const).map((axis, idx) => {
+              const sliderKey = `rotation${axis.toUpperCase()}` as keyof typeof showSlider;
+              const isSliderVisible = showSlider[sliderKey];
+              
+              return isSliderVisible && (
+                <div key={`slider-${axis}`} className="pt-1" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-2 px-1">
+                    <span className="text-[10px] text-gray-400 font-mono w-3">{axis.toUpperCase()}</span>
+                    <input
+                      type="range"
+                      min="-180"
+                      max="180"
+                      step="0.5"
+                      value={modelInstance.rotation[idx]}
+                      onChange={(e) => {
+                        const value = parseFloat(e.target.value);
+                        const newRotation: [number, number, number] = [...modelInstance.rotation];
+                        newRotation[idx] = value;
+                        onUpdateTransform({ rotation: newRotation });
+                      }}
+                      className="flex-1 h-1 slider-blue-track appearance-none cursor-pointer rounded-full"
+                    />
+                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{modelInstance.rotation[idx].toFixed(1)}°</span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* Scale */}
@@ -240,7 +374,86 @@ export default function ModelCard({
               min={0.01}
             />
           </div>
+
+          {/* 相機公轉 */}
+          <div className="space-y-1 pt-2 border-t border-white/5">
+            <label className="text-xs text-gray-400">相機公轉 (Camera Orbit)</label>
+            <div className="flex items-center gap-2">
+              <NumberInput
+                value={modelInstance.cameraOrbitSpeed.toFixed(0)}
+                onChange={(val) => {
+                  const value = parseFloat(val);
+                  if (!isNaN(value)) {
+                    onUpdateTransform({ cameraOrbitSpeed: value });
+                  }
+                }}
+                className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
+                step={5}
+                min={0}
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateTransform({ isCameraOrbiting: !modelInstance.isCameraOrbiting });
+                }}
+                className={`px-3 py-2 rounded transition-all flex items-center gap-1 text-xs font-medium ${
+                  modelInstance.isCameraOrbiting
+                    ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 animate-pulse'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                }`}
+                title={modelInstance.isCameraOrbiting ? '停止公轉' : '開始公轉'}
+              >
+                <Orbit className={`w-3.5 h-3.5 ${modelInstance.isCameraOrbiting ? 'animate-spin' : ''}`} />
+                {modelInstance.isCameraOrbiting ? '運行中' : '公轉'}
+              </button>
+            </div>
+            <div className="text-[10px] text-gray-500">速度：{modelInstance.cameraOrbitSpeed}°/秒</div>
+          </div>
+
+          {/* 模型自轉 */}
+          <div className="space-y-1 pt-2 border-t border-white/5">
+            <label className="text-xs text-gray-400">模型自轉 (Model Rotation)</label>
+            <div className="flex items-center gap-2">
+              <NumberInput
+                value={modelInstance.modelRotationSpeed.toFixed(0)}
+                onChange={(val) => {
+                  const value = parseFloat(val);
+                  if (!isNaN(value)) {
+                    onUpdateTransform({ modelRotationSpeed: value });
+                  }
+                }}
+                className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
+                step={5}
+                min={0}
+              />
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateTransform({ isModelRotating: !modelInstance.isModelRotating });
+                }}
+                className={`px-3 py-2 rounded transition-all flex items-center gap-1 text-xs font-medium ${
+                  modelInstance.isModelRotating
+                    ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 animate-pulse'
+                    : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                }`}
+                title={modelInstance.isModelRotating ? '停止自轉' : '開始自轉'}
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${modelInstance.isModelRotating ? 'animate-spin' : ''}`} />
+                {modelInstance.isModelRotating ? '運行中' : '自轉'}
+              </button>
+            </div>
+            <div className="text-[10px] text-gray-500">速度：{modelInstance.modelRotationSpeed}°/秒</div>
+          </div>
         </div>
+      )}
+
+      {/* 貼圖管理彈出視窗 */}
+      {showTextureManager && (
+        <TextureManagerModal
+          model={modelInstance.model}
+          onClose={() => setShowTextureManager(false)}
+          theme={theme}
+        />
       )}
     </div>
   );

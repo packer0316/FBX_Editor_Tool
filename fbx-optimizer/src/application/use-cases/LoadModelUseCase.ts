@@ -155,6 +155,10 @@ export class LoadModelUseCase {
       scale: [1, 1, 1],
       renderPriority: 0,
       visible: true,
+      isCameraOrbiting: false,
+      cameraOrbitSpeed: 30,
+      isModelRotating: false,
+      modelRotationSpeed: 30,
       createdAt: Date.now(),
       updatedAt: Date.now()
     };

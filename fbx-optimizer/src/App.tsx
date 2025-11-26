@@ -65,6 +65,10 @@ function App() {
   const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
+  // 鍵盤相機控制狀態
+  const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
+  const [cameraMoveSpeed, setCameraMoveSpeed] = useState(5.0);
+
   // Panel Resize
   const { panelHeight, handleMouseDown } = usePanelResize(384);
   const { rightPanelWidth, handleRightPanelMouseDown } = useRightPanelResize(
@@ -635,42 +639,46 @@ function App() {
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar (Floating Glass) */}
-        <LeftToolbar
-          currentTheme={currentTheme}
-          showGrid={showGrid}
-          setShowGrid={setShowGrid}
-          themeMode={themeMode}
-          setThemeMode={setThemeMode}
-          activeSidebarPanel={activeSidebarPanel}
-          toggleSidebarPanel={toggleSidebarPanel}
-          cameraSettings={cameraSettings}
-          setCameraSettings={setCameraSettings}
-          applyPreset={applyPreset}
-          selectedPreset={selectedPreset}
-          toneMappingExposure={toneMappingExposure}
-          setToneMappingExposure={setToneMappingExposure}
-          whitePoint={whitePoint}
-          setWhitePoint={setWhitePoint}
-          hdriUrl={hdriUrl}
-          setHdriUrl={setHdriUrl}
-          environmentIntensity={environmentIntensity}
-          setEnvironmentIntensity={setEnvironmentIntensity}
-          bones={bones}
-          boneSearchQuery={boneSearchQuery}
-          setBoneSearchQuery={setBoneSearchQuery}
-          selectedBoneUuid={selectedBoneUuid}
-          setSelectedBoneUuid={setSelectedBoneUuid}
-          isCameraBound={isCameraBound}
-          setIsCameraBound={setIsCameraBound}
-          showGroundPlane={showGroundPlane}
-          setShowGroundPlane={setShowGroundPlane}
-          groundPlaneColor={groundPlaneColor}
-          setGroundPlaneColor={setGroundPlaneColor}
-          groundPlaneOpacity={groundPlaneOpacity}
-          setGroundPlaneOpacity={setGroundPlaneOpacity}
-          enableShadows={enableShadows}
-          setEnableShadows={setEnableShadows}
-        />
+                <LeftToolbar
+                  currentTheme={currentTheme}
+                  showGrid={showGrid}
+                  setShowGrid={setShowGrid}
+                  themeMode={themeMode}
+                  setThemeMode={setThemeMode}
+                  activeSidebarPanel={activeSidebarPanel}
+                  toggleSidebarPanel={toggleSidebarPanel}
+                  cameraSettings={cameraSettings}
+                  setCameraSettings={setCameraSettings}
+                  applyPreset={applyPreset}
+                  selectedPreset={selectedPreset}
+                  toneMappingExposure={toneMappingExposure}
+                  setToneMappingExposure={setToneMappingExposure}
+                  whitePoint={whitePoint}
+                  setWhitePoint={setWhitePoint}
+                  hdriUrl={hdriUrl}
+                  setHdriUrl={setHdriUrl}
+                  environmentIntensity={environmentIntensity}
+                  setEnvironmentIntensity={setEnvironmentIntensity}
+                  bones={bones}
+                  boneSearchQuery={boneSearchQuery}
+                  setBoneSearchQuery={setBoneSearchQuery}
+                  selectedBoneUuid={selectedBoneUuid}
+                  setSelectedBoneUuid={setSelectedBoneUuid}
+                  isCameraBound={isCameraBound}
+                  setIsCameraBound={setIsCameraBound}
+                  showGroundPlane={showGroundPlane}
+                  setShowGroundPlane={setShowGroundPlane}
+                  groundPlaneColor={groundPlaneColor}
+                  setGroundPlaneColor={setGroundPlaneColor}
+                  groundPlaneOpacity={groundPlaneOpacity}
+                  setGroundPlaneOpacity={setGroundPlaneOpacity}
+                  enableShadows={enableShadows}
+                  setEnableShadows={setEnableShadows}
+                  keyboardControlsEnabled={keyboardControlsEnabled}
+                  setKeyboardControlsEnabled={setKeyboardControlsEnabled}
+                  cameraMoveSpeed={cameraMoveSpeed}
+                  setCameraMoveSpeed={setCameraMoveSpeed}
+                />
 
         {/* 左側：3D 預覽區 */}
         <div className="flex-1 relative flex flex-col">
@@ -745,7 +753,11 @@ function App() {
                     visible: m.visible,
                     isPlaying: m.isPlaying, // 傳遞播放狀態
                     currentTime: m.currentTime, // 傳遞當前時間
-                    isLoopEnabled: m.isLoopEnabled // 傳遞循環設置
+                    isLoopEnabled: m.isLoopEnabled, // 傳遞循環設置
+                    isCameraOrbiting: m.isCameraOrbiting, // 傳遞相機公轉狀態
+                    cameraOrbitSpeed: m.cameraOrbitSpeed, // 傳遞相機公轉速度
+                    isModelRotating: m.isModelRotating, // 傳遞模型自轉狀態
+                    modelRotationSpeed: m.modelRotationSpeed // 傳遞模型自轉速度
                   })) : undefined}
                   activeModelId={models.length > 0 ? activeModelId : undefined}
                   // 單模型模式（向後兼容）
@@ -760,6 +772,8 @@ function App() {
                   cameraSettings={cameraSettings}
                   boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
                   isCameraBound={isCameraBound}
+                  keyboardControlsEnabled={keyboardControlsEnabled}
+                  cameraMoveSpeed={cameraMoveSpeed}
                   showGroundPlane={showGroundPlane}
                   groundPlaneColor={groundPlaneColor}
                   groundPlaneOpacity={groundPlaneOpacity}

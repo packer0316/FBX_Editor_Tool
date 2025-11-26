@@ -6,6 +6,7 @@ import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-object
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/InitEffekseerRuntimeUseCase';
 import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
+import { KeyboardCameraControls } from './KeyboardCameraControls';
 
 export interface ModelRef {
     play: () => void;
@@ -66,6 +67,10 @@ interface SceneViewerProps {
     whitePoint?: number;
     hdriUrl?: string;
     environmentIntensity?: number;
+    // 鍵盤相機控制
+    keyboardControlsEnabled?: boolean;
+    cameraMoveSpeed?: number;
+    cameraSprintMultiplier?: number;
 }
 
 // Scene Settings Controller
@@ -1023,21 +1028,41 @@ type MultiModelProps = {
         isPlaying?: boolean; // 播放狀態
         currentTime?: number; // 當前時間
         isLoopEnabled?: boolean; // 循環設置
+        isCameraOrbiting?: boolean; // 相機是否公轉
+        cameraOrbitSpeed?: number; // 相機公轉速度
+        isModelRotating?: boolean; // 模型是否自轉
+        modelRotationSpeed?: number; // 模型自轉速度
     };
     onTimeUpdate?: (time: number) => void;
     loop?: boolean;
     onFinish?: () => void;
     enableShadows?: boolean;
+    isActiveModel?: boolean; // 是否為活動模型（只有活動模型才執行相機公轉）
 };
 
 const MultiModel = forwardRef<ModelRef, MultiModelProps>(
-    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows }, ref) => {
-        const { model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, isPlaying = false, currentTime, isLoopEnabled } = modelInstance;
+    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false }, ref) => {
+        const { 
+            model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+            isPlaying = false, currentTime, isLoopEnabled,
+            isCameraOrbiting = false, cameraOrbitSpeed = 30,
+            isModelRotating = false, modelRotationSpeed = 30
+        } = modelInstance;
+        
         // 使用模型自己的 loop 設置，如果有的話
         const modelLoop = isLoopEnabled !== undefined ? isLoopEnabled : loop;
         
         // 使用現有的 Model 組件處理動畫和 shader
         const modelRef = useRef<ModelRef>(null);
+        const groupRef = useRef<THREE.Group>(null);
+        
+        // 相機公轉累積角度
+        const cameraOrbitAngleRef = useRef(0);
+        
+        // 模型自轉累積角度
+        const modelRotationAngleRef = useRef(rotation[1]); // 儲存 Y 軸初始角度
+        
+        const { camera } = useThree();
         
         // 每個模型都應該更新時間，即使不是活動模型
         // 但只有活動模型的時間更新會觸發 onTimeUpdate 回調（用於 UI 同步）
@@ -1048,6 +1073,58 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
             // 所有模型都會繼續播放和更新，但只有活動模型會同步到 UI
         };
+        
+        // 相機公轉邏輯（只在活動模型上執行）
+        useFrame((state, delta) => {
+            if (isCameraOrbiting && isActiveModel && model) {
+                const controls = state.controls as any;
+                const modelPosition = new THREE.Vector3(...position);
+                
+                // 確保 OrbitControls 目標點設置為模型位置
+                if (controls && controls.target) {
+                    controls.target.copy(modelPosition);
+                }
+                
+                // 計算當前相機到模型的實時距離（允許用戶用滾輪調整）
+                const currentDistance = camera.position.distanceTo(modelPosition);
+                
+                // 獲取相機的高度（Y 軸位置相對於模型）
+                const heightOffset = camera.position.y - modelPosition.y;
+                
+                // 計算水平距離（用於圓周運動）
+                const horizontalDistance = Math.sqrt(currentDistance * currentDistance - heightOffset * heightOffset);
+                
+                // 更新累積角度
+                cameraOrbitAngleRef.current += (cameraOrbitSpeed * delta * Math.PI) / 180;
+                
+                // 計算新的相機位置（水平圓周運動，保持高度）
+                const newX = modelPosition.x + horizontalDistance * Math.sin(cameraOrbitAngleRef.current);
+                const newZ = modelPosition.z + horizontalDistance * Math.cos(cameraOrbitAngleRef.current);
+                const newY = modelPosition.y + heightOffset;
+                
+                camera.position.set(newX, newY, newZ);
+                
+                // 讓相機始終朝向模型中心
+                camera.lookAt(modelPosition);
+            }
+        });
+        
+        // 模型自轉邏輯
+        useFrame((_state, delta) => {
+            if (isModelRotating && groupRef.current) {
+                // 更新累積角度（度數）
+                modelRotationAngleRef.current += modelRotationSpeed * delta;
+                
+                // 將度數轉換為弧度並應用到 Y 軸旋轉
+                const rotationRad = [
+                    (rotation[0] * Math.PI) / 180,
+                    (modelRotationAngleRef.current * Math.PI) / 180,
+                    (rotation[2] * Math.PI) / 180
+                ] as [number, number, number];
+                
+                groupRef.current.rotation.set(...rotationRad);
+            }
+        });
         
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
@@ -1064,6 +1141,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
 
         return (
             <group
+                ref={groupRef}
                 position={position}
                 rotation={rotationRad}
                 scale={scale}
@@ -1111,7 +1189,10 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         toneMappingExposure, 
         whitePoint: _whitePoint, 
         hdriUrl, 
-        environmentIntensity 
+        environmentIntensity,
+        keyboardControlsEnabled = true,
+        cameraMoveSpeed = 5.0,
+        cameraSprintMultiplier = 2.0
     }, ref) => {
         // 決定使用單模型還是多模型模式
         const isMultiModelMode = models && models.length > 0;
@@ -1394,6 +1475,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 loop={loop}
                                 onFinish={isActive ? onFinish : undefined}
                                 enableShadows={enableShadows}
+                                isActiveModel={isActive}
                             />
                         );
                     })}
@@ -1421,6 +1503,11 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         rotateSpeed={1.0}
                         zoomSpeed={1.0}
                         panSpeed={0.8}
+                    />
+                    <KeyboardCameraControls
+                        enabled={keyboardControlsEnabled}
+                        moveSpeed={cameraMoveSpeed}
+                        sprintMultiplier={cameraSprintMultiplier}
                     />
                 </Canvas>
             </div>
