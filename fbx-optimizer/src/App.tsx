@@ -1345,6 +1345,8 @@ function App() {
                 setEffects={setEffects}
                 createdClips={createdClips}
                 theme={currentTheme}
+                duration={duration}
+                fps={30}
               />
             )}
 

@@ -2,11 +2,198 @@ import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
+
+// 特效播放控制組件
+const EffectPlaybackControls = ({
+    effectHandle,
+    onPlay,
+    onStop,
+    onStepFrame,
+    onPlayOneFrame,
+    hasActiveEffect,
+    effectColor
+}: {
+    effectHandle: effekseer.EffekseerHandle | null;
+    onPlay: () => void;
+    onStop: () => void;
+    onStepFrame: (frames: number) => void;
+    onPlayOneFrame: () => void;
+    hasActiveEffect: boolean;
+    effectColor: string;
+}) => {
+    const [isPaused, setIsPaused] = useState(false);
+
+    // 暫停/繼續特效
+    const togglePause = () => {
+        if (hasActiveEffect && effectHandle) {
+            const newPaused = !isPaused;
+            effectHandle.setPaused(newPaused);
+            setIsPaused(newPaused);
+        }
+    };
+
+    // 當特效結束時重置暫停狀態
+    useEffect(() => {
+        if (!hasActiveEffect) {
+            setIsPaused(false);
+        }
+    }, [hasActiveEffect]);
+
+    return (
+        <div className="space-y-2 p-3 bg-gray-950/30 rounded border border-gray-800">
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+                <Film className="w-3.5 h-3.5" />
+                <span>特效播放控制</span>
+                {hasActiveEffect && (
+                    <span className="ml-auto text-[10px] font-medium" style={{ color: effectColor }}>
+                        {isPaused ? '已暫停' : '播放中'}
+                    </span>
+                )}
+            </div>
+
+            {/* 控制按鈕 */}
+            <div className="flex items-center gap-2">
+                {/* 播放新特效 */}
+                <button
+                    onClick={() => {
+                        setIsPaused(false);
+                        onPlay();
+                    }}
+                    className="flex-1 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-95"
+                    title="播放特效"
+                >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    播放
+                </button>
+
+                {/* 暫停/繼續 */}
+                <button
+                    onClick={togglePause}
+                    disabled={!hasActiveEffect}
+                    className={`flex-1 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-all border hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
+                        isPaused
+                            ? 'bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border-blue-600/50'
+                            : 'bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border-orange-600/50'
+                    }`}
+                    title={isPaused ? '繼續播放' : '暫停'}
+                >
+                    {isPaused ? (
+                        <>
+                            <Play className="w-3.5 h-3.5 fill-current" />
+                            繼續
+                        </>
+                    ) : (
+                        <>
+                            <Pause className="w-3.5 h-3.5" />
+                            暫停
+                        </>
+                    )}
+                </button>
+
+                {/* 停止 */}
+                <button
+                    onClick={() => {
+                        setIsPaused(false);
+                        onStop();
+                    }}
+                    disabled={!hasActiveEffect}
+                    className="flex-1 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="停止特效"
+                >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    停止
+                </button>
+            </div>
+
+            {/* 逐幀控制 (1/60秒 = 1幀) */}
+            <div className="flex items-center gap-2 pt-2 border-t border-gray-800">
+                <span className="text-[10px] text-gray-500">逐幀:</span>
+                
+                {/* 播放1幀就暫停 */}
+                <button
+                    onClick={() => {
+                        onPlayOneFrame();
+                        setIsPaused(true);
+                    }}
+                    className="p-1.5 bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-400 border border-cyan-600/50 rounded transition-colors"
+                    title="播放 1 幀後暫停 (1/60秒)"
+                >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                </button>
+
+                {/* +0.5F */}
+                <button
+                    onClick={() => {
+                        if (hasActiveEffect) {
+                            onStepFrame(0.5);
+                            setIsPaused(true);
+                        }
+                    }}
+                    disabled={!hasActiveEffect}
+                    className="px-1.5 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="前進 0.5 幀 (≈8ms)"
+                >
+                    +.5
+                </button>
+
+                {/* +1F */}
+                <button
+                    onClick={() => {
+                        if (hasActiveEffect) {
+                            onStepFrame(1);
+                            setIsPaused(true);
+                        }
+                    }}
+                    disabled={!hasActiveEffect}
+                    className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="前進 1 幀 (≈17ms)"
+                >
+                    +1F
+                </button>
+
+                {/* +3F */}
+                <button
+                    onClick={() => {
+                        if (hasActiveEffect) {
+                            onStepFrame(3);
+                            setIsPaused(true);
+                        }
+                    }}
+                    disabled={!hasActiveEffect}
+                    className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="前進 3 幀 (≈50ms)"
+                >
+                    +3F
+                </button>
+
+                {/* +10F */}
+                <button
+                    onClick={() => {
+                        if (hasActiveEffect) {
+                            onStepFrame(10);
+                            setIsPaused(true);
+                        }
+                    }}
+                    disabled={!hasActiveEffect}
+                    className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white rounded text-[10px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="前進 10 幀 (≈167ms)"
+                >
+                    +10F
+                </button>
+            </div>
+
+            {/* 提示 */}
+            <div className="text-[10px] text-gray-600 mt-1">
+                💡 繼續播放 N/60 秒後自動暫停
+            </div>
+        </div>
+    );
+};
 
 // 定義單個特效卡片的狀態介面
 export interface EffectItem {
@@ -97,7 +284,9 @@ const EffectCard = ({
     model,
     bones,
     createdClips,
-    theme
+    theme,
+    duration,
+    fps = 30
 }: {
     item: EffectItem,
     isRuntimeReady: boolean,
@@ -106,17 +295,35 @@ const EffectCard = ({
     model: THREE.Group | null,
     bones: THREE.Object3D[],
     createdClips: IdentifiableClip[],
-    theme: ThemeStyle
+    theme: ThemeStyle,
+    duration: number,
+    fps?: number
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
     const [newTriggerState, setNewTriggerState] = useState<{ clipId: string, frame: string }>({ clipId: '', frame: '' });
     const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
     const [editingFrame, setEditingFrame] = useState<string>('');
+    const [hasActiveEffect, setHasActiveEffect] = useState(false); // 追蹤特效是否存在
 
     // 追蹤當前播放的 Handle，以便即時更新參數
     const currentHandleRef = useRef<effekseer.EffekseerHandle | null>(null);
     const animationFrameRef = useRef<number | null>(null);
+
+    // 監測特效是否已結束
+    useEffect(() => {
+        if (!hasActiveEffect) return;
+
+        const checkEffectExists = () => {
+            if (currentHandleRef.current && !currentHandleRef.current.exists) {
+                setHasActiveEffect(false);
+                onUpdate(item.id, { isPlaying: false });
+            }
+        };
+
+        const interval = setInterval(checkEffectExists, 100);
+        return () => clearInterval(interval);
+    }, [hasActiveEffect, item.id, onUpdate]);
 
     // 找到綁定的 bone
     const boundBone = item.boundBoneUuid
@@ -264,6 +471,11 @@ const EffectCard = ({
     const handlePlay = () => {
         if (!item.isLoaded) return;
 
+        // 播放新特效前，先停止舊的特效（避免 handle 丟失無法操控）
+        if (currentHandleRef.current && currentHandleRef.current.exists) {
+            currentHandleRef.current.stop();
+        }
+
         // 計算位置
         let x = item.position[0];
         let y = item.position[1];
@@ -308,10 +520,70 @@ const EffectCard = ({
 
         if (handle) {
             currentHandleRef.current = handle;
+            setHasActiveEffect(true);
         }
 
         onUpdate(item.id, { isPlaying: true });
-        setTimeout(() => onUpdate(item.id, { isPlaying: false }), 500);
+    };
+
+    // 播放 1 幀後立即暫停（用於逐幀觀看）
+    const handlePlayOneFrame = () => {
+        if (!item.isLoaded) return;
+
+        // 先停止舊的特效
+        if (currentHandleRef.current && currentHandleRef.current.exists) {
+            currentHandleRef.current.stop();
+        }
+
+        // 計算位置
+        let x = item.position[0];
+        let y = item.position[1];
+        let z = item.position[2];
+
+        if (boundBone && model) {
+            const boneWorldPos = new THREE.Vector3();
+            boundBone.getWorldPosition(boneWorldPos);
+            x = boneWorldPos.x + item.position[0];
+            y = boneWorldPos.y + item.position[1];
+            z = boneWorldPos.z + item.position[2];
+        }
+
+        // 計算旋轉
+        let rx = item.rotation[0];
+        let ry = item.rotation[1];
+        let rz = item.rotation[2];
+
+        if (boundBone && model) {
+            const boneWorldQuat = new THREE.Quaternion();
+            boundBone.getWorldQuaternion(boneWorldQuat);
+            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
+            rx = (boneEuler.x * 180 / Math.PI) + item.rotation[0];
+            ry = (boneEuler.y * 180 / Math.PI) + item.rotation[1];
+            rz = (boneEuler.z * 180 / Math.PI) + item.rotation[2];
+        }
+
+        const handle = PlayEffectUseCase.execute({
+            id: item.id,
+            x, y, z,
+            rx: rx * Math.PI / 180,
+            ry: ry * Math.PI / 180,
+            rz: rz * Math.PI / 180,
+            sx: item.scale[0], sy: item.scale[1], sz: item.scale[2],
+            speed: item.speed
+        });
+
+        if (handle) {
+            currentHandleRef.current = handle;
+            setHasActiveEffect(true);
+            // 前進 1 幀然後立即暫停
+            const adapter = getEffekseerRuntimeAdapter();
+            if (adapter?.effekseerContext) {
+                adapter.effekseerContext.update(1); // 前進 1 幀
+            }
+            handle.setPaused(true); // 立即暫停
+        }
+
+        onUpdate(item.id, { isPlaying: true });
     };
 
     // 停止
@@ -330,11 +602,35 @@ const EffectCard = ({
             currentHandleRef.current = null;
         }
 
+        setHasActiveEffect(false);
         onUpdate(item.id, {
             isLooping: false,
             loopIntervalId: null,
             isPlaying: false
         });
+    };
+
+    // 逐幀前進（用「繼續→等待→暫停」模擬）
+    const handleStepFrame = (frames: number) => {
+        if (!currentHandleRef.current || !currentHandleRef.current.exists) {
+            console.log('[EffectCard] 沒有活躍的特效');
+            return;
+        }
+
+        const handle = currentHandleRef.current;
+        const durationMs = (frames / 60) * 1000; // N幀 = N/60秒
+
+        // 繼續播放
+        handle.setPaused(false);
+        
+        // 等待指定時間後暫停
+        setTimeout(() => {
+            if (handle && handle.exists) {
+                handle.setPaused(true);
+            }
+        }, durationMs);
+
+        console.log(`[EffectCard] 前進 ${frames} 幀 (${durationMs.toFixed(1)}ms)`);
     };
 
     // 切換 Loop
@@ -532,6 +828,7 @@ const EffectCard = ({
                         </div>
                     )}
 
+
                     {/* Transform Controls */}
                     {item.isLoaded && (
                         <div className="space-y-3 p-3 bg-gray-950/30 rounded border border-gray-800">
@@ -582,36 +879,32 @@ const EffectCard = ({
                         </div>
                     )}
 
-                    {/* Playback Controls */}
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handlePlay}
-                            disabled={!item.isLoaded}
-                            className="flex-1 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
-                        >
-                            <Play className="w-3.5 h-3.5 fill-current" />
-                            Play
-                        </button>
-                        <button
-                            onClick={handleStop}
-                            disabled={!item.isLoaded}
-                            className="flex-1 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/50 rounded text-xs flex items-center justify-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95"
-                        >
-                            <Square className="w-3.5 h-3.5 fill-current" />
-                            Stop
-                        </button>
+                    {/* 特效播放控制（暫停/繼續/逐幀） */}
+                    {item.isLoaded && (
+                        <EffectPlaybackControls
+                            effectHandle={currentHandleRef.current}
+                            onPlay={handlePlay}
+                            onStop={handleStop}
+                            onStepFrame={handleStepFrame}
+                            onPlayOneFrame={handlePlayOneFrame}
+                            hasActiveEffect={hasActiveEffect}
+                            effectColor={item.color}
+                        />
+                    )}
+
+                    {/* Loop 控制 */}
+                    {item.isLoaded && (
                         <button
                             onClick={handleLoopToggle}
-                            disabled={!item.isLoaded}
-                            className={`flex-1 py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-all border disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02] active:scale-95
+                            className={`w-full py-1.5 rounded text-xs flex items-center justify-center gap-1.5 transition-all border hover:scale-[1.02] active:scale-95
                                 ${item.isLooping
                                     ? 'bg-orange-600 text-white border-orange-500 shadow-[0_0_10px_rgba(234,88,12,0.3)]'
                                     : 'bg-gray-700 text-gray-300 border-gray-600 hover:bg-gray-600'}`}
                         >
                             <Repeat className="w-3.5 h-3.5" />
-                            {item.isLooping ? 'Looping' : 'Loop'}
+                            {item.isLooping ? '循環播放中...' : '開啟循環播放'}
                         </button>
-                    </div>
+                    )}
 
                     {/* Frame Triggers */}
                     {item.isLoaded && (
@@ -717,6 +1010,8 @@ const EffectCard = ({
 
 /**
  * Effekseer 特效測試面板（優化版）
+ * 
+ * 特效預覽時間軸是獨立的，不會影響主動畫播放。
  */
 interface EffectTestPanelProps {
     model?: THREE.Group | null;
@@ -725,9 +1020,22 @@ interface EffectTestPanelProps {
     setEffects: React.Dispatch<React.SetStateAction<EffectItem[]>>;
     createdClips: IdentifiableClip[];
     theme: ThemeStyle;
+    /** 動畫總時長（只讀，用於顯示時間軸範圍） */
+    duration?: number;
+    /** 幀率 */
+    fps?: number;
 }
 
-export default function EffectTestPanel({ model = null, bones = [], effects, setEffects, createdClips, theme }: EffectTestPanelProps) {
+export default function EffectTestPanel({
+    model = null,
+    bones = [],
+    effects,
+    setEffects,
+    createdClips,
+    theme,
+    duration = 0,
+    fps = 30
+}: EffectTestPanelProps) {
     const [isRuntimeReady, setIsRuntimeReady] = useState(false);
 
     // 檢查 Runtime 狀態
@@ -814,6 +1122,8 @@ export default function EffectTestPanel({ model = null, bones = [], effects, set
                             bones={bones}
                             createdClips={createdClips}
                             theme={theme}
+                            duration={duration}
+                            fps={fps}
                         />
                     ))
                 )}
