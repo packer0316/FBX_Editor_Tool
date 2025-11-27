@@ -299,17 +299,22 @@ function App() {
         instance.duration = instance.originalClip.duration;
       }
 
-      // 添加到模型列表
-      addModel(instance);
+      // 先關閉載入狀態，再更新模型狀態，避免 DOM 操作衝突
+      setIsLoading(false);
+      
+      // 使用 requestAnimationFrame 確保載入遮罩已完全隱藏後再更新模型
+      requestAnimationFrame(() => {
+        // 添加到模型列表
+        addModel(instance);
 
-      // 設為活動模型
-      setActiveModelId(instance.id);
+        // 設為活動模型
+        setActiveModelId(instance.id);
+      });
 
       console.log('✅ 模型載入成功:', instance.name);
     } catch (error) {
       console.error('Error loading FBX:', error);
       alert('讀取 FBX 檔案失敗，請確認檔案格式是否正確。');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -1124,13 +1129,16 @@ function App() {
               </div>
             </div>
 
-            {/* 載入中遮罩 */}
-            {isLoading && (
-              <div className="absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-50">
-                <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-2" />
-                <span className="text-blue-400 font-medium">讀取模型中...</span>
-              </div>
-            )}
+            {/* 載入中遮罩 - 使用 CSS 控制顯示/隱藏，避免條件渲染導致的 DOM 錯誤 */}
+            <div 
+              className={`absolute inset-0 bg-black/70 flex flex-col items-center justify-center z-50 transition-opacity duration-200 ${
+                isLoading ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+              }`}
+              aria-hidden={!isLoading}
+            >
+              <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-2" />
+              <span className="text-blue-400 font-medium">讀取模型中...</span>
+            </div>
           </div>
 
           {/* 底部：模型檢測與動畫工具 */}
