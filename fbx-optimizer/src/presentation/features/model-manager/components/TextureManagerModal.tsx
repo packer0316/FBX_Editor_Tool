@@ -224,8 +224,6 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
           setTimeout(() => {
             URL.revokeObjectURL(url);
           }, 1000);
-
-          alert(`貼圖「${file.name}」已成功替換！`);
         },
         undefined,
         (error) => {
