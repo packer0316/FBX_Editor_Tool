@@ -1337,7 +1337,8 @@ function App() {
               />
             )}
 
-            {activeTab === 'effect' && (
+            {/* Effect 面板不卸載，用 CSS 隱藏（保持特效 handle 引用） */}
+            <div className={activeTab === 'effect' ? '' : 'hidden'}>
               <EffectTestPanel
                 model={model}
                 bones={bones}
@@ -1348,7 +1349,7 @@ function App() {
                 duration={duration}
                 fps={30}
               />
-            )}
+            </div>
 
           </div>
 

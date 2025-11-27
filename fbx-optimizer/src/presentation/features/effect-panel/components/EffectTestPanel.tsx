@@ -325,6 +325,22 @@ const EffectCard = ({
         return () => clearInterval(interval);
     }, [hasActiveEffect, item.id, onUpdate]);
 
+    // 卡片刪除時停止特效（組件卸載）
+    useEffect(() => {
+        return () => {
+            if (item.loopIntervalId) {
+                clearInterval(item.loopIntervalId);
+            }
+            if (animationFrameRef.current !== null) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+            if (currentHandleRef.current && currentHandleRef.current.exists) {
+                currentHandleRef.current.stop();
+                console.log('[EffectCard] 卡片刪除，停止特效');
+            }
+        };
+    }, []);
+
     // 找到綁定的 bone
     const boundBone = item.boundBoneUuid
         ? bones.find(b => b.uuid === item.boundBoneUuid) || null
@@ -848,14 +864,27 @@ const EffectCard = ({
                             />
 
                             <div className="flex gap-3">
-                                <div className="flex-1">
-                                    <Vector3Input
-                                        label="縮放 (Scale)"
-                                        values={item.scale}
-                                        onChange={(v) => onUpdate(item.id, { scale: v })}
-                                        step={0.5}
-                                        icon={Maximize}
-                                    />
+                                <div className="w-1/3">
+                                    <div className="flex flex-col gap-1">
+                                        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-0.5">
+                                            <Maximize className="w-3.5 h-3.5" />
+                                            <span>縮放</span>
+                                        </div>
+                                        <div className="relative">
+                                            <NumberInput
+                                                value={item.scale[0]}
+                                                onChange={(val) => {
+                                                    const num = parseFloat(val);
+                                                    if (!isNaN(num)) {
+                                                        onUpdate(item.id, { scale: [num, num, num] });
+                                                    }
+                                                }}
+                                                step={0.1}
+                                                min={0.01}
+                                                className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="w-1/3">
                                     <div className="flex flex-col gap-1">
