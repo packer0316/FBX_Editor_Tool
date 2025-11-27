@@ -111,6 +111,8 @@ const EffectCard = ({
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
     const [newTriggerState, setNewTriggerState] = useState<{ clipId: string, frame: string }>({ clipId: '', frame: '' });
+    const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
+    const [editingFrame, setEditingFrame] = useState<string>('');
 
     // 追蹤當前播放的 Handle，以便即時更新參數
     const currentHandleRef = useRef<effekseer.EffekseerHandle | null>(null);
@@ -384,6 +386,48 @@ const EffectCard = ({
         });
     };
 
+    // 開始編輯觸發器
+    const startEditTrigger = (trigger: EffectTrigger) => {
+        setEditingTriggerId(trigger.id);
+        setEditingFrame(trigger.frame.toString());
+    };
+
+    // 儲存編輯的觸發器
+    const saveEditTrigger = () => {
+        if (!editingTriggerId) return;
+
+        const frame = parseInt(editingFrame);
+        if (isNaN(frame) || frame < 0) {
+            setEditingTriggerId(null);
+            setEditingFrame('');
+            return;
+        }
+
+        onUpdate(item.id, {
+            triggers: item.triggers.map(t =>
+                t.id === editingTriggerId ? { ...t, frame } : t
+            )
+        });
+
+        setEditingTriggerId(null);
+        setEditingFrame('');
+    };
+
+    // 取消編輯
+    const cancelEditTrigger = () => {
+        setEditingTriggerId(null);
+        setEditingFrame('');
+    };
+
+    // 處理按鍵事件
+    const handleEditKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            saveEditTrigger();
+        } else if (e.key === 'Escape') {
+            cancelEditTrigger();
+        }
+    };
+
     useEffect(() => {
         return () => {
             if (item.loopIntervalId) {
@@ -580,16 +624,46 @@ const EffectCard = ({
                                     {item.triggers.map(trigger => {
                                         const matchedClip = createdClips.find(clip => getClipId(clip) === trigger.clipId);
                                         const displayName = matchedClip ? getClipDisplayName(matchedClip) : trigger.clipName || 'Unknown Clip';
+                                        const isEditing = editingTriggerId === trigger.id;
+
                                         return (
-                                            <div key={trigger.id} className="flex items-center justify-between bg-gray-800 rounded px-2 py-1.5 border border-gray-700">
-                                                <div className="flex items-center gap-2 text-xs">
-                                                    <span className="text-blue-400">{displayName}</span>
-                                                    <span className="text-gray-500">@</span>
-                                                    <span style={{ color: item.color }}>{trigger.frame} Frame</span>
-                                                </div>
+                                            <div key={trigger.id} className={`flex items-center justify-between bg-gray-800 rounded px-2 py-1.5 border transition-colors ${isEditing ? 'border-blue-500' : 'border-gray-700 hover:border-gray-600 cursor-pointer'}`}>
+                                                {isEditing ? (
+                                                    // 編輯模式
+                                                    <div className="flex items-center gap-2 text-xs flex-1">
+                                                        <span className="text-blue-400">{displayName}</span>
+                                                        <span className="text-gray-500">@</span>
+                                                        <input
+                                                            type="number"
+                                                            value={editingFrame}
+                                                            onChange={(e) => setEditingFrame(e.target.value)}
+                                                            onKeyDown={handleEditKeyDown}
+                                                            onBlur={saveEditTrigger}
+                                                            autoFocus
+                                                            min={0}
+                                                            className="w-16 bg-gray-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs focus:outline-none"
+                                                            style={{ color: item.color }}
+                                                        />
+                                                        <span className="text-gray-500">Frame</span>
+                                                    </div>
+                                                ) : (
+                                                    // 顯示模式（可點擊編輯）
+                                                    <div
+                                                        className="flex items-center gap-2 text-xs flex-1"
+                                                        onClick={() => startEditTrigger(trigger)}
+                                                        title="點擊編輯幀數"
+                                                    >
+                                                        <span className="text-blue-400">{displayName}</span>
+                                                        <span className="text-gray-500">@</span>
+                                                        <span className="hover:underline" style={{ color: item.color }}>{trigger.frame} Frame</span>
+                                                    </div>
+                                                )}
                                                 <button
-                                                    onClick={() => removeTrigger(trigger.id)}
-                                                    className="text-gray-500 hover:text-red-400 transition-colors"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        removeTrigger(trigger.id);
+                                                    }}
+                                                    className="text-gray-500 hover:text-red-400 transition-colors ml-2"
                                                 >
                                                     <X className="w-3 h-3" />
                                                 </button>
