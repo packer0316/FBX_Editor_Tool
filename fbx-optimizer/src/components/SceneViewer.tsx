@@ -857,10 +857,15 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         makeDefault
                         enableDamping
                         dampingFactor={0.05}
-                        screenSpacePanning={false}
+                        screenSpacePanning={true}
                         rotateSpeed={1.0}
-                        zoomSpeed={1.0}
-                        panSpeed={0.8}
+                        zoomSpeed={1.2}
+                        panSpeed={1.0}
+                        mouseButtons={{
+                            LEFT: THREE.MOUSE.ROTATE,
+                            MIDDLE: THREE.MOUSE.ROTATE,
+                            RIGHT: THREE.MOUSE.PAN
+                        }}
                     />
                 </Canvas>
             </div>

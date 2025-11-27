@@ -1517,10 +1517,15 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         ref={orbitControlsRef}
                         makeDefault
                         enableDamping={false}
-                        screenSpacePanning={false}
+                        screenSpacePanning={true}
                         rotateSpeed={1.0}
-                        zoomSpeed={1.0}
-                        panSpeed={0.8}
+                        zoomSpeed={1.2}
+                        panSpeed={1.0}
+                        mouseButtons={{
+                            LEFT: THREE.MOUSE.ROTATE,
+                            MIDDLE: THREE.MOUSE.ROTATE,
+                            RIGHT: THREE.MOUSE.PAN
+                        }}
                     />
                     <KeyboardCameraControls
                         enabled={keyboardControlsEnabled}
