@@ -1516,8 +1516,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     <OrbitControls
                         ref={orbitControlsRef}
                         makeDefault
-                        enableDamping
-                        dampingFactor={0.05}
+                        enableDamping={false}
                         screenSpacePanning={false}
                         rotateSpeed={1.0}
                         zoomSpeed={1.0}
