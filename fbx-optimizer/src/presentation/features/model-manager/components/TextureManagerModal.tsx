@@ -67,6 +67,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
   /**
    * 從模型中提取所有貼圖
+   * 注意：當 shader 被應用後，原始材質會存在 userData.originalMaterial 中
    */
   function extractTexturesFromModel(model: THREE.Group): TextureInfo[] {
     const texturesList: TextureInfo[] = [];
@@ -74,7 +75,12 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        const material = child.material;
+        // 優先使用原始材質（shader 應用前的材質）
+        const originalMaterial = (child as any).userData?.originalMaterial;
+        const currentMaterial = child.material;
+        
+        // 如果有原始材質，使用原始材質；否則使用當前材質
+        const material = originalMaterial || currentMaterial;
         const materials = Array.isArray(material) ? material : [material];
 
         materials.forEach((mat) => {
@@ -165,25 +171,58 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
           if (model) {
             model.traverse((child) => {
               if (child instanceof THREE.Mesh) {
-                const material = child.material;
-                const materials = Array.isArray(material) ? material : [material];
+                // 1. 更新原始材質（userData.originalMaterial）- 這是 shader 應用前保存的材質
+                const originalMaterial = (child as any).userData?.originalMaterial;
+                let updatedOriginalMap = false;
+                
+                if (originalMaterial) {
+                  const origMaterials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
+                  origMaterials.forEach((mat: any) => {
+                    const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+                    textureTypes.forEach((key) => {
+                      if (mat[key] === textureInfo.texture) {
+                        mat[key] = newTexture;
+                        mat.needsUpdate = true;
+                        if (key === 'map') updatedOriginalMap = true;
+                      }
+                    });
+                  });
+                }
+
+                // 2. 更新當前材質
+                const currentMaterial = child.material;
+                const materials = Array.isArray(currentMaterial) ? currentMaterial : [currentMaterial];
 
                 materials.forEach((mat) => {
-                  // 找到並替換對應的貼圖
-                  const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
-                  
-                  textureTypes.forEach((key) => {
-                    if ((mat as any)[key] === textureInfo.texture) {
-                      // 釋放舊貼圖
-                      textureInfo.texture.dispose();
-                      // 設置新貼圖
-                      (mat as any)[key] = newTexture;
+                  // 如果是 ShaderMaterial，更新 uniform
+                  if (mat instanceof THREE.ShaderMaterial && mat.uniforms) {
+                    // 如果原始材質的 map 被更新了，也更新 shader 的 baseTexture
+                    if (updatedOriginalMap && mat.uniforms.baseTexture) {
+                      mat.uniforms.baseTexture.value = newTexture;
                       mat.needsUpdate = true;
                     }
-                  });
+                    // 也直接檢查 baseTexture 是否等於舊貼圖
+                    if (mat.uniforms.baseTexture && mat.uniforms.baseTexture.value === textureInfo.texture) {
+                      mat.uniforms.baseTexture.value = newTexture;
+                      mat.needsUpdate = true;
+                    }
+                  } else {
+                    // 標準材質，找到並替換對應的貼圖
+                    const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+                    
+                    textureTypes.forEach((key) => {
+                      if ((mat as any)[key] === textureInfo.texture) {
+                        (mat as any)[key] = newTexture;
+                        mat.needsUpdate = true;
+                      }
+                    });
+                  }
                 });
               }
             });
+            
+            // 釋放舊貼圖
+            textureInfo.texture.dispose();
           }
 
           // 等待圖片完全載入後再更新狀態（確保預覽圖可用）
