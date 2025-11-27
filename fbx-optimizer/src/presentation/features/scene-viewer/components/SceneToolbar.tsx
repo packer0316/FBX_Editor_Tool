@@ -51,12 +51,13 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
         }
     }, [showAspectMenu]);
 
-    const aspectRatioOptions: { value: AspectRatio; label: string }[] = [
+    // 基於 1080p 高度計算各比例的像素尺寸
+    const aspectRatioOptions: { value: AspectRatio; label: string; pixels?: string }[] = [
         { value: 'free', label: '自由比例' },
-        { value: '16:9', label: '16:9' },
-        { value: '16:10', label: '16:10' },
-        { value: '21:9', label: '21:9' },
-        { value: '32:9', label: '32:9' },
+        { value: '16:9', label: '16:9', pixels: '1920 × 1080' },
+        { value: '16:10', label: '16:10', pixels: '1728 × 1080' },
+        { value: '21:9', label: '21:9', pixels: '2560 × 1080' },
+        { value: '32:9', label: '32:9', pixels: '3840 × 1080' },
         { value: 'custom', label: '自訂尺寸...' },
     ];
 
@@ -173,17 +174,20 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
 
                     {/* 比例選單 */}
                     {showAspectMenu && (
-                        <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-4 ${theme.panelBg} border ${theme.panelBorder} rounded-xl shadow-2xl py-2 min-w-[160px] z-50 overflow-hidden animate-slide-up`}>
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-4 ${theme.panelBg} border ${theme.panelBorder} rounded-xl shadow-2xl py-2 min-w-[220px] z-50 overflow-hidden animate-slide-up`}>
                             {aspectRatioOptions.map((option) => (
                                 <button
                                     key={option.value}
                                     onClick={() => handleAspectRatioSelect(option.value)}
-                                    className={`w-full px-4 py-2.5 text-left text-sm transition-all ${aspectRatio === option.value
+                                    className={`w-full px-4 py-2.5 text-sm transition-all flex items-center justify-between gap-4 ${aspectRatio === option.value
                                         ? theme.activeButton
                                         : `${theme.text} hover:bg-white/5`
                                         }`}
                                 >
-                                    {option.label}
+                                    <span>{option.label}</span>
+                                    {option.pixels && (
+                                        <span className="text-xs text-gray-400 font-mono">{option.pixels}</span>
+                                    )}
                                 </button>
                             ))}
                         </div>
@@ -193,8 +197,28 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
 
             {/* 自訂尺寸對話框 */}
             {showCustomDialog && (
-                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 animate-fade-in">
-                    <div className={`glass-panel rounded-2xl shadow-2xl p-8 w-[360px] transform transition-all scale-100`}>
+                <div 
+                    className="bg-black/60 backdrop-blur-sm z-[99999] animate-fade-in"
+                    style={{ 
+                        position: 'fixed', 
+                        top: 0, 
+                        left: 0, 
+                        right: 0, 
+                        bottom: 0,
+                    }}
+                    onClick={() => setShowCustomDialog(false)}
+                >
+                    <div 
+                        className="glass-panel rounded-2xl shadow-2xl p-8 w-[360px]"
+                        style={{
+                            position: 'absolute',
+                            top: '50%',
+                            left: '50%',
+                            marginTop: '400px',
+                            transform: 'translate(-50%, -50%)'
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                    >
                         <div className="flex items-center justify-between mb-6">
                             <h3 className={`${theme.text} text-lg font-bold`}>自訂尺寸</h3>
                             <button
