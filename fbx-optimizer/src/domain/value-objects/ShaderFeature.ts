@@ -16,6 +16,7 @@ export interface ShaderFeature {
     description: string;
     icon: string;
     expanded: boolean;
+    enabled: boolean;
     params: Record<string, any>;
 }
 

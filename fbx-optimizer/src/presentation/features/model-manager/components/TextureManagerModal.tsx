@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { X, Upload, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+import { X, Upload, Image as ImageIcon, GripHorizontal } from 'lucide-react';
 import * as THREE from 'three';
 import type { ThemeStyle } from '../../../hooks/useTheme';
 
@@ -27,6 +27,43 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
   });
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
+  
+  // 拖動功能
+  const [position, setPosition] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const modalRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX - position.x,
+      y: e.clientY - position.y,
+    };
+  }, [position]);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDragging) return;
+    setPosition({
+      x: e.clientX - dragStartRef.current.x,
+      y: e.clientY - dragStartRef.current.y,
+    });
+  }, [isDragging]);
+
+  const handleMouseUp = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, handleMouseMove, handleMouseUp]);
 
   /**
    * 從模型中提取所有貼圖
@@ -215,29 +252,38 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
   /**
    * 生成貼圖預覽 URL
+   * 使用 canvas 將圖片轉換為 Data URL，避免 Blob URL 失效問題
    */
   const getTexturePreviewUrl = (texture: THREE.Texture): string => {
     try {
       if (texture.image) {
+        // 通用方法：使用 canvas 將任何圖片類型轉換為 Data URL
+        const drawToCanvas = (source: CanvasImageSource, width: number, height: number): string => {
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(source, 0, 0, width, height);
+            return canvas.toDataURL('image/png');
+          }
+          return '';
+        };
+
         if (texture.image instanceof HTMLImageElement) {
-          // 如果圖片已載入，返回 src
-          if (texture.image.complete && texture.image.src) {
+          // 如果圖片已載入完成，用 canvas 轉換為 Data URL
+          if (texture.image.complete && texture.image.naturalWidth > 0) {
+            return drawToCanvas(texture.image, texture.image.naturalWidth, texture.image.naturalHeight);
+          }
+          // 如果 src 存在且不是 blob URL，直接返回
+          if (texture.image.src && !texture.image.src.startsWith('blob:')) {
             return texture.image.src;
           }
-          // 如果圖片還在載入中，返回 src（即使還沒完全載入）
-          return texture.image.src || '';
+          return '';
         } else if (texture.image instanceof HTMLCanvasElement) {
           return texture.image.toDataURL();
         } else if (texture.image instanceof ImageBitmap) {
-          // 處理 ImageBitmap（創建臨時 canvas）
-          const canvas = document.createElement('canvas');
-          canvas.width = texture.image.width;
-          canvas.height = texture.image.height;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(texture.image, 0, 0);
-            return canvas.toDataURL();
-          }
+          return drawToCanvas(texture.image, texture.image.width, texture.image.height);
         }
       }
     } catch (error) {
@@ -248,21 +294,31 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
-        className={`relative w-[90vw] max-w-4xl max-h-[85vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col`}
+        ref={modalRef}
+        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col`}
+        style={{
+          transform: `translate(${position.x}px, ${position.y}px)`,
+          cursor: isDragging ? 'grabbing' : 'default',
+        }}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 標題列 */}
-        <div className={`flex items-center justify-between px-6 py-4 border-b ${theme.panelBorder} ${theme.toolbarBg}`}>
+        {/* 標題列 - 可拖動 */}
+        <div 
+          className={`flex items-center justify-between px-6 py-3 border-b ${theme.panelBorder} ${theme.toolbarBg} cursor-grab active:cursor-grabbing select-none`}
+          onMouseDown={handleMouseDown}
+        >
           <div className="flex items-center gap-3">
+            <GripHorizontal className="w-4 h-4 text-gray-500" />
             <ImageIcon className="w-5 h-5 text-blue-400" />
             <h2 className={`text-lg font-bold ${theme.text}`}>貼圖管理</h2>
           </div>
           <button
             onClick={onClose}
+            onMouseDown={(e) => e.stopPropagation()}
             className="p-2 rounded-lg hover:bg-white/10 transition-colors"
             title="關閉"
           >
@@ -271,14 +327,14 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
         </div>
 
         {/* 貼圖列表 */}
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className="flex-1 overflow-auto p-4 custom-scrollbar">
           {textures.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-500">
               <ImageIcon className="w-16 h-16 mb-4 opacity-30" />
               <p className="text-lg">此模型沒有貼圖</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="flex flex-col gap-3 min-w-[700px]">
               {textures.map((textureInfo, index) => {
                 const textureKey = `texture-${index}`;
                 const previewUrl = getTexturePreviewUrl(textureInfo.texture);
@@ -286,57 +342,31 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                 return (
                   <div
                     key={textureKey}
-                    className={`${theme.panelBg} border ${theme.panelBorder} rounded-xl overflow-hidden hover:border-blue-500/50 transition-all`}
+                    className={`${theme.panelBg} border ${theme.panelBorder} rounded-xl overflow-hidden hover:border-blue-500/50 transition-all flex flex-row`}
                   >
-                    {/* 貼圖預覽 */}
-                    <div className="relative aspect-square bg-black/30">
-                      {previewUrl ? (
-                        <img
-                          src={previewUrl}
-                          alt={textureInfo.name}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <ImageIcon className="w-12 h-12 text-gray-600" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* 貼圖資訊 */}
-                    <div className="p-3 space-y-2">
-                      <div>
-                        <div className="text-xs text-gray-400">名稱</div>
-                        <div className="text-sm text-white truncate" title={textureInfo.name}>
-                          {textureInfo.name}
-                        </div>
+                    {/* 左側：貼圖預覽 + 替換按鈕 */}
+                    <div className="flex flex-col flex-shrink-0 p-3">
+                      <div className="relative w-24 h-24 bg-black/30 rounded-lg overflow-hidden">
+                        {previewUrl ? (
+                          <img
+                            src={previewUrl}
+                            alt={textureInfo.name}
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <ImageIcon className="w-8 h-8 text-gray-600" />
+                          </div>
+                        )}
                       </div>
-                      <div>
-                        <div className="text-xs text-gray-400">類型</div>
-                        <div className="text-sm text-blue-400">{textureInfo.textureType}</div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400">材質</div>
-                        <div className="text-sm text-gray-300 truncate" title={textureInfo.materialName}>
-                          {textureInfo.materialName}
-                        </div>
-                      </div>
-                      <div>
-                        <div className="text-xs text-gray-400">尺寸</div>
-                        <div className="text-sm text-gray-300">
-                          {textureInfo.texture.image?.width || '?'} × {textureInfo.texture.image?.height || '?'}
-                        </div>
-                      </div>
-
-                      {/* 上傳按鈕 */}
+                      {/* 替換按鈕 */}
                       <button
                         onClick={() => triggerFileInput(textureKey)}
-                        className="w-full mt-3 py-2 px-3 bg-blue-500 hover:bg-blue-600 text-white text-sm font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                        className="mt-2 py-1.5 px-3 bg-blue-500 hover:bg-blue-600 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-1.5 whitespace-nowrap"
                       >
-                        <Upload className="w-4 h-4" />
+                        <Upload className="w-3.5 h-3.5" />
                         替換貼圖
                       </button>
-
                       {/* 隱藏的檔案輸入 */}
                       <input
                         ref={(el) => (fileInputRefs.current[textureKey] = el)}
@@ -348,10 +378,35 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                           if (file) {
                             handleTextureUpload(textureInfo, file);
                           }
-                          // 重置 input 以允許重複選擇同一檔案
                           e.target.value = '';
                         }}
                       />
+                    </div>
+
+                    {/* 右側：貼圖資訊 */}
+                    <div className="flex-1 flex items-start px-4 py-3 gap-4">
+                      <div className="w-[140px] flex-shrink-0">
+                        <div className="text-xs text-gray-400 mb-1">名稱</div>
+                        <div className="text-sm text-white break-words leading-relaxed">
+                          {textureInfo.name}
+                        </div>
+                      </div>
+                      <div className="w-[120px] flex-shrink-0">
+                        <div className="text-xs text-gray-400 mb-1">類型</div>
+                        <div className="text-sm text-blue-400 break-words leading-relaxed">{textureInfo.textureType}</div>
+                      </div>
+                      <div className="w-[140px] flex-shrink-0">
+                        <div className="text-xs text-gray-400 mb-1">材質</div>
+                        <div className="text-sm text-gray-300 break-words leading-relaxed">
+                          {textureInfo.materialName}
+                        </div>
+                      </div>
+                      <div className="w-[90px] flex-shrink-0">
+                        <div className="text-xs text-gray-400 mb-1">尺寸</div>
+                        <div className="text-sm text-gray-300">
+                          {textureInfo.texture.image?.width || '?'} × {textureInfo.texture.image?.height || '?'}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 );

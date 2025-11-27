@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2 } from 'lucide-react';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../domain/value-objects/ShaderFeature';
 
 interface MaterialShaderToolProps {
@@ -211,6 +211,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             id: `${featureTemplate.type}_${Date.now()}`,
             ...featureTemplate,
             expanded: true,
+            enabled: true,
             params: getDefaultParams(featureTemplate.type),
         };
 
@@ -255,6 +256,20 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                     ...g,
                     features: g.features.map(f =>
                         f.id === featureId ? { ...f, expanded: !f.expanded } : f
+                    )
+                }
+                : g
+        ));
+    };
+
+    // 切換功能啟用/禁用
+    const toggleFeatureEnabled = (groupId: string, featureId: string) => {
+        onGroupsChange(shaderGroups.map(g =>
+            g.id === groupId
+                ? {
+                    ...g,
+                    features: g.features.map(f =>
+                        f.id === featureId ? { ...f, enabled: !f.enabled } : f
                     )
                 }
                 : g
@@ -556,7 +571,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             <div className="p-3 space-y-3">
                                 {/* Features List */}
                                 {group.features.map(feature => (
-                                    <div key={feature.id} className="bg-gray-800 rounded-lg border border-gray-600">
+                                    <div key={feature.id} className={`bg-gray-800 rounded-lg border ${feature.enabled !== false ? 'border-gray-600' : 'border-gray-700 opacity-50'}`}>
                                         <div className="p-2 flex items-center gap-2 border-b border-gray-600">
                                             <button
                                                 onClick={() => toggleFeatureExpanded(group.id, feature.id)}
@@ -566,6 +581,14 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                             </button>
                                             <span className="text-lg">{feature.icon}</span>
                                             <span className="flex-1 text-white text-sm font-medium">{feature.name}</span>
+                                            {/* 開關按鈕 */}
+                                            <button
+                                                onClick={() => toggleFeatureEnabled(group.id, feature.id)}
+                                                className={`p-1 transition-colors ${feature.enabled !== false ? 'text-green-400 hover:text-green-300' : 'text-gray-500 hover:text-gray-400'}`}
+                                                title={feature.enabled !== false ? '點擊停用' : '點擊啟用'}
+                                            >
+                                                {feature.enabled !== false ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
+                                            </button>
                                             <button
                                                 onClick={() => removeFeatureFromGroup(group.id, feature.id)}
                                                 className="p-1 text-red-400 hover:text-red-300 transition-colors"

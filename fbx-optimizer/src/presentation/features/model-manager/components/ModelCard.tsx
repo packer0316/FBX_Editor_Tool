@@ -191,7 +191,7 @@ export default function ModelCard({
                   e.stopPropagation();
                   setShowTextureManager(true);
                 }}
-                className="p-1.5 rounded transition-all bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white flex items-center gap-1"
+                className="p-1.5 rounded transition-all bg-green-500/30 text-green-300 hover:bg-green-500/50 hover:text-white flex items-center gap-1"
                 title="管理貼圖"
               >
                 <Image className="w-3 h-3" />

@@ -513,8 +513,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     return;
                 }
 
-                // 從該組的 features 中提取各種效果
-                const shaderFeatures = meshGroup.features;
+                // 從該組的 features 中提取各種效果（只取啟用的）
+                const shaderFeatures = meshGroup.features.filter((f: ShaderFeature) => f.enabled !== false);
 
                 // Separate Base Matcap and Additive Matcap
                 const baseMatcapFeature = shaderFeatures.find(
