@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -205,6 +205,7 @@ export interface EffectItem {
     isPlaying: boolean;  // 是否正在播放 (主要用於 UI 狀態)
     isLooping: boolean;  // 是否開啟循環
     loopIntervalId: number | null; // 循環計時器 ID
+    isVisible: boolean;  // 是否顯示（不影響播放狀態）
 
     // Transform & Playback
     position: [number, number, number];
@@ -537,6 +538,8 @@ const EffectCard = ({
         if (handle) {
             currentHandleRef.current = handle;
             setHasActiveEffect(true);
+            // 套用顯示/隱藏狀態
+            handle.setShown(item.isVisible);
         }
 
         onUpdate(item.id, { isPlaying: true });
@@ -591,6 +594,8 @@ const EffectCard = ({
         if (handle) {
             currentHandleRef.current = handle;
             setHasActiveEffect(true);
+            // 套用顯示/隱藏狀態
+            handle.setShown(item.isVisible);
             // 前進 1 幀然後立即暫停
             const adapter = getEffekseerRuntimeAdapter();
             if (adapter?.effekseerContext) {
@@ -772,6 +777,26 @@ const EffectCard = ({
                 <div className="flex items-center gap-2">
                     {item.isLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                     {item.isLoaded && !item.isLoading && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+
+                    {/* 顯示/隱藏按鈕 */}
+                    <button
+                        onClick={() => {
+                            const newVisible = !item.isVisible;
+                            onUpdate(item.id, { isVisible: newVisible });
+                            // 如果有活躍的特效，更新顯示狀態
+                            if (currentHandleRef.current && currentHandleRef.current.exists) {
+                                currentHandleRef.current.setShown(newVisible);
+                            }
+                        }}
+                        className={`p-1.5 rounded transition-colors ${
+                            item.isVisible 
+                                ? 'text-blue-400 hover:text-blue-300 hover:bg-blue-600/20' 
+                                : 'text-gray-600 hover:text-gray-400 hover:bg-gray-700/50'
+                        }`}
+                        title={item.isVisible ? '隱藏特效' : '顯示特效'}
+                    >
+                        {item.isVisible ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                    </button>
 
                     <button
                         onClick={() => onRemove(item.id)}
@@ -1086,6 +1111,7 @@ export default function EffectTestPanel({
             isPlaying: false,
             isLooping: false,
             loopIntervalId: null,
+            isVisible: true, // 預設顯示
             position: [0, 0, 0],
             rotation: [0, 0, 0],
             scale: [1, 1, 1],
