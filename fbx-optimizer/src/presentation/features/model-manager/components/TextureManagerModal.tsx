@@ -28,42 +28,66 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   
-  // 拖動功能
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
   const modalRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    rafId: 0
+  });
+
+  const updateModalPosition = useCallback(() => {
+    if (modalRef.current) {
+      modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+    }
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
-    };
-  }, [position]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
-    });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
+    e.preventDefault();
+    dragStateRef.current.isDragging = true;
+    dragStateRef.current.startX = e.clientX - dragStateRef.current.currentX;
+    dragStateRef.current.startY = e.clientY - dragStateRef.current.currentY;
+    
+    if (modalRef.current) {
+      modalRef.current.style.cursor = 'grabbing';
+    }
   }, []);
 
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStateRef.current.isDragging) return;
+      
+      dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
+      dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
+      
+      // 使用 requestAnimationFrame 節流
+      if (dragStateRef.current.rafId) {
+        cancelAnimationFrame(dragStateRef.current.rafId);
+      }
+      dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
+    };
+
+    const handleMouseUp = () => {
+      dragStateRef.current.isDragging = false;
+      if (modalRef.current) {
+        modalRef.current.style.cursor = '';
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      if (dragStateRef.current.rafId) {
+        cancelAnimationFrame(dragStateRef.current.rafId);
+      }
     };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [updateModalPosition]);
 
   /**
    * 從模型中提取所有貼圖
@@ -336,10 +360,9 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
     >
       <div
         ref={modalRef}
-        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col`}
+        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col will-change-transform`}
         style={{
-          transform: `translate(${position.x}px, ${position.y}px)`,
-          cursor: isDragging ? 'grabbing' : 'default',
+          transform: 'translate(0px, 0px)', // 初始位置，會由 JS 直接更新
         }}
         onClick={(e) => e.stopPropagation()}
       >

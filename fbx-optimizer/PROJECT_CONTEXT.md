@@ -527,6 +527,92 @@ cameraSettings: { fov, near, far }
 1. **貼圖載入**：使用 URL 修改器攔截貼圖請求，依賴檔名匹配
 2. **音訊觸發**：使用片段名稱而非 UUID 匹配（因為優化後 UUID 會改變）
 3. **Shader 更新**：每次 features 改變時會重新建立 ShaderMaterial（確保 defines 正確更新）
+4. **Shader 與貼圖管理**：當 Shader 被應用後，原始材質會存在 `userData.originalMaterial` 中，貼圖管理面板需從此處讀取貼圖
+
+---
+
+## ⚡ 效能優化技巧
+
+### 1. 拖拉視窗優化（Modal Drag Optimization）
+
+**問題**：使用 React `useState` 管理拖拉位置會導致每次 mousemove 都觸發重新渲染，造成卡頓
+
+**解決方案**：使用 ref 直接操作 DOM，繞過 React 虛擬 DOM
+
+```typescript
+// ❌ 錯誤做法：每次移動都觸發重新渲染
+const [position, setPosition] = useState({ x: 0, y: 0 });
+const handleMouseMove = (e) => {
+  setPosition({ x: e.clientX - startX, y: e.clientY - startY });
+};
+
+// ✅ 正確做法：使用 ref 直接操作 DOM
+const dragStateRef = useRef({
+  isDragging: false,
+  currentX: 0,
+  currentY: 0,
+  rafId: 0
+});
+
+const handleMouseMove = (e: MouseEvent) => {
+  if (!dragStateRef.current.isDragging) return;
+  
+  dragStateRef.current.currentX = e.clientX - startX;
+  dragStateRef.current.currentY = e.clientY - startY;
+  
+  // 使用 requestAnimationFrame 節流
+  if (dragStateRef.current.rafId) {
+    cancelAnimationFrame(dragStateRef.current.rafId);
+  }
+  dragStateRef.current.rafId = requestAnimationFrame(() => {
+    modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+  });
+};
+```
+
+**關鍵技術**：
+- **useRef 存儲拖拉狀態**：避免觸發 React 重新渲染
+- **requestAnimationFrame 節流**：限制 DOM 更新頻率至 60fps
+- **直接操作 DOM style**：繞過 React 虛擬 DOM diff
+- **will-change-transform**：提示瀏覽器啟用 GPU 加速
+
+**應用場景**：
+- Modal 拖拉
+- 滑桿拖動
+- 任何需要高頻率更新 UI 位置的場景
+
+### 2. 進度條渲染優化
+
+**解決方案**：使用 CSS Transform (`scaleX`) 更新進度，避免觸發 reflow
+
+```typescript
+// ✅ 使用 scaleX 而非 width
+<div 
+  style={{ transform: `scaleX(${progress / 100})` }}
+  className="origin-left"
+/>
+```
+
+### 3. 貼圖管理與 Shader 整合
+
+**問題**：開啟 Shader 後替換貼圖，模型身上的貼圖不會更新
+
+**解決方案**：替換貼圖時同時更新原始材質和 ShaderMaterial 的 uniform
+
+```typescript
+// 1. 更新原始材質
+const originalMaterial = child.userData?.originalMaterial;
+if (originalMaterial) {
+  originalMaterial.map = newTexture;
+  originalMaterial.needsUpdate = true;
+}
+
+// 2. 更新 ShaderMaterial 的 uniform
+if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.baseTexture) {
+  mat.uniforms.baseTexture.value = newTexture;
+  mat.needsUpdate = true;
+}
+```
 
 ---
 
