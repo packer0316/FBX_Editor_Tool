@@ -101,7 +101,7 @@ export default function ModelManagerPanel({
       </div>
 
       {/* 模型列表 */}
-      <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+      <div className="flex-1 overflow-y-auto space-y-2 px-1 custom-scrollbar">
         {models.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-gray-500">
             <Package className="w-12 h-12 mb-2 opacity-50" />

@@ -28,45 +28,70 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
   
-  // 拖動功能
-  const [position, setPosition] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStartRef = useRef({ x: 0, y: 0 });
+  // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
   const modalRef = useRef<HTMLDivElement>(null);
+  const dragStateRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    currentX: 0,
+    currentY: 0,
+    rafId: 0
+  });
+
+  const updateModalPosition = useCallback(() => {
+    if (modalRef.current) {
+      modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+    }
+  }, []);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
-    setIsDragging(true);
-    dragStartRef.current = {
-      x: e.clientX - position.x,
-      y: e.clientY - position.y,
-    };
-  }, [position]);
-
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    setPosition({
-      x: e.clientX - dragStartRef.current.x,
-      y: e.clientY - dragStartRef.current.y,
-    });
-  }, [isDragging]);
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
+    e.preventDefault();
+    dragStateRef.current.isDragging = true;
+    dragStateRef.current.startX = e.clientX - dragStateRef.current.currentX;
+    dragStateRef.current.startY = e.clientY - dragStateRef.current.currentY;
+    
+    if (modalRef.current) {
+      modalRef.current.style.cursor = 'grabbing';
+    }
   }, []);
 
   useEffect(() => {
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    }
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!dragStateRef.current.isDragging) return;
+      
+      dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
+      dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
+      
+      // 使用 requestAnimationFrame 節流
+      if (dragStateRef.current.rafId) {
+        cancelAnimationFrame(dragStateRef.current.rafId);
+      }
+      dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
+    };
+
+    const handleMouseUp = () => {
+      dragStateRef.current.isDragging = false;
+      if (modalRef.current) {
+        modalRef.current.style.cursor = '';
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
+      if (dragStateRef.current.rafId) {
+        cancelAnimationFrame(dragStateRef.current.rafId);
+      }
     };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  }, [updateModalPosition]);
 
   /**
    * 從模型中提取所有貼圖
+   * 注意：當 shader 被應用後，原始材質會存在 userData.originalMaterial 中
    */
   function extractTexturesFromModel(model: THREE.Group): TextureInfo[] {
     const texturesList: TextureInfo[] = [];
@@ -74,7 +99,12 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
 
     model.traverse((child) => {
       if (child instanceof THREE.Mesh) {
-        const material = child.material;
+        // 優先使用原始材質（shader 應用前的材質）
+        const originalMaterial = (child as any).userData?.originalMaterial;
+        const currentMaterial = child.material;
+        
+        // 如果有原始材質，使用原始材質；否則使用當前材質
+        const material = originalMaterial || currentMaterial;
         const materials = Array.isArray(material) ? material : [material];
 
         materials.forEach((mat) => {
@@ -165,25 +195,58 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
           if (model) {
             model.traverse((child) => {
               if (child instanceof THREE.Mesh) {
-                const material = child.material;
-                const materials = Array.isArray(material) ? material : [material];
+                // 1. 更新原始材質（userData.originalMaterial）- 這是 shader 應用前保存的材質
+                const originalMaterial = (child as any).userData?.originalMaterial;
+                let updatedOriginalMap = false;
+                
+                if (originalMaterial) {
+                  const origMaterials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
+                  origMaterials.forEach((mat: any) => {
+                    const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+                    textureTypes.forEach((key) => {
+                      if (mat[key] === textureInfo.texture) {
+                        mat[key] = newTexture;
+                        mat.needsUpdate = true;
+                        if (key === 'map') updatedOriginalMap = true;
+                      }
+                    });
+                  });
+                }
+
+                // 2. 更新當前材質
+                const currentMaterial = child.material;
+                const materials = Array.isArray(currentMaterial) ? currentMaterial : [currentMaterial];
 
                 materials.forEach((mat) => {
-                  // 找到並替換對應的貼圖
-                  const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
-                  
-                  textureTypes.forEach((key) => {
-                    if ((mat as any)[key] === textureInfo.texture) {
-                      // 釋放舊貼圖
-                      textureInfo.texture.dispose();
-                      // 設置新貼圖
-                      (mat as any)[key] = newTexture;
+                  // 如果是 ShaderMaterial，更新 uniform
+                  if (mat instanceof THREE.ShaderMaterial && mat.uniforms) {
+                    // 如果原始材質的 map 被更新了，也更新 shader 的 baseTexture
+                    if (updatedOriginalMap && mat.uniforms.baseTexture) {
+                      mat.uniforms.baseTexture.value = newTexture;
                       mat.needsUpdate = true;
                     }
-                  });
+                    // 也直接檢查 baseTexture 是否等於舊貼圖
+                    if (mat.uniforms.baseTexture && mat.uniforms.baseTexture.value === textureInfo.texture) {
+                      mat.uniforms.baseTexture.value = newTexture;
+                      mat.needsUpdate = true;
+                    }
+                  } else {
+                    // 標準材質，找到並替換對應的貼圖
+                    const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
+                    
+                    textureTypes.forEach((key) => {
+                      if ((mat as any)[key] === textureInfo.texture) {
+                        (mat as any)[key] = newTexture;
+                        mat.needsUpdate = true;
+                      }
+                    });
+                  }
                 });
               }
             });
+            
+            // 釋放舊貼圖
+            textureInfo.texture.dispose();
           }
 
           // 等待圖片完全載入後再更新狀態（確保預覽圖可用）
@@ -297,10 +360,9 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
     >
       <div
         ref={modalRef}
-        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col`}
+        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col will-change-transform`}
         style={{
-          transform: `translate(${position.x}px, ${position.y}px)`,
-          cursor: isDragging ? 'grabbing' : 'default',
+          transform: 'translate(0px, 0px)', // 初始位置，會由 JS 直接更新
         }}
         onClick={(e) => e.stopPropagation()}
       >

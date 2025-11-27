@@ -436,6 +436,10 @@ const Model = forwardRef<ModelRef, ModelProps>(
             seekTo: (time: number) => {
                 if (actionRef.current) {
                     actionRef.current.time = time;
+                    // 同步時間到 model.userData 供 ModelPreview 使用
+                    if (model) {
+                        model.userData.animationTime = time;
+                    }
                     if (!isPlayingRef.current && mixerRef.current) {
                         const wasPaused = actionRef.current.paused;
                         actionRef.current.paused = false;
@@ -459,6 +463,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 if (onTimeUpdateRef.current && actionRef.current) {
                     // console.log('SceneViewer: sending time', actionRef.current.time);
                     onTimeUpdateRef.current(actionRef.current.time);
+                    
+                    // 將當前動畫時間存到 model.userData 中，供 ModelPreview 同步使用
+                    if (model) {
+                        model.userData.animationTime = actionRef.current.time;
+                    }
                     
                     // 檢查動畫是否結束（非循環模式下）
                     if (!loopRef.current && actionRef.current.time >= actionRef.current.getClip().duration) {
