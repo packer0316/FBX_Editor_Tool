@@ -3,7 +3,7 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
 import { Environment } from '@react-three/drei';
-import { Maximize2, X, Grid3X3 } from 'lucide-react';
+import { Maximize2, X, Grid3X3, GripHorizontal, Box } from 'lucide-react';
 import type { ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 
 interface ModelPreviewProps {
@@ -240,13 +240,18 @@ function PreviewCanvas({
   hdriUrl?: string;
   showGrid: boolean;
 }) {
-  // 計算模型的邊界盒來設置初始相機位置
+  // 計算模型的邊界盒來設置初始相機位置（正前方 45 度俯角）
   const initialCameraPosition = useCallback((): [number, number, number] => {
     const box = new THREE.Box3().setFromObject(model);
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) * 0.01; // scale 0.01
-    const distance = maxDim * 2.5;
-    return [distance * 0.7, distance * 0.5, distance * 0.7];
+    const distance = maxDim * 80; // 距離更遠
+    
+    // 相機位置：正前方 45 度俯角
+    // 45 度俯角：Y 和 Z 相等時就是 45 度
+    const height = distance * Math.sin(Math.PI / 4); // 45 度的高度
+    const depth = distance * Math.cos(Math.PI / 4);  // 45 度的深度
+    return [0, height, depth]; // 正前方 45 度俯角
   }, [model]);
 
   return (
@@ -295,6 +300,251 @@ function PreviewCanvas({
   );
 }
 
+// 放大預覽 Modal 組件
+function ExpandedPreviewModal({
+  model,
+  position,
+  rotation,
+  scale,
+  toneMappingExposure,
+  environmentIntensity,
+  hdriUrl,
+  showGrid,
+  setShowGrid,
+  onClose,
+  initialCameraPosition
+}: {
+  model: THREE.Group;
+  position: [number, number, number];
+  rotation: [number, number, number];
+  scale: [number, number, number];
+  toneMappingExposure?: number;
+  environmentIntensity?: number;
+  hdriUrl?: string;
+  showGrid: boolean;
+  setShowGrid: (v: boolean) => void;
+  onClose: () => void;
+}) {
+  const modalRef = useRef<HTMLDivElement>(null);
+  
+  // 計算初始大小和位置（在主場景區域，避開右側工具列約 400px）
+  const getInitialSize = useCallback(() => {
+    const rightPanelWidth = 420; // 右側工具列寬度
+    const availableWidth = window.innerWidth - rightPanelWidth;
+    const width = Math.min(availableWidth * 0.85, 1200);
+    const height = Math.min(window.innerHeight * 0.8, 800);
+    return { width, height };
+  }, []);
+  
+  // 視窗大小狀態
+  const [modalSize, setModalSize] = useState(getInitialSize);
+  
+  // 計算初始偏移（讓視窗在主場景區域中間）
+  const getInitialOffset = useCallback(() => {
+    const rightPanelWidth = 420;
+    const availableWidth = window.innerWidth - rightPanelWidth;
+    // 偏移量：讓視窗在左側區域置中
+    const offsetX = -(rightPanelWidth / 2);
+    return { x: offsetX, y: 0 };
+  }, []);
+  
+  const initialOffset = getInitialOffset();
+  
+  // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
+  const dragStateRef = useRef({
+    isDragging: false,
+    startX: 0,
+    startY: 0,
+    currentX: initialOffset.x,
+    currentY: initialOffset.y,
+    rafId: 0
+  });
+
+  // 調整大小功能
+  const resizeStateRef = useRef({
+    isResizing: false,
+    startX: 0,
+    startY: 0,
+    startWidth: modalSize.width,
+    startHeight: modalSize.height
+  });
+
+  const updateModalPosition = useCallback(() => {
+    if (modalRef.current) {
+      modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+    }
+  }, []);
+  
+  // 初始化位置
+  useEffect(() => {
+    updateModalPosition();
+  }, [updateModalPosition]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    dragStateRef.current.isDragging = true;
+    dragStateRef.current.startX = e.clientX - dragStateRef.current.currentX;
+    dragStateRef.current.startY = e.clientY - dragStateRef.current.currentY;
+    
+    if (modalRef.current) {
+      modalRef.current.style.cursor = 'grabbing';
+    }
+  }, []);
+
+  // 開始調整大小
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStateRef.current.isResizing = true;
+    resizeStateRef.current.startX = e.clientX;
+    resizeStateRef.current.startY = e.clientY;
+    resizeStateRef.current.startWidth = modalSize.width;
+    resizeStateRef.current.startHeight = modalSize.height;
+  }, [modalSize]);
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      // 處理拖動
+      if (dragStateRef.current.isDragging) {
+        dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
+        dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
+        
+        if (dragStateRef.current.rafId) {
+          cancelAnimationFrame(dragStateRef.current.rafId);
+        }
+        dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
+      }
+      
+      // 處理調整大小
+      if (resizeStateRef.current.isResizing) {
+        const deltaX = e.clientX - resizeStateRef.current.startX;
+        const deltaY = e.clientY - resizeStateRef.current.startY;
+        
+        setModalSize({
+          width: Math.max(500, Math.min(window.innerWidth * 0.9, resizeStateRef.current.startWidth + deltaX)),
+          height: Math.max(400, Math.min(window.innerHeight * 0.9, resizeStateRef.current.startHeight + deltaY))
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      dragStateRef.current.isDragging = false;
+      resizeStateRef.current.isResizing = false;
+      if (modalRef.current) {
+        modalRef.current.style.cursor = '';
+      }
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+      if (dragStateRef.current.rafId) {
+        cancelAnimationFrame(dragStateRef.current.rafId);
+      }
+    };
+  }, [updateModalPosition]);
+
+  return (
+    <div 
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+      onClick={onClose}
+    >
+      <div 
+        ref={modalRef}
+        className="relative bg-gray-900 rounded-2xl border border-gray-600 overflow-hidden shadow-2xl will-change-transform flex flex-col"
+        style={{
+          width: modalSize.width,
+          height: modalSize.height,
+          transform: `translate(${initialOffset.x}px, ${initialOffset.y}px)`,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 標題列 - 可拖動 */}
+        <div 
+          className="flex items-center justify-between px-4 py-3 bg-gray-800/90 border-b border-gray-700 cursor-grab active:cursor-grabbing select-none"
+          onMouseDown={handleMouseDown}
+        >
+          <div className="flex items-center gap-3">
+            <GripHorizontal className="w-4 h-4 text-gray-500" />
+            <Box className="w-5 h-5 text-blue-400" />
+            <h2 className="text-base font-bold text-white">模型預覽</h2>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            {/* 格線開關 */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowGrid(!showGrid);
+              }}
+              onMouseDown={(e) => e.stopPropagation()}
+              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-2 text-xs ${
+                showGrid 
+                  ? 'bg-blue-500/90 text-white border-blue-400' 
+                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
+              }`}
+              title={showGrid ? '隱藏格線' : '顯示格線'}
+            >
+              <Grid3X3 className="w-3.5 h-3.5" />
+              {showGrid ? '格線開' : '格線關'}
+            </button>
+            
+            {/* 關閉按鈕 */}
+            <button
+              onClick={onClose}
+              onMouseDown={(e) => e.stopPropagation()}
+              className="p-2 hover:bg-white/10 text-gray-400 hover:text-white rounded-lg transition-colors"
+              title="關閉"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* 3D 預覽區域 */}
+        <div className="flex-1 relative">
+          <PreviewCanvas
+            model={model}
+            position={position}
+            rotation={rotation}
+            scale={scale}
+            toneMappingExposure={toneMappingExposure}
+            environmentIntensity={environmentIntensity}
+            hdriUrl={hdriUrl}
+            showGrid={showGrid}
+          />
+          
+          {/* 操作提示 */}
+          <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-black/60 px-3 py-2 rounded-lg">
+            🖱️ 左鍵旋轉 | 右鍵平移 | 滾輪縮放
+          </div>
+          
+          {/* 視窗大小顯示 */}
+          <div className="absolute bottom-4 right-16 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
+            {modalSize.width} × {modalSize.height}
+          </div>
+        </div>
+
+        {/* 調整大小拖把 - 右下角 */}
+        <div
+          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group"
+          onMouseDown={handleResizeStart}
+        >
+          <svg 
+            className="w-full h-full text-gray-500 group-hover:text-blue-400 transition-colors"
+            viewBox="0 0 24 24"
+          >
+            <path fill="currentColor" d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ModelPreview({ 
   model, 
   position, 
@@ -308,7 +558,7 @@ export default function ModelPreview({
   hdriUrl
 }: ModelPreviewProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showGrid, setShowGrid] = useState(false);
+  const [showGrid, setShowGrid] = useState(true); // 預設顯示格線
 
   if (!model || !visible) {
     return (
@@ -369,61 +619,18 @@ export default function ModelPreview({
 
       {/* 放大預覽 Modal */}
       {isExpanded && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={() => setIsExpanded(false)}
-        >
-          <div 
-            className="relative w-[90vw] h-[90vh] bg-gray-900 rounded-lg border border-gray-700 overflow-hidden shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* 頂部控制列 */}
-            <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-              {/* 格線開關 */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowGrid(!showGrid);
-                }}
-                className={`p-2 rounded-lg border transition-colors flex items-center gap-2 ${
-                  showGrid 
-                    ? 'bg-blue-500/90 text-white border-blue-400' 
-                    : 'bg-gray-900/90 hover:bg-gray-800 text-gray-400 hover:text-white border-gray-600 hover:border-gray-500'
-                }`}
-                title={showGrid ? '隱藏格線' : '顯示格線'}
-              >
-                <Grid3X3 className="w-4 h-4" />
-                <span className="text-xs">{showGrid ? '格線開' : '格線關'}</span>
-              </button>
-              
-              {/* 關閉按鈕 */}
-              <button
-                onClick={() => setIsExpanded(false)}
-                className="p-2 bg-gray-900/90 hover:bg-gray-800 text-gray-400 hover:text-white rounded-lg border border-gray-600 hover:border-gray-500 transition-colors"
-                title="關閉"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* 放大的預覽 */}
-            <PreviewCanvas
-              model={model}
-              position={position}
-              rotation={rotation}
-              scale={scale}
-              toneMappingExposure={toneMappingExposure}
-              environmentIntensity={environmentIntensity}
-              hdriUrl={hdriUrl}
-              showGrid={showGrid}
-            />
-            
-            {/* 操作提示 */}
-            <div className="absolute bottom-4 left-4 text-xs text-gray-500 bg-black/50 px-3 py-2 rounded">
-              🖱️ 左鍵拖曳旋轉 | 右鍵拖曳平移 | 滾輪縮放
-            </div>
-          </div>
-        </div>
+        <ExpandedPreviewModal
+          model={model}
+          position={position}
+          rotation={rotation}
+          scale={scale}
+          toneMappingExposure={toneMappingExposure}
+          environmentIntensity={environmentIntensity}
+          hdriUrl={hdriUrl}
+          showGrid={showGrid}
+          setShowGrid={setShowGrid}
+          onClose={() => setIsExpanded(false)}
+        />
       )}
     </>
   );
