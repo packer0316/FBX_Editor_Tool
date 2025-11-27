@@ -108,13 +108,24 @@ export class LoadModelUseCase {
     const result = await this.execute(files);
     const { fbxFile } = ModelLoaderService.classifyFiles(files);
     
-    // 提取骨骼
-    const bones: THREE.Object3D[] = [];
+    // 提取骨骼（從兩個來源：樹狀結構和 SkinnedMesh.skeleton）
+    const boneSet = new Set<THREE.Object3D>();
     result.model.traverse((child) => {
+      // 來源1: 樹狀結構中的 Bone 節點
       if (child.type === 'Bone' || (child as any).isBone) {
-        bones.push(child);
+        boneSet.add(child);
+      }
+      // 來源2: SkinnedMesh 的 skeleton.bones
+      if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+        const skinnedMesh = child as THREE.SkinnedMesh;
+        if (skinnedMesh.skeleton && skinnedMesh.skeleton.bones) {
+          skinnedMesh.skeleton.bones.forEach((bone) => {
+            boneSet.add(bone);
+          });
+        }
       }
     });
+    const bones = Array.from(boneSet);
 
     // 處理動畫片段
     let originalClip: IdentifiableClip | null = null;

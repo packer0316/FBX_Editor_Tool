@@ -4,14 +4,11 @@ import * as THREE from 'three';
 /**
  * 骨骼提取 Hook
  * 
- * 從 Three.js 模型中提取骨骼資訊。此 Hook 會遍歷模型樹狀結構，
- * 找出所有可能的骨骼節點（Bone、Object3D、以及名稱包含 'bone'、'root'、'bip'、'dummy' 的節點）。
+ * 從 Three.js 模型中提取骨骼資訊。此 Hook 會從兩個來源提取骨骼：
+ * 1. 模型樹狀結構中的 Bone 節點（type === 'Bone' 或 isBone === true）
+ * 2. SkinnedMesh 的 skeleton.bones 陣列
  * 
- * 提取邏輯：
- * - 包含類型為 'Bone' 或 'Object3D' 的節點
- * - 包含父節點為 'Bone' 的節點
- * - 包含名稱中帶有骨骼相關關鍵字的節點
- * - 排除模型根節點和 Mesh 節點
+ * 這個計算方式與 3DS Max 和 Blender 相同，確保計算所有真正的骨骼節點。
  * 
  * @param model - Three.js 模型群組，將從中提取骨骼，如果為 null 則返回空陣列
  * @returns 骨骼陣列，當模型改變時會自動更新
@@ -34,26 +31,26 @@ export function useBoneExtraction(model: THREE.Group | null) {
 
   useEffect(() => {
     if (model) {
-      const foundBones: THREE.Object3D[] = [];
+      const boneSet = new Set<THREE.Bone>();
+      
       model.traverse((child) => {
-        // Include all Object3D that could be part of skeleton hierarchy
-        // This includes Bone, Object3D, and Group nodes that are part of the armature
-        if (
-          child.type === 'Bone' ||
-          child.type === 'Object3D' ||
-          child.parent?.type === 'Bone' ||
-          child.name.toLowerCase().includes('bone') ||
-          child.name.toLowerCase().includes('root') ||
-          child.name.toLowerCase().includes('bip') ||
-          child.name.toLowerCase().includes('dummy')
-        ) {
-          // Exclude the model root itself and meshes
-          if (child !== model && !child.isMesh && !child.isSkinnedMesh) {
-            foundBones.push(child);
+        // 來源1: 樹狀結構中的 Bone 節點
+        if (child.type === 'Bone' || (child as any).isBone) {
+          boneSet.add(child as THREE.Bone);
+        }
+        
+        // 來源2: SkinnedMesh 的 skeleton.bones
+        if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+          const skinnedMesh = child as THREE.SkinnedMesh;
+          if (skinnedMesh.skeleton && skinnedMesh.skeleton.bones) {
+            skinnedMesh.skeleton.bones.forEach((bone) => {
+              boneSet.add(bone);
+            });
           }
         }
       });
-      setBones(foundBones as THREE.Bone[]);
+      
+      setBones(Array.from(boneSet));
     } else {
       setBones([]);
     }

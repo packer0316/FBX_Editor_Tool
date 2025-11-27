@@ -123,6 +123,7 @@ export default function ModelInspector({
     const [activeTab, setActiveTab] = useState<'mesh' | 'bone' | 'clip' | 'playlist'>('mesh');
     const [meshes, setMeshes] = useState<THREE.Mesh[]>([]);
     const [rootBones, setRootBones] = useState<THREE.Object3D[]>([]); // 改為陣列，支援多個根骨架
+    const [boneCount, setBoneCount] = useState(0); // 真正的骨骼數量（與 3DS Max/Blender 一致）
     const [updateCounter, setUpdateCounter] = useState(0); // 用於強制重繪
     const [expandAll, setExpandAll] = useState(true); // 骨架展開狀態
     const [wasPlayingBeforeDrag, setWasPlayingBeforeDrag] = useState(false); // 拖動前是否在播放
@@ -170,11 +171,27 @@ export default function ModelInspector({
         if (model) {
             const meshList: THREE.Mesh[] = [];
             const rootNodes: THREE.Object3D[] = [];
+            const boneSet = new Set<THREE.Bone>();
 
-            // 收集所有 Mesh
+            // 收集所有 Mesh 和計算骨骼數量
             model.traverse((child) => {
                 if ((child as THREE.Mesh).isMesh) {
                     meshList.push(child as THREE.Mesh);
+                }
+                
+                // 來源1: 樹狀結構中的 Bone 節點
+                if (child.type === 'Bone' || (child as any).isBone) {
+                    boneSet.add(child as THREE.Bone);
+                }
+                
+                // 來源2: SkinnedMesh 的 skeleton.bones（與 3DS Max/Blender 一致）
+                if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+                    const skinnedMesh = child as THREE.SkinnedMesh;
+                    if (skinnedMesh.skeleton && skinnedMesh.skeleton.bones) {
+                        skinnedMesh.skeleton.bones.forEach((bone) => {
+                            boneSet.add(bone);
+                        });
+                    }
                 }
             });
 
@@ -188,9 +205,11 @@ export default function ModelInspector({
 
             setMeshes(meshList);
             setRootBones(rootNodes);
+            setBoneCount(boneSet.size);
         } else {
             setMeshes([]);
             setRootBones([]);
+            setBoneCount(0);
         }
     }, [model]);
 
@@ -370,7 +389,7 @@ export default function ModelInspector({
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'bone' ? theme.activeButton : theme.button}`}
                     onClick={() => setActiveTab('bone')}
                 >
-                    骨架 ({rootBones.length})
+                    骨架 ({boneCount})
                 </button>
                 <button
                     className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'clip' ? theme.activeButton : theme.button}`}

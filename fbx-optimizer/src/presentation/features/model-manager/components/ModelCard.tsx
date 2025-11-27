@@ -1,10 +1,79 @@
-import { useState } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info } from 'lucide-react';
+import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import ModelPreview from './ModelPreview';
 import TextureManagerModal from './TextureManagerModal';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
+
+/**
+ * 計算模型資訊
+ * 注意：Polys 無法準確計算，因為 FBX 導入後所有多邊形都轉換成三角面
+ */
+function calculateModelInfo(model: THREE.Group | null) {
+  if (!model) {
+    return { boneCount: 0, triangleCount: 0, vertexCount: 0, drawCallCount: 0 };
+  }
+
+  const boneSet = new Set<THREE.Bone>();
+  let triangleCount = 0;
+  let drawCallCount = 0;
+  
+  // 使用 Set 來收集唯一頂點位置
+  const uniqueVertices = new Set<string>();
+
+  model.traverse((child) => {
+    // 計算骨骼（從兩個來源）
+    if (child.type === 'Bone' || (child as any).isBone) {
+      boneSet.add(child as THREE.Bone);
+    }
+    if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
+      const skinnedMesh = child as THREE.SkinnedMesh;
+      if (skinnedMesh.skeleton && skinnedMesh.skeleton.bones) {
+        skinnedMesh.skeleton.bones.forEach((bone) => {
+          boneSet.add(bone);
+        });
+      }
+    }
+
+    // 計算三角面和頂點
+    if ((child as THREE.Mesh).isMesh) {
+      const mesh = child as THREE.Mesh;
+      const geometry = mesh.geometry;
+      
+      if (geometry) {
+        const positions = geometry.attributes.position;
+        if (positions) {
+          // 計算唯一頂點位置
+          const posArray = positions.array;
+          for (let i = 0; i < positions.count; i++) {
+            const idx = i * 3;
+            uniqueVertices.add(`${posArray[idx]}|${posArray[idx + 1]}|${posArray[idx + 2]}`);
+          }
+        }
+        
+        // 三角面數量
+        if (geometry.index) {
+          triangleCount += geometry.index.count / 3;
+        } else if (geometry.attributes.position) {
+          triangleCount += geometry.attributes.position.count / 3;
+        }
+      }
+      
+      // DrawCall 計算
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      drawCallCount += materials.length;
+    }
+  });
+
+  return {
+    boneCount: boneSet.size,
+    triangleCount: Math.floor(triangleCount),
+    vertexCount: uniqueVertices.size,
+    drawCallCount
+  };
+}
 
 interface ModelCardProps {
   modelInstance: ModelInstance;
@@ -45,6 +114,10 @@ export default function ModelCard({
   const [editName, setEditName] = useState(modelInstance.name);
   const [isExpanded, setIsExpanded] = useState(false);
   const [showTextureManager, setShowTextureManager] = useState(false);
+  const [showModelInfo, setShowModelInfo] = useState(false);
+  
+  // 計算模型資訊
+  const modelInfo = useMemo(() => calculateModelInfo(modelInstance.model), [modelInstance.model]);
   
   // 滑動條顯示狀態：position-x, position-y, position-z, rotation-x, rotation-y, rotation-z
   const [showSlider, setShowSlider] = useState<{
@@ -139,6 +212,16 @@ export default function ModelCard({
             </span>
 
             <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowModelInfo(true);
+                }}
+                className="p-1 text-gray-400 hover:text-cyan-400 hover:bg-gray-700 rounded transition-colors"
+                title="模型資訊"
+              >
+                <Info className="w-3 h-3" />
+              </button>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -454,6 +537,73 @@ export default function ModelCard({
           onClose={() => setShowTextureManager(false)}
           theme={theme}
         />
+      )}
+
+      {/* 模型資訊彈出視窗 */}
+      {showModelInfo && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={() => setShowModelInfo(false)}
+        >
+          <div
+            className={`relative w-[320px] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 標題列 */}
+            <div className={`flex items-center justify-between px-5 py-4 border-b ${theme.panelBorder} ${theme.toolbarBg}`}>
+              <div className="flex items-center gap-3">
+                <Info className="w-5 h-5 text-cyan-400" />
+                <h2 className={`text-base font-bold ${theme.text}`}>模型資訊</h2>
+              </div>
+              <button
+                onClick={() => setShowModelInfo(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                title="關閉"
+              >
+                <X className="w-4 h-4 text-gray-400" />
+              </button>
+            </div>
+
+            {/* 資訊內容 */}
+            <div className="p-5 space-y-4">
+              {/* 模型名稱 */}
+              <div className="text-center pb-3 border-b border-white/10">
+                <div className="text-xs text-gray-400 mb-1">模型名稱</div>
+                <div className={`text-lg font-semibold ${theme.text}`}>{modelInstance.name}</div>
+              </div>
+
+              {/* 幾何資訊 - Tris / Verts */}
+              <div className="space-y-2">
+                <div className="text-xs text-gray-400 uppercase tracking-wider">Geometry</div>
+                <div className="bg-black/30 rounded-xl p-3 space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Tris</span>
+                    <span className="text-lg font-bold text-blue-300">{modelInfo.triangleCount.toLocaleString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-400">Verts</span>
+                    <span className="text-lg font-bold text-green-300">{modelInfo.vertexCount.toLocaleString()}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 骨骼與渲染資訊 */}
+              <div className="grid grid-cols-2 gap-3">
+                {/* 骨骼數量 */}
+                <div className="bg-gradient-to-br from-purple-500/20 to-purple-600/10 border border-purple-500/30 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-purple-300">{modelInfo.boneCount.toLocaleString()}</div>
+                  <div className="text-xs text-purple-400 mt-1">Bones</div>
+                </div>
+
+                {/* DrawCall */}
+                <div className="bg-gradient-to-br from-orange-500/20 to-orange-600/10 border border-orange-500/30 rounded-xl p-3 text-center">
+                  <div className="text-2xl font-bold text-orange-300">{modelInfo.drawCallCount.toLocaleString()}</div>
+                  <div className="text-xs text-orange-400 mt-1">DrawCall</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
