@@ -1,4 +1,4 @@
-import React, { Component, ErrorInfo, ReactNode } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
@@ -49,14 +49,21 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-gray-300 mb-4">
               {this.state.error?.message || '未知錯誤'}
             </p>
-            {this.state.error?.stack && (
+            {(this.state.error?.stack || this.state.errorInfo?.componentStack) && (
               <details className="mb-4">
                 <summary className="cursor-pointer text-gray-400 hover:text-gray-200 mb-2">
                   錯誤詳情
                 </summary>
-                <pre className="bg-gray-900 p-4 rounded text-xs overflow-auto max-h-64 text-gray-400">
-                  {this.state.error.stack}
-                </pre>
+                {this.state.error?.stack && (
+                  <pre className="bg-gray-900 p-4 rounded text-xs overflow-auto max-h-64 text-gray-400 mb-2">
+                    {this.state.error.stack}
+                  </pre>
+                )}
+                {this.state.errorInfo?.componentStack && (
+                  <pre className="bg-gray-900 p-4 rounded text-xs overflow-auto max-h-64 text-gray-400">
+                    {this.state.errorInfo.componentStack}
+                  </pre>
+                )}
               </details>
             )}
             <div className="flex gap-4">
