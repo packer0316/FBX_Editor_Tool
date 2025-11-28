@@ -2,10 +2,11 @@
  * TrackRow - 軌道元件
  */
 
-import React, { memo, useCallback } from 'react';
+import React, { memo, useCallback, useRef } from 'react';
 import { Trash2, Lock, Unlock, Volume2, VolumeX } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ClipBlock } from './ClipBlock';
+import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import type { DirectorTrack } from '../../../../domain/entities/director/director.types';
 
 interface TrackRowProps {
@@ -19,7 +20,13 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   pixelsPerFrame,
   timelineWidth,
 }) => {
-  const { removeTrack, updateTrack, addClip, ui } = useDirectorStore();
+  const { removeTrack, updateTrack, ui } = useDirectorStore();
+  const trackRef = useRef<HTMLDivElement>(null);
+  
+  const { handleTrackDragOver, handleTrackDrop } = useDragAndDrop({
+    pixelsPerFrame,
+    enableSnap: true,
+  });
 
   const handleRemoveTrack = useCallback(() => {
     removeTrack(track.id);
@@ -34,36 +41,13 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   }, [updateTrack, track.id, track.isMuted]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
-    if (track.isLocked) return;
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-  }, [track.isLocked]);
+    handleTrackDragOver(e, track.id);
+  }, [handleTrackDragOver, track.id]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
-    if (track.isLocked) return;
-    e.preventDefault();
-    
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('application/json'));
-      if (data.type !== 'new') return;
-      
-      const rect = e.currentTarget.getBoundingClientRect();
-      const x = e.clientX - rect.left;
-      const startFrame = Math.max(0, Math.round(x / pixelsPerFrame));
-      
-      addClip({
-        trackId: track.id,
-        sourceModelId: data.sourceModelId,
-        sourceAnimationId: data.sourceAnimationId,
-        sourceAnimationName: data.sourceAnimationName,
-        sourceAnimationDuration: data.durationFrames,
-        startFrame,
-        color: data.color,
-      });
-    } catch {
-      // 忽略解析錯誤
-    }
-  }, [track.id, track.isLocked, pixelsPerFrame, addClip]);
+    if (!trackRef.current) return;
+    handleTrackDrop(e, track.id, trackRef.current);
+  }, [handleTrackDrop, track.id]);
 
   return (
     <div
@@ -105,6 +89,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
 
       {/* 時間軸區域（可放置片段） */}
       <div
+        ref={trackRef}
         className={`flex-1 relative ${track.isLocked ? 'cursor-not-allowed' : ''}`}
         style={{ width: timelineWidth }}
         onDragOver={handleDragOver}

@@ -814,5 +814,51 @@ Phase 4（播放同步）
 
 ---
 
+## 📊 開發進度追蹤
+
+> 最後更新：2025.11.28
+
+### Phase 0：準備工作 ✅
+- [x] 安裝 Zustand 狀態管理套件
+- [x] 建立 director 資料夾結構與 TypeScript 類型定義
+- [x] 建立 directorStore.ts (Zustand Store 骨架)
+
+### Phase 1：基礎 UI ✅
+- [x] 實作「Director」按鈕於 SceneToolbar
+- [x] 實作 DirectorPanel.tsx 主面板容器
+- [x] 實作 ActionSourcePanel.tsx 左側動作來源面板
+- [x] 實作 TimelineEditor.tsx 與 TimelineRuler.tsx
+- [x] 實作 TrackRow.tsx 軌道元件（新增/刪除功能）
+- [x] 實作 ClipBlock.tsx 片段方塊
+- [x] 整合 DirectorPanel 到 App.tsx
+
+### Phase 2：拖放功能 ✅
+- [x] 實作 useDragAndDrop.ts Hook
+- [x] 實作拖曳放置到軌道與幀位置計算
+- [x] 實作片段軌道內/跨軌道拖曳移動
+
+### Phase 3：播放功能 ⏳
+- [ ] 實作 Playhead.tsx 播放頭（拖曳跳轉）
+- [ ] 實作 PlaybackControls.tsx 播放控制列
+- [ ] 實作 useTimelinePlayback.ts 與多模型同步播放
+
+### Phase 4：進階互動
+- [ ] 時間軸縮放、片段選取刪除、快捷鍵支援
+- [ ] 軌道靜音/鎖定功能與右鍵選單
+
+### Phase 5：優化與打磨
+- [ ] 吸附功能與片段顏色區分
+- [ ] 動畫過渡效果與效能優化
+
+### 測試覆蓋
+| Phase | 測試數量 | 狀態 |
+|-------|---------|------|
+| Phase 0 | 59 tests | ✅ |
+| Phase 1 | 12 tests | ✅ |
+| Phase 2 | 5 tests | ✅ |
+| **Total** | **76 tests** | ✅ |
+
+---
+
 *此文檔將隨開發進度持續更新*
 

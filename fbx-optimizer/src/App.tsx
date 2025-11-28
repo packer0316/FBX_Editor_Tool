@@ -9,6 +9,8 @@ import ModelInspector from './presentation/features/model-inspector/components/M
 import AudioPanel from './presentation/features/audio-panel/components/AudioPanel';
 import EffectTestPanel, { type EffectItem } from './presentation/features/effect-panel/components/EffectTestPanel';
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
+import { DirectorPanel } from './presentation/features/director';
+import { useIsDirectorMode } from './presentation/stores/directorStore';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
@@ -59,6 +61,9 @@ export type { AudioTrack } from './domain/value-objects/AudioTrack';
 const BASE_LAYER_ID = 'layer_3d_base';
 
 function App() {
+  // Director Mode
+  const isDirectorMode = useIsDirectorMode();
+
   // 多模型管理
   const {
     models,
@@ -1139,17 +1144,23 @@ function App() {
           {/* 底部：模型檢測與動畫工具 */}
           <div
             className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative`}
-            style={{ height: `${panelHeight}px` }}
+            style={{ height: isDirectorMode ? '320px' : `${panelHeight}px` }}
           >
             {/* 拖拉調整高度的把手 */}
-            <div
-              className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
-              onMouseDown={handleMouseDown}
-            >
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
-            </div>
+            {!isDirectorMode && (
+              <div
+                className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
+                onMouseDown={handleMouseDown}
+              >
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
+              </div>
+            )}
 
-            <ModelInspector
+            {/* Director Mode Panel */}
+            {isDirectorMode ? (
+              <DirectorPanel actionSources={[]} />
+            ) : (
+              <ModelInspector
               model={model}
               clip={optimizedClip}
               currentTime={currentTime}
@@ -1183,6 +1194,7 @@ function App() {
               effects={effects}
               theme={currentTheme}
             />
+            )}
           </div>
         </div>
 

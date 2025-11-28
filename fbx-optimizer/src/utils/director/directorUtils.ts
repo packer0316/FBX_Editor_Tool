@@ -2,12 +2,12 @@
  * Director Mode 工具函數
  */
 
-import {
+import type {
   DirectorClip,
   DirectorTrack,
   ClipLocalTimeResult,
-  DEFAULT_FPS,
 } from '../../domain/entities/director/director.types';
+import { DEFAULT_FPS } from '../../domain/entities/director/director.types';
 
 // ============================================================================
 // 時間轉換函數

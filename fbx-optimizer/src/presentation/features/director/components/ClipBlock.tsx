@@ -4,6 +4,7 @@
 
 import React, { memo, useCallback } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import type { DirectorClip } from '../../../../domain/entities/director/director.types';
 
 interface ClipBlockProps {
@@ -17,7 +18,8 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   pixelsPerFrame,
   isLocked,
 }) => {
-  const { ui, selectClip, removeClip, setDragging, moveClip } = useDirectorStore();
+  const { ui, selectClip, removeClip } = useDirectorStore();
+  const { handleClipDragStart, handleDragEnd } = useDragAndDrop({ pixelsPerFrame });
   
   const isSelected = ui.selectedClipId === clip.id;
   const width = clip.sourceAnimationDuration * pixelsPerFrame;
@@ -45,29 +47,13 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       return;
     }
     
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      type: 'existing',
-      clipId: clip.id,
-      sourceModelId: clip.sourceModelId,
-      sourceAnimationId: clip.sourceAnimationId,
-      sourceAnimationName: clip.sourceAnimationName,
-      durationFrames: clip.sourceAnimationDuration,
-    }));
-    
-    setDragging(true, {
-      type: 'existing',
-      clipId: clip.id,
+    handleClipDragStart(e, clip.id, {
       sourceModelId: clip.sourceModelId,
       sourceAnimationId: clip.sourceAnimationId,
       sourceAnimationName: clip.sourceAnimationName,
       durationFrames: clip.sourceAnimationDuration,
     });
-  }, [clip, isLocked, setDragging]);
-
-  const handleDragEnd = useCallback(() => {
-    setDragging(false, null);
-  }, [setDragging]);
+  }, [clip, isLocked, handleClipDragStart]);
 
   return (
     <div
