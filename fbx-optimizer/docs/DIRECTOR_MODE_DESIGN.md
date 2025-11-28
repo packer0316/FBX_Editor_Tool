@@ -830,20 +830,31 @@ Phase 4（播放同步）
 - [x] 實作 TimelineEditor.tsx 與 TimelineRuler.tsx
 - [x] 實作 TrackRow.tsx 軌道元件（新增/刪除功能）
 - [x] 實作 ClipBlock.tsx 片段方塊
+- [x] 實作 Playhead.tsx 播放頭
+- [x] 實作 PlaybackControls.tsx 播放控制列
 - [x] 整合 DirectorPanel 到 App.tsx
+- [x] 收集模型動作來源 (actionSources)
 
 ### Phase 2：拖放功能 ✅
 - [x] 實作 useDragAndDrop.ts Hook
 - [x] 實作拖曳放置到軌道與幀位置計算
 - [x] 實作片段軌道內/跨軌道拖曳移動
+- [x] 實作即時拖曳預覽（ClipBlock 跟隨滑鼠）
+- [x] 修正內部拖曳不觸發檔案上傳區域
+- [x] 修正佈局：Track Header 與 Timeline 分離
+- [x] 自動擴展時間軸長度
 
-### Phase 3：播放功能 ⏳
-- [ ] 實作 Playhead.tsx 播放頭（拖曳跳轉）
-- [ ] 實作 PlaybackControls.tsx 播放控制列
-- [ ] 實作 useTimelinePlayback.ts 與多模型同步播放
+### Phase 3：播放功能 ✅
+- [x] 實作 useTimelinePlayback.ts Hook
+- [x] 實作 requestAnimationFrame 播放循環
+- [x] 實作模型動畫同步控制（當前活躍模型）
+- [x] 根據片段位置計算局部時間並更新動畫
+- [x] ESC 鍵關閉 Director Mode
+- [x] 進入 Director Mode 時暫停原本播放
 
 ### Phase 4：進階互動
-- [ ] 時間軸縮放、片段選取刪除、快捷鍵支援
+- [ ] 時間軸縮放（滑鼠滾輪）
+- [ ] 片段選取刪除、快捷鍵支援
 - [ ] 軌道靜音/鎖定功能與右鍵選單
 
 ### Phase 5：優化與打磨
@@ -856,6 +867,7 @@ Phase 4（播放同步）
 | Phase 0 | 59 tests | ✅ |
 | Phase 1 | 12 tests | ✅ |
 | Phase 2 | 5 tests | ✅ |
+| Phase 3 | - (整合測試) | ✅ |
 | **Total** | **76 tests** | ✅ |
 
 ---

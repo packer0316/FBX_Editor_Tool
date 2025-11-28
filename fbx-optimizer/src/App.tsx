@@ -93,6 +93,14 @@ function App() {
   const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
+  // 進入 Director Mode 時暫停原本的播放
+  useEffect(() => {
+    if (isDirectorMode) {
+      sceneViewerRef.current?.pause();
+      setIsPlaying(false);
+    }
+  }, [isDirectorMode]);
+
   // 鍵盤相機控制狀態
   const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
   const [cameraMoveSpeed, setCameraMoveSpeed] = useState(5.0);
@@ -1194,7 +1202,36 @@ function App() {
 
             {/* Director Mode Panel */}
             {isDirectorMode ? (
-              <DirectorPanel actionSources={actionSources} />
+              <DirectorPanel 
+                actionSources={actionSources}
+                onUpdateModelAnimation={(modelId, animationId, localTime) => {
+                  console.log('[Director] Update model animation:', {
+                    modelId,
+                    animationId,
+                    localTime,
+                  });
+                  
+                  // 通過 updateModel 更新對應模型的 currentTime
+                  // 這樣每個模型都能獨立播放
+                  const targetModel = models.find(m => m.id === modelId);
+                  if (targetModel) {
+                    // 找到對應的動畫 clip
+                    const allClips = [
+                      targetModel.originalClip,
+                      targetModel.masterClip,
+                      targetModel.optimizedClip,
+                      ...targetModel.createdClips,
+                    ].filter((c): c is IdentifiableClip => c !== null);
+                    
+                    const targetClip = allClips.find(c => getClipId(c) === animationId);
+                    
+                    updateModel(modelId, {
+                      currentTime: localTime,
+                      clip: targetClip || targetModel.clip,
+                    });
+                  }
+                }}
+              />
             ) : (
               <ModelInspector
               model={model}

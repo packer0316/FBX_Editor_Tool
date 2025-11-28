@@ -434,18 +434,32 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 }
             },
             seekTo: (time: number) => {
-                if (actionRef.current) {
+                if (actionRef.current && mixerRef.current) {
+                    // 設置動畫時間
                     actionRef.current.time = time;
+                    
                     // 同步時間到 model.userData 供 ModelPreview 使用
                     if (model) {
                         model.userData.animationTime = time;
                     }
-                    if (!isPlayingRef.current && mixerRef.current) {
-                        const wasPaused = actionRef.current.paused;
-                        actionRef.current.paused = false;
-                        mixerRef.current.update(0);
-                        actionRef.current.paused = wasPaused;
+                    
+                    // 強制更新骨架位置（即使動畫暫停）
+                    // 關鍵：必須先取消暫停，更新 mixer，再恢復暫停狀態
+                    const wasPaused = actionRef.current.paused;
+                    const wasPlaying = isPlayingRef.current;
+                    
+                    // 確保 action 處於可更新狀態
+                    actionRef.current.paused = false;
+                    if (!actionRef.current.isRunning()) {
+                        actionRef.current.play();
                     }
+                    
+                    // 更新 mixer 以應用新的時間到骨架
+                    mixerRef.current.update(0.001); // 使用極小的 delta 強制更新
+                    
+                    // 恢復原狀態
+                    actionRef.current.paused = wasPaused;
+                    isPlayingRef.current = wasPlaying;
                 }
             },
             getCurrentTime: () => actionRef.current?.time ?? 0,
@@ -1135,6 +1149,13 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
         });
         
+        // 監聽外部 currentTime 變化（用於 Director Mode）
+        useEffect(() => {
+            if (currentTime !== undefined && modelRef.current) {
+                modelRef.current.seekTo(currentTime);
+            }
+        }, [currentTime]);
+
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
             pause: () => modelRef.current?.pause(),

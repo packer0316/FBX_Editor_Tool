@@ -2,21 +2,46 @@
  * DirectorPanel - 導演模式主面板
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ActionSourcePanel } from './ActionSourcePanel';
 import { TimelineEditor } from './TimelineEditor';
 import { PlaybackControls } from './PlaybackControls';
+import { useTimelinePlayback } from '../hooks/useTimelinePlayback';
 import type { ActionSource } from '../../../../domain/entities/director/director.types';
 
 interface DirectorPanelProps {
   /** 動作來源列表（從模型中收集） */
   actionSources: ActionSource[];
+  /** 更新模型動畫的回調 */
+  onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number) => void;
 }
 
-export const DirectorPanel: React.FC<DirectorPanelProps> = ({ actionSources }) => {
+export const DirectorPanel: React.FC<DirectorPanelProps> = ({ 
+  actionSources,
+  onUpdateModelAnimation,
+}) => {
   const { isDirectorMode, exitDirectorMode } = useDirectorStore();
+
+  // 使用播放控制 Hook
+  const { activeClips } = useTimelinePlayback({
+    callbacks: {
+      onUpdateModelAnimation: onUpdateModelAnimation ?? (() => {}),
+    },
+  });
+
+  // ESC 鍵關閉
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isDirectorMode) {
+        exitDirectorMode();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isDirectorMode, exitDirectorMode]);
 
   if (!isDirectorMode) return null;
 

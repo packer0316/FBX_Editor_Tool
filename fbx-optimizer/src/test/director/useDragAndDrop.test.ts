@@ -55,15 +55,18 @@ describe('useDragAndDrop', () => {
     expect(result.current.draggingData).toBeNull();
   });
 
-  it('calculateDropFrame 應該處理 scrollLeft', () => {
+  it('calculateDropFrame 應該處理 scrollOffsetX (from store)', () => {
+    // 設定 store 的 scrollOffsetX
+    useDirectorStore.getState().setScrollOffset(200, 0);
+    
     const { result } = renderHook(() => useDragAndDrop({ pixelsPerFrame: 4 }));
     
     const mockTrackElement = {
       getBoundingClientRect: () => ({ left: 100, top: 0, width: 1000, height: 48 }),
-      scrollLeft: 200, // 已捲動 200px = 50 frames
+      scrollLeft: 0, // scrollLeft 不再使用，改用 store 的 scrollOffsetX
     } as HTMLElement;
     
-    // clientX = 140, rect.left = 100, scrollLeft = 200
+    // clientX = 140, rect.left = 100, scrollOffsetX = 200
     // x = 140 - 100 + 200 = 240, frame = 240/4 = 60
     const frame = result.current.calculateDropFrame(140, mockTrackElement);
     expect(frame).toBe(60);
