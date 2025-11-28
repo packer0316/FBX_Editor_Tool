@@ -178,5 +178,5 @@ GitHub 倉庫：
   https://github.com/packer0316/FBX_Editor_Tool
 
 
-最後更新：2024
+最後更新：2025.11.28
 

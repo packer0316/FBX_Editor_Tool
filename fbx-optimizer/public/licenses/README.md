@@ -133,7 +133,7 @@ npm install @breezystack/lamejs
 
 如有授權相關疑問，請聯繫：
 
-- **專案維護者**：[請在此填寫聯繫方式]
+- **專案維護者**：(JR.H)
 - **lamejs 問題**：https://github.com/zhuker/lamejs/issues
 - **Effekseer 問題**：https://github.com/effekseer/Effekseer/issues
 
@@ -143,7 +143,7 @@ npm install @breezystack/lamejs
 
 | 日期 | 版本 | 更新內容 |
 |------|------|----------|
-| 2024-11-25 | v1.0 | 初始授權文件，包含 lamejs 和 Effekseer |
+| 2025.11.28 | v1.0 | 初始授權文件，包含 lamejs 和 Effekseer |
 
 ---
 
@@ -157,6 +157,6 @@ npm install @breezystack/lamejs
 
 ---
 
-**最後更新**：2024年11月25日  
-**文件維護**：專案開發團隊
+**最後更新**：2025.11.28  
+**文件維護**：(JR.H)
 

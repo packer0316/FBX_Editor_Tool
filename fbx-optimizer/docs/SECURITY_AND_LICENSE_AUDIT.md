@@ -1,6 +1,6 @@
 # 🔐 JR 3D Viewer 專案安全與版權審查報告
 
-> **審查日期**：2024年11月25日  
+> **審查日期**：2025.11.28  
 > **專案版本**：0.0.0  
 > **審查範圍**：安全疑慮、資安風險、版權使用
 
@@ -484,7 +484,7 @@ touch LICENSE
 <!-- LICENSE -->
 MIT License
 
-Copyright (c) 2024 [您的名稱/組織]
+Copyright (c) 2025 (JR.H)
 
 [完整 MIT 授權條款]
 
@@ -898,12 +898,12 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
 | 日期 | 版本 | 更新內容 |
 |------|------|----------|
-| 2024-11-25 | v1.0 | 初始審查報告 |
+| 2025.11.28 | v1.0 | 初始審查報告 |
 
 ---
 
-**最後更新**：2024年11月25日  
-**審查人員**：AI 代碼審查助手  
+**最後更新**：2025.11.28  
+**審查人員**：(JR.H)  
 **下次審查**：建議 3 個月後或重大更新時
 
 ---
@@ -921,7 +921,7 @@ echo "📝 創建 LICENSE 文件..."
 cat > LICENSE << 'EOF'
 MIT License
 
-Copyright (c) 2024 [您的名稱]
+Copyright (c) 2025 (JR.H)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
