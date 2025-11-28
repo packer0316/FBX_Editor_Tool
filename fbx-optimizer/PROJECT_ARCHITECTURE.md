@@ -48,6 +48,12 @@
 - 2D 元素：文字、圖片、形狀
 - 圖層優先級與透明度控制
 
+### 7. Director Mode（導演模式）
+- 多模型動畫統一編排（類似影片剪輯軟體）
+- 時間軸與多軌道管理
+- 跨模型動畫同步播放
+- 全域時間軸控制
+
 ---
 
 ## 🏛️ 分層架構（DDD 啟發）
@@ -93,6 +99,7 @@ Presentation → Application → Domain ← Infrastructure
 | `Layer.ts` | 2D 圖層定義 |
 | `Element2D.ts` | 2D 元素（文字/圖片/形狀） |
 | `CameraPreset.ts` | 相機預設參數 |
+| `director.types.ts` | Director Mode 類型定義（Track、Clip、Timeline） |
 
 ### Services（業務邏輯）
 
@@ -184,6 +191,11 @@ Presentation → Application → Domain ← Infrastructure
 | | `Layer2DRenderer.tsx` | 2D 圖層渲染器 |
 | | `Element2DEditorPanel.tsx` | 2D 元素編輯器 |
 | `optimization-panel` | `OptimizationControls.tsx` | 動畫優化控制 |
+| `director` | `DirectorPanel.tsx` | Director Mode 主面板 |
+| | `ActionSourcePanel.tsx` | 動作來源面板 |
+| | `TimelineEditor.tsx` | 時間軸編輯器 |
+| | `TrackRow.tsx` | 軌道行 |
+| | `ClipBlock.tsx` | 片段方塊 |
 
 ### Hooks（共用邏輯）
 
@@ -196,6 +208,15 @@ Presentation → Application → Domain ← Infrastructure
 | `useBoneExtraction` | 骨骼提取 |
 | `useModelsManager` | 多模型狀態管理 |
 | `useKeyboardCameraControls` | 鍵盤相機控制 |
+| `useTimelinePlayback` | Director Mode 時間軸播放控制 |
+| `useDragAndDrop` | Director Mode 拖放邏輯 |
+| `useKeyboardShortcuts` | Director Mode 快捷鍵 |
+
+### Stores（狀態管理）
+
+| Store | 說明 |
+|------|------|
+| `directorStore` | Director Mode 全域狀態（Zustand） |
 
 ---
 
