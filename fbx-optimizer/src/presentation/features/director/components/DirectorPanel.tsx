@@ -2,13 +2,14 @@
  * DirectorPanel - 導演模式主面板
  */
 
-import React, { useEffect } from 'react';
-import { X } from 'lucide-react';
+import React from 'react';
+import { X, Keyboard } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ActionSourcePanel } from './ActionSourcePanel';
 import { TimelineEditor } from './TimelineEditor';
 import { PlaybackControls } from './PlaybackControls';
 import { useTimelinePlayback } from '../hooks/useTimelinePlayback';
+import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { ActionSource } from '../../../../domain/entities/director/director.types';
 
 interface DirectorPanelProps {
@@ -34,17 +35,8 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
     },
   });
 
-  // ESC 鍵關閉
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isDirectorMode) {
-        exitDirectorMode();
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isDirectorMode, exitDirectorMode]);
+  // 鍵盤快捷鍵
+  const { shortcuts } = useKeyboardShortcuts({ enabled: isDirectorMode });
 
   if (!isDirectorMode) return null;
 
@@ -67,13 +59,36 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
             🎬 Director Mode
           </span>
         </div>
-        <button
-          onClick={exitDirectorMode}
-          className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-          title="關閉導演模式 (ESC)"
-        >
-          <X size={18} />
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 快捷鍵提示 */}
+          <div className="group relative">
+            <button
+              className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+              title="快捷鍵"
+            >
+              <Keyboard size={16} />
+            </button>
+            {/* Tooltip */}
+            <div className="absolute right-0 top-full mt-2 w-52 bg-gray-800/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl p-3 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+              <div className="text-xs text-gray-400 mb-2 font-medium">快捷鍵</div>
+              <div className="space-y-1.5 text-xs">
+                {shortcuts.map((s, i) => (
+                  <div key={i} className="flex justify-between text-gray-300">
+                    <span className="text-gray-500">{s.key}</span>
+                    <span>{s.description}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={exitDirectorMode}
+            className="p-1.5 rounded-lg hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            title="關閉導演模式 (ESC)"
+          >
+            <X size={18} />
+          </button>
+        </div>
       </div>
 
       {/* 主內容區 */}
