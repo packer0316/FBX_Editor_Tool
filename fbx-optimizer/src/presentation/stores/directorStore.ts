@@ -267,7 +267,7 @@ export const useDirectorStore = create<DirectorStore>()(
       // ========================================
       
       addClip: (params: CreateClipParams) => {
-        const { tracks } = get();
+        const { tracks, timeline } = get();
         const track = tracks.find((t) => t.id === params.trackId);
         
         if (!track || track.isLocked) {
@@ -290,6 +290,11 @@ export const useDirectorStore = create<DirectorStore>()(
           color: params.color ?? getNextColor(),
         };
         
+        // 自動擴展時間軸（留 10% 緩衝空間）
+        const newEndFrame = newClip.endFrame;
+        const minTotalFrames = Math.ceil(newEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
         set(
           (state) => ({
             tracks: state.tracks.map((t) =>
@@ -297,6 +302,10 @@ export const useDirectorStore = create<DirectorStore>()(
                 ? { ...t, clips: [...t.clips, newClip] }
                 : t
             ),
+            timeline: {
+              ...state.timeline,
+              totalFrames: newTotalFrames,
+            },
           }),
           undefined,
           'addClip'
@@ -306,7 +315,7 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       moveClip: (params: MoveClipParams) => {
-        const { tracks } = get();
+        const { tracks, timeline } = get();
         const { clipId, newTrackId, newStartFrame } = params;
         
         // 找到片段
@@ -338,6 +347,11 @@ export const useDirectorStore = create<DirectorStore>()(
           endFrame: newStartFrame + sourceClip.sourceAnimationDuration - 1,
         };
         
+        // 自動擴展時間軸（留 10% 緩衝空間）
+        const newEndFrame = updatedClip.endFrame;
+        const minTotalFrames = Math.ceil(newEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
         // 同軌道移動 vs 跨軌道移動
         const isSameTrack = sourceTrackId === newTrackId;
         
@@ -367,6 +381,10 @@ export const useDirectorStore = create<DirectorStore>()(
               
               return t;
             }),
+            timeline: {
+              ...state.timeline,
+              totalFrames: newTotalFrames,
+            },
           }),
           undefined,
           'moveClip'
