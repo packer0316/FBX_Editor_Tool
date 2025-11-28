@@ -2,7 +2,7 @@
  * ActionSourcePanel - 左側動作來源面板
  */
 
-import React, { useState } from 'react';
+import React, { useState, memo } from 'react';
 import { ChevronRight, ChevronDown, GripVertical } from 'lucide-react';
 import type { ActionSource, ActionSourceItem } from '../../../../domain/entities/director/director.types';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
@@ -12,7 +12,7 @@ interface ActionSourcePanelProps {
   actionSources: ActionSource[];
 }
 
-export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = ({ actionSources }) => {
+export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({ actionSources }) => {
   const [expandedModels, setExpandedModels] = useState<Set<string>>(new Set());
   const { setDragging } = useDirectorStore();
 
@@ -51,6 +51,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = ({ actionSour
       sourceAnimationId: clip.clipId,
       sourceAnimationName: clip.displayName,
       durationFrames: clip.durationFrames,
+      color: source.modelColor,
     });
   };
 
@@ -124,7 +125,9 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = ({ actionSour
       </div>
     </div>
   );
-};
+});
+
+ActionSourcePanel.displayName = 'ActionSourcePanel';
 
 export default ActionSourcePanel;
 

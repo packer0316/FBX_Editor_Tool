@@ -2,7 +2,7 @@
  * Playhead - 播放頭
  */
 
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useRef, memo } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
 
 interface PlayheadProps {
@@ -11,7 +11,7 @@ interface PlayheadProps {
   height: number;
 }
 
-export const Playhead: React.FC<PlayheadProps> = ({
+export const Playhead: React.FC<PlayheadProps> = memo(({
   currentFrame,
   pixelsPerFrame,
   height,
@@ -68,7 +68,9 @@ export const Playhead: React.FC<PlayheadProps> = ({
       <div className="absolute left-1/2 -translate-x-1/2 w-px h-full bg-red-500" />
     </div>
   );
-};
+});
+
+Playhead.displayName = 'Playhead';
 
 export default Playhead;
 

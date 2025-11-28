@@ -2,7 +2,7 @@
  * TimelineRuler - 時間刻度尺
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
 
 interface TimelineRulerProps {
@@ -12,7 +12,7 @@ interface TimelineRulerProps {
   scrollOffsetX: number;
 }
 
-export const TimelineRuler: React.FC<TimelineRulerProps> = ({
+export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
   totalFrames,
   fps,
   pixelsPerFrame,
@@ -95,7 +95,9 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = ({
       </div>
     </div>
   );
-};
+});
+
+TimelineRuler.displayName = 'TimelineRuler';
 
 export default TimelineRuler;
 

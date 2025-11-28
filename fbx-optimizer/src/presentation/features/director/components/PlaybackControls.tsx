@@ -2,12 +2,12 @@
  * PlaybackControls - 播放控制列
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, memo } from 'react';
 import { Play, Pause, Square, Repeat, SkipBack, SkipForward } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
 
-export const PlaybackControls: React.FC = () => {
+export const PlaybackControls: React.FC = memo(() => {
   const {
     timeline,
     play,
@@ -165,7 +165,9 @@ export const PlaybackControls: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+
+PlaybackControls.displayName = 'PlaybackControls';
 
 export default PlaybackControls;
 

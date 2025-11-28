@@ -2,9 +2,10 @@
  * ClipBlock - 片段方塊（支援即時拖曳）
  */
 
-import React, { memo, useCallback, useState, useRef, useEffect } from 'react';
+import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import type { DirectorClip } from '../../../../domain/entities/director/director.types';
+import { snapToGrid, snapToClipEdges } from '../../../../utils/director/directorUtils';
 
 interface ClipBlockProps {
   clip: DirectorClip;
@@ -17,7 +18,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   pixelsPerFrame,
   isLocked,
 }) => {
-  const { ui, selectClip, removeClip, moveClip } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, tracks } = useDirectorStore();
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const dragStartX = useRef(0);
@@ -26,10 +27,30 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   const isSelected = ui.selectedClipId === clip.id;
   const width = clip.sourceAnimationDuration * pixelsPerFrame;
   
-  // 計算顯示位置（拖曳時使用臨時位置）
-  const displayFrame = isDragging 
-    ? Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame))
-    : clip.startFrame;
+  // 使用 useMemo 計算顯示位置和吸附狀態
+  const { displayFrame, showSnapIndicator } = useMemo(() => {
+    let frame = isDragging 
+      ? Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame))
+      : clip.startFrame;
+    
+    let isSnapped = false;
+    
+    // 拖曳時應用吸附
+    if (isDragging) {
+      const snapThreshold = 5; // 5 幀內吸附
+      const snappedFrame = snapToClipEdges(frame, tracks, snapThreshold, clip.id);
+      if (snappedFrame !== frame) {
+        frame = snappedFrame;
+        isSnapped = true;
+      } else {
+        frame = snapToGrid(frame, 1);
+        isSnapped = false;
+      }
+    }
+    
+    return { displayFrame: frame, showSnapIndicator: isSnapped };
+  }, [isDragging, dragOffset, pixelsPerFrame, clip.startFrame, clip.id, tracks]);
+  
   const left = displayFrame * pixelsPerFrame;
 
   const handleClick = useCallback((e: React.MouseEvent) => {
@@ -67,15 +88,20 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     const handleMouseUp = () => {
       setIsDragging(false);
       
-      // 計算最終幀位置
-      const newStartFrame = Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame));
+      // 使用當前 displayFrame 作為最終位置（已經應用吸附）
+      const rawFrame = Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame));
+      const snapThreshold = 5;
+      let finalFrame = snapToClipEdges(rawFrame, tracks, snapThreshold, clip.id);
+      if (finalFrame === rawFrame) {
+        finalFrame = snapToGrid(rawFrame, 1);
+      }
       
       // 只有位置改變才更新
-      if (newStartFrame !== clip.startFrame) {
+      if (finalFrame !== clip.startFrame) {
         moveClip({
           clipId: clip.id,
           newTrackId: clip.trackId,
-          newStartFrame,
+          newStartFrame: finalFrame,
         });
       }
       
@@ -89,27 +115,43 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip]);
+  }, [isDragging, dragOffset, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks]);
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-      onMouseDown={handleMouseDown}
-      className={`absolute top-1 bottom-1 rounded px-2 flex items-center overflow-hidden select-none
-        ${isSelected ? 'ring-2 ring-white/50' : ''}
-        ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab'}
-        ${isDragging ? 'cursor-grabbing opacity-90 z-50' : 'hover:brightness-110'}
-        transition-colors duration-100`}
-      style={{
-        left,
-        width: Math.max(width, 20),
-        backgroundColor: clip.color,
-        transition: isDragging ? 'none' : undefined,
-      }}
-    >
+    <>
+      {/* 吸附指示線 */}
+      {isDragging && showSnapIndicator && (
+        <>
+          <div 
+            className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-40 pointer-events-none"
+            style={{ left }}
+          />
+          <div 
+            className="absolute top-0 bottom-0 w-0.5 bg-amber-400 z-40 pointer-events-none"
+            style={{ left: left + width }}
+          />
+        </>
+      )}
+      
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onMouseDown={handleMouseDown}
+        className={`absolute top-1 bottom-1 rounded px-2 flex items-center overflow-hidden select-none
+          ${isSelected ? 'ring-2 ring-white/50' : ''}
+          ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab'}
+          ${isDragging ? 'cursor-grabbing opacity-90 z-50' : 'hover:brightness-110'}
+          ${showSnapIndicator ? 'ring-1 ring-amber-400' : ''}
+          transition-colors duration-100`}
+        style={{
+          left,
+          width: Math.max(width, 20),
+          backgroundColor: clip.color,
+          transition: isDragging ? 'none' : undefined,
+        }}
+      >
       <span className="text-xs text-white font-medium truncate drop-shadow-sm pointer-events-none">
         {clip.sourceModelName} - {clip.sourceAnimationName}
       </span>
@@ -121,6 +163,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         </span>
       )}
     </div>
+    </>
   );
 });
 

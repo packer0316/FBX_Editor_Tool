@@ -198,6 +198,9 @@ export interface DraggingClipData {
   
   /** 動作幀數 */
   durationFrames: number;
+  
+  /** 片段顏色（依據模型區分） */
+  color?: string;
 }
 
 // ============================================================================

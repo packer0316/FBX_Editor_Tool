@@ -156,6 +156,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
           sourceAnimationName: data.sourceAnimationName,
           sourceAnimationDuration: data.durationFrames,
           startFrame,
+          color: data.color,
         });
       } else if (data.type === 'existing' && data.clipId) {
         // 移動現有片段
