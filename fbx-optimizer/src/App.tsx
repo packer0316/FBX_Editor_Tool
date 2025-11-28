@@ -107,6 +107,7 @@ function App() {
 
   // Panel Resize
   const { panelHeight, handleMouseDown } = usePanelResize(384);
+  const { panelHeight: directorPanelHeight, handleMouseDown: handleDirectorMouseDown } = usePanelResize(400, 250, window.innerHeight - 150);
   const { rightPanelWidth, handleRightPanelMouseDown } = useRightPanelResize(
     320,
     280,
@@ -1188,22 +1189,13 @@ function App() {
           {/* 底部：模型檢測與動畫工具 */}
           <div
             className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative`}
-            style={{ height: isDirectorMode ? '320px' : `${panelHeight}px` }}
+            style={{ height: isDirectorMode ? `${directorPanelHeight}px` : `${panelHeight}px` }}
           >
-            {/* 拖拉調整高度的把手 */}
-            {!isDirectorMode && (
-              <div
-                className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
-                onMouseDown={handleMouseDown}
-              >
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
-              </div>
-            )}
-
             {/* Director Mode Panel */}
             {isDirectorMode ? (
               <DirectorPanel 
                 actionSources={actionSources}
+                onResizeHandleMouseDown={handleDirectorMouseDown}
                 onUpdateModelAnimation={(modelId, animationId, localTime) => {
                   console.log('[Director] Update model animation:', {
                     modelId,
@@ -1233,7 +1225,16 @@ function App() {
                 }}
               />
             ) : (
-              <ModelInspector
+              <>
+                {/* 拖拉調整高度的把手 */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
+                  onMouseDown={handleMouseDown}
+                >
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
+                </div>
+                
+                <ModelInspector
               model={model}
               clip={optimizedClip}
               currentTime={currentTime}
@@ -1267,6 +1268,7 @@ function App() {
               effects={effects}
               theme={currentTheme}
             />
+              </>
             )}
           </div>
         </div>

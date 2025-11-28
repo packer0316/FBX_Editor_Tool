@@ -16,11 +16,14 @@ interface DirectorPanelProps {
   actionSources: ActionSource[];
   /** 更新模型動畫的回調 */
   onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number) => void;
+  /** 調整高度把手的 mouseDown 處理 */
+  onResizeHandleMouseDown?: (e: React.MouseEvent) => void;
 }
 
 export const DirectorPanel: React.FC<DirectorPanelProps> = ({ 
   actionSources,
   onUpdateModelAnimation,
+  onResizeHandleMouseDown,
 }) => {
   const { isDirectorMode, exitDirectorMode } = useDirectorStore();
 
@@ -46,7 +49,17 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
   if (!isDirectorMode) return null;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-[320px] bg-gray-900/95 backdrop-blur-xl border-t border-white/10 z-[400] flex flex-col animate-slide-up">
+    <div className="absolute inset-0 bg-gray-900/95 backdrop-blur-xl flex flex-col">
+      {/* 拖曳調整高度的把手 */}
+      {onResizeHandleMouseDown && (
+        <div
+          className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-amber-400 cursor-ns-resize transition-colors z-50"
+          onMouseDown={onResizeHandleMouseDown}
+        >
+          <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-amber-500 rounded-full"></div>
+        </div>
+      )}
+      
       {/* 標題列 */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/10 bg-black/30">
         <div className="flex items-center gap-3">
