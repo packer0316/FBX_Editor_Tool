@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RotateCcw, Camera, Video, Square, Monitor, X } from 'lucide-react';
+import { RotateCcw, Camera, Video, Square, Monitor, X, Clapperboard } from 'lucide-react';
+import { useDirectorStore } from '../../../stores/directorStore';
 import { type ThemeStyle } from '../../../hooks/useTheme';
 
 export type AspectRatio = '16:9' | '16:10' | '21:9' | '32:9' | 'custom' | 'free';
@@ -32,6 +33,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     theme
 }) => {
     const [showAspectMenu, setShowAspectMenu] = useState(false);
+    const { isDirectorMode, toggleDirectorMode } = useDirectorStore();
     const [showCustomDialog, setShowCustomDialog] = useState(false);
     const [tempWidth, setTempWidth] = useState(customWidth.toString());
     const [tempHeight, setTempHeight] = useState(customHeight.toString());
@@ -193,6 +195,29 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                         </div>
                     )}
                 </div>
+
+                {/* 分隔線 */}
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+                {/* Director Mode 按鈕 */}
+                <button
+                    onClick={toggleDirectorMode}
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${
+                        isDirectorMode
+                            ? 'text-amber-400 bg-amber-500/20 ring-1 ring-amber-500/50'
+                            : `${theme.button} hover:scale-110`
+                    }`}
+                    title="Director Mode"
+                >
+                    <Clapperboard size={18} />
+                    <span className="sr-only">Director Mode</span>
+
+                    {/* Tooltip */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                        {isDirectorMode ? '關閉導演模式' : '導演模式'}
+                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                    </div>
+                </button>
             </div>
 
             {/* 自訂尺寸對話框 */}
