@@ -21,30 +21,30 @@ interface ModelPreviewProps {
 
 // Scene Settings Controller (與主場景相同)
 function SceneSettings({ toneMappingExposure, environmentIntensity }: { toneMappingExposure?: number, environmentIntensity?: number }) {
-    const { gl, scene } = useThree();
+  const { gl, scene } = useThree();
 
-    useEffect(() => {
-        if (toneMappingExposure !== undefined) {
-            gl.toneMappingExposure = toneMappingExposure;
-        }
-    }, [toneMappingExposure, gl]);
+  useEffect(() => {
+    if (toneMappingExposure !== undefined) {
+      gl.toneMappingExposure = toneMappingExposure;
+    }
+  }, [toneMappingExposure, gl]);
 
-    useEffect(() => {
-        if (environmentIntensity !== undefined) {
-            if ('environmentIntensity' in scene) {
-                (scene as any).environmentIntensity = environmentIntensity;
-            }
-        }
-    }, [environmentIntensity, scene]);
+  useEffect(() => {
+    if (environmentIntensity !== undefined) {
+      if ('environmentIntensity' in scene) {
+        (scene as any).environmentIntensity = environmentIntensity;
+      }
+    }
+  }, [environmentIntensity, scene]);
 
-    return null;
+  return null;
 }
 
 // 動畫同步組件 - 監聯主場景的動畫時間並更新克隆模型的動畫
-function AnimationSync({ 
-  mixer, 
-  originalModel 
-}: { 
+function AnimationSync({
+  mixer,
+  originalModel
+}: {
   mixer: THREE.AnimationMixer | null;
   originalModel: THREE.Group;
 }) {
@@ -56,7 +56,7 @@ function AnimationSync({
     // 從原始模型獲取當前動畫時間
     // 原始模型的 userData 中存儲了 animationTime（由主場景更新）
     const currentTime = (originalModel as any).userData?.animationTime ?? 0;
-    
+
     // 只有時間變化時才更新（避免不必要的計算）
     if (Math.abs(currentTime - lastTimeRef.current) > 0.001) {
       // 直接設置時間，確保完全同步
@@ -69,13 +69,13 @@ function AnimationSync({
 }
 
 // 模型渲染組件 - 使用克隆模型但同步原始模型的動畫
-function ModelRenderer({ 
-  model, 
-  position, 
-  rotation, 
+function ModelRenderer({
+  model,
+  position,
+  rotation,
   scale,
-}: { 
-  model: THREE.Group; 
+}: {
+  model: THREE.Group;
   position: [number, number, number];
   rotation: [number, number, number];
   scale: [number, number, number];
@@ -88,17 +88,17 @@ function ModelRenderer({
   useEffect(() => {
     // 深度克隆模型（包括骨骼）
     const cloned = model.clone(true);
-    
+
     // 為 SkinnedMesh 重新綁定骨骼
     const skinnedMeshes: THREE.SkinnedMesh[] = [];
     const originalSkinnedMeshes: THREE.SkinnedMesh[] = [];
-    
+
     model.traverse((child) => {
       if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
         originalSkinnedMeshes.push(child as THREE.SkinnedMesh);
       }
     });
-    
+
     cloned.traverse((child) => {
       if ((child as THREE.SkinnedMesh).isSkinnedMesh) {
         skinnedMeshes.push(child as THREE.SkinnedMesh);
@@ -118,7 +118,7 @@ function ModelRenderer({
               bones.push(clonedBone);
             }
           });
-          
+
           if (bones.length > 0) {
             mesh.skeleton = new THREE.Skeleton(bones, originalSkeleton.boneInverses.map(m => m.clone()));
             mesh.bind(mesh.skeleton, mesh.bindMatrix.clone());
@@ -202,7 +202,7 @@ function IndependentCameraControls() {
 // 格線組件
 function PreviewGrid({ visible }: { visible: boolean }) {
   if (!visible) return null;
-  
+
   return (
     <Grid
       args={[20, 20]}
@@ -221,10 +221,10 @@ function PreviewGrid({ visible }: { visible: boolean }) {
 }
 
 // 3D 預覽內容組件
-function PreviewCanvas({ 
-  model, 
-  position, 
-  rotation, 
+function PreviewCanvas({
+  model,
+  position,
+  rotation,
   scale,
   toneMappingExposure,
   environmentIntensity,
@@ -246,7 +246,7 @@ function PreviewCanvas({
     const size = box.getSize(new THREE.Vector3());
     const maxDim = Math.max(size.x, size.y, size.z) * 0.01; // scale 0.01
     const distance = maxDim * 80; // 距離更遠
-    
+
     // 相機位置：正前方 45 度俯角
     // 45 度俯角：Y 和 Z 相等時就是 45 度
     const height = distance * Math.sin(Math.PI / 4); // 45 度的高度
@@ -256,19 +256,19 @@ function PreviewCanvas({
 
   return (
     <Canvas
-      camera={{ 
-        position: initialCameraPosition(), 
+      camera={{
+        position: initialCameraPosition(),
         fov: 50,
         near: 0.01,
         far: 1000
       }}
-      gl={{ 
+      gl={{
         preserveDrawingBuffer: true,
-        antialias: true 
+        antialias: true
       }}
       onCreated={({ gl }) => {
         gl.outputColorSpace = THREE.SRGBColorSpace;
-        gl.toneMapping = THREE.ACESFilmicToneMapping;
+        gl.toneMapping = THREE.LinearToneMapping;
         if (toneMappingExposure !== undefined) {
           gl.toneMappingExposure = toneMappingExposure;
         }
@@ -276,22 +276,22 @@ function PreviewCanvas({
     >
       <IndependentCameraControls />
       <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
-      
+
       {/* 環境光 */}
       {hdriUrl && <Environment files={hdriUrl} background={false} blur={0.5} />}
       <ambientLight intensity={0.8 * (environmentIntensity ?? 1.0)} />
       <hemisphereLight args={["#ffffff", "#444444", 0.6]} />
-      
+
       {/* 方向光 */}
       <directionalLight position={[5, 10, 7.5]} intensity={1.2} />
       <directionalLight position={[-10, 5, -5]} intensity={0.6} />
       <directionalLight position={[0, -5, 0]} intensity={0.4} />
-      
+
       {/* 格線 */}
       <PreviewGrid visible={showGrid} />
-      
-      <ModelRenderer 
-        model={model} 
+
+      <ModelRenderer
+        model={model}
         position={position}
         rotation={rotation}
         scale={scale}
@@ -326,7 +326,7 @@ function ExpandedPreviewModal({
   onClose: () => void;
 }) {
   const modalRef = useRef<HTMLDivElement>(null);
-  
+
   // 計算初始大小和位置（在主場景區域，避開右側工具列約 400px）
   const getInitialSize = useCallback(() => {
     const rightPanelWidth = 420; // 右側工具列寬度
@@ -335,10 +335,10 @@ function ExpandedPreviewModal({
     const height = Math.min(window.innerHeight * 0.8, 800);
     return { width, height };
   }, []);
-  
+
   // 視窗大小狀態
   const [modalSize, setModalSize] = useState(getInitialSize);
-  
+
   // 計算初始偏移（讓視窗在主場景區域中間）
   const getInitialOffset = useCallback(() => {
     const rightPanelWidth = 420;
@@ -347,9 +347,9 @@ function ExpandedPreviewModal({
     const offsetX = -(rightPanelWidth / 2);
     return { x: offsetX, y: 0 };
   }, []);
-  
+
   const initialOffset = getInitialOffset();
-  
+
   // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
   const dragStateRef = useRef({
     isDragging: false,
@@ -374,7 +374,7 @@ function ExpandedPreviewModal({
       modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
     }
   }, []);
-  
+
   // 初始化位置
   useEffect(() => {
     updateModalPosition();
@@ -385,7 +385,7 @@ function ExpandedPreviewModal({
     dragStateRef.current.isDragging = true;
     dragStateRef.current.startX = e.clientX - dragStateRef.current.currentX;
     dragStateRef.current.startY = e.clientY - dragStateRef.current.currentY;
-    
+
     if (modalRef.current) {
       modalRef.current.style.cursor = 'grabbing';
     }
@@ -408,18 +408,18 @@ function ExpandedPreviewModal({
       if (dragStateRef.current.isDragging) {
         dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
         dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
-        
+
         if (dragStateRef.current.rafId) {
           cancelAnimationFrame(dragStateRef.current.rafId);
         }
         dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
       }
-      
+
       // 處理調整大小
       if (resizeStateRef.current.isResizing) {
         const deltaX = e.clientX - resizeStateRef.current.startX;
         const deltaY = e.clientY - resizeStateRef.current.startY;
-        
+
         setModalSize({
           width: Math.max(500, Math.min(window.innerWidth * 0.9, resizeStateRef.current.startWidth + deltaX)),
           height: Math.max(400, Math.min(window.innerHeight * 0.9, resizeStateRef.current.startHeight + deltaY))
@@ -448,11 +448,11 @@ function ExpandedPreviewModal({
   }, [updateModalPosition]);
 
   return (
-    <div 
+    <div
       className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
       onClick={onClose}
     >
-      <div 
+      <div
         ref={modalRef}
         className="relative bg-gray-900 rounded-2xl border border-gray-600 overflow-hidden shadow-2xl will-change-transform flex flex-col"
         style={{
@@ -463,7 +463,7 @@ function ExpandedPreviewModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* 標題列 - 可拖動 */}
-        <div 
+        <div
           className="flex items-center justify-between px-4 py-3 bg-gray-800/90 border-b border-gray-700 cursor-grab active:cursor-grabbing select-none"
           onMouseDown={handleMouseDown}
         >
@@ -472,7 +472,7 @@ function ExpandedPreviewModal({
             <Box className="w-5 h-5 text-blue-400" />
             <h2 className="text-base font-bold text-white">模型預覽</h2>
           </div>
-          
+
           <div className="flex items-center gap-2">
             {/* 格線開關 */}
             <button
@@ -481,17 +481,16 @@ function ExpandedPreviewModal({
                 setShowGrid(!showGrid);
               }}
               onMouseDown={(e) => e.stopPropagation()}
-              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-2 text-xs ${
-                showGrid 
-                  ? 'bg-blue-500/90 text-white border-blue-400' 
+              className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-2 text-xs ${showGrid
+                  ? 'bg-blue-500/90 text-white border-blue-400'
                   : 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
-              }`}
+                }`}
               title={showGrid ? '隱藏格線' : '顯示格線'}
             >
               <Grid3X3 className="w-3.5 h-3.5" />
               {showGrid ? '格線開' : '格線關'}
             </button>
-            
+
             {/* 關閉按鈕 */}
             <button
               onClick={onClose}
@@ -516,12 +515,12 @@ function ExpandedPreviewModal({
             hdriUrl={hdriUrl}
             showGrid={showGrid}
           />
-          
+
           {/* 操作提示 */}
           <div className="absolute bottom-4 left-4 text-xs text-gray-400 bg-black/60 px-3 py-2 rounded-lg">
             🖱️ 左鍵旋轉 | 右鍵平移 | 滾輪縮放
           </div>
-          
+
           {/* 視窗大小顯示 */}
           <div className="absolute bottom-4 right-16 text-[10px] text-gray-500 bg-black/40 px-2 py-1 rounded">
             {modalSize.width} × {modalSize.height}
@@ -533,11 +532,11 @@ function ExpandedPreviewModal({
           className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group"
           onMouseDown={handleResizeStart}
         >
-          <svg 
+          <svg
             className="w-full h-full text-gray-500 group-hover:text-blue-400 transition-colors"
             viewBox="0 0 24 24"
           >
-            <path fill="currentColor" d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z"/>
+            <path fill="currentColor" d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z" />
           </svg>
         </div>
       </div>
@@ -545,11 +544,11 @@ function ExpandedPreviewModal({
   );
 }
 
-export default function ModelPreview({ 
-  model, 
-  position, 
-  rotation, 
-  scale, 
+export default function ModelPreview({
+  model,
+  position,
+  rotation,
+  scale,
   visible,
   shaderGroups = [],
   isShaderEnabled = true,
@@ -584,7 +583,7 @@ export default function ModelPreview({
           hdriUrl={hdriUrl}
           showGrid={showGrid}
         />
-        
+
         {/* 右下角控制按鈕 */}
         <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-all">
           {/* 格線開關 */}
@@ -593,16 +592,15 @@ export default function ModelPreview({
               e.stopPropagation();
               setShowGrid(!showGrid);
             }}
-            className={`p-1.5 rounded border transition-all ${
-              showGrid 
-                ? 'bg-blue-500/80 text-white border-blue-400' 
+            className={`p-1.5 rounded border transition-all ${showGrid
+                ? 'bg-blue-500/80 text-white border-blue-400'
                 : 'bg-gray-900/80 hover:bg-gray-800 text-gray-400 hover:text-white border-gray-600 hover:border-gray-500'
-            }`}
+              }`}
             title={showGrid ? '隱藏格線' : '顯示格線'}
           >
             <Grid3X3 className="w-3 h-3" />
           </button>
-          
+
           {/* 放大按鈕 */}
           <button
             onClick={(e) => {
