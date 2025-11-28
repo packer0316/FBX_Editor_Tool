@@ -16,7 +16,7 @@ interface DirectorPanelProps {
   /** 動作來源列表（從模型中收集） */
   actionSources: ActionSource[];
   /** 更新模型動畫的回調 */
-  onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number) => void;
+  onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number, localFrame: number) => void;
   /** 調整高度把手的 mouseDown 處理 */
   onResizeHandleMouseDown?: (e: React.MouseEvent) => void;
 }

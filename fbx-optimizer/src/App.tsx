@@ -29,6 +29,7 @@ import { CreateClipUseCase } from './application/use-cases/CreateClipUseCase';
 import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
 import { EffectSyncUseCase } from './application/use-cases/EffectSyncUseCase';
+import { PlayEffectUseCase } from './application/use-cases/PlayEffectUseCase';
 import { InitializeLayerStackUseCase } from './application/use-cases/InitializeLayerStackUseCase';
 import { CreateLayerUseCase } from './application/use-cases/CreateLayerUseCase';
 import { UpdateLayerUseCase } from './application/use-cases/UpdateLayerUseCase';
@@ -1196,30 +1197,87 @@ function App() {
               <DirectorPanel 
                 actionSources={actionSources}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
-                onUpdateModelAnimation={(modelId, animationId, localTime) => {
+                onUpdateModelAnimation={(modelId, animationId, localTime, localFrame) => {
                   console.log('[Director] Update model animation:', {
                     modelId,
                     animationId,
                     localTime,
+                    localFrame,
                   });
                   
                   // 通過 updateModel 更新對應模型的 currentTime
                   // 這樣每個模型都能獨立播放
                   const targetModel = models.find(m => m.id === modelId);
                   if (targetModel) {
-                    // 找到對應的動畫 clip
-                    const allClips = [
-                      targetModel.originalClip,
-                      targetModel.masterClip,
-                      targetModel.optimizedClip,
-                      ...targetModel.createdClips,
-                    ].filter((c): c is IdentifiableClip => c !== null);
-                    
-                    const targetClip = allClips.find(c => getClipId(c) === animationId);
-                    
+                    // 更新模型的當前播放時間
                     updateModel(modelId, {
                       currentTime: localTime,
-                      clip: targetClip || targetModel.clip,
+                    });
+
+                    // 觸發音效
+                    targetModel.audioTracks.forEach((track: AudioTrack) => {
+                      track.triggers.forEach((trigger) => {
+                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
+                          console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
+                          audioControllerRef.current.play(track);
+                        }
+                      });
+                    });
+
+                    // 觸發特效
+                    targetModel.effects.forEach((effect: EffectItem) => {
+                      if (!effect.isLoaded) return;
+                      
+                      effect.triggers.forEach((trigger) => {
+                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
+                          console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
+                          
+                          // 計算位置（包含骨骼綁定）
+                          let x = effect.position[0];
+                          let y = effect.position[1];
+                          let z = effect.position[2];
+                          
+                          if (effect.boundBoneUuid && targetModel.model) {
+                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
+                            if (boundBone) {
+                              const boneWorldPos = new THREE.Vector3();
+                              boundBone.getWorldPosition(boneWorldPos);
+                              x = boneWorldPos.x + effect.position[0];
+                              y = boneWorldPos.y + effect.position[1];
+                              z = boneWorldPos.z + effect.position[2];
+                            }
+                          }
+                          
+                          // 計算旋轉
+                          let rx = effect.rotation[0];
+                          let ry = effect.rotation[1];
+                          let rz = effect.rotation[2];
+                          
+                          if (effect.boundBoneUuid && targetModel.model) {
+                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
+                            if (boundBone) {
+                              const boneWorldQuat = new THREE.Quaternion();
+                              boundBone.getWorldQuaternion(boneWorldQuat);
+                              const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
+                              
+                              rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
+                              ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
+                              rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
+                            }
+                          }
+                          
+                          // 播放特效
+                          PlayEffectUseCase.execute({
+                            id: effect.id,
+                            x, y, z,
+                            rx: rx * Math.PI / 180,
+                            ry: ry * Math.PI / 180,
+                            rz: rz * Math.PI / 180,
+                            sx: effect.scale[0], sy: effect.scale[1], sz: effect.scale[2],
+                            speed: effect.speed
+                          });
+                        }
+                      });
                     });
                   }
                 }}

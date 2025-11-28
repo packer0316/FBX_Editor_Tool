@@ -17,7 +17,8 @@ export interface PlaybackCallbacks {
   onUpdateModelAnimation: (
     modelId: string,
     animationId: string,
-    localTime: number
+    localTime: number,
+    localFrame: number // 當前幀數（用於觸發音效和特效）
   ) => void;
   
   /** 當片段開始播放時調用 */
@@ -95,10 +96,12 @@ export function useTimelinePlayback(
       
       // 通知外部更新模型動畫
       if (localTime !== null) {
+        const localFrame = Math.floor(localTime * fps);
         callbacksRef.current.onUpdateModelAnimation(
           clip.sourceModelId,
           clip.sourceAnimationId,
-          localTime
+          localTime,
+          localFrame
         );
       }
       
