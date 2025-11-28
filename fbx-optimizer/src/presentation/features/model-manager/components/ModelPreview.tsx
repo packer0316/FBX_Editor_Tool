@@ -311,8 +311,7 @@ function ExpandedPreviewModal({
   hdriUrl,
   showGrid,
   setShowGrid,
-  onClose,
-  initialCameraPosition
+  onClose
 }: {
   model: THREE.Group;
   position: [number, number, number];
