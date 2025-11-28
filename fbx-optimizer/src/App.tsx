@@ -98,19 +98,19 @@ function App() {
 
   // 進入 Director Mode 時暫停原本的播放並禁用 LOOP
   const savedLoopStatesRef = useRef<Map<string, boolean>>(new Map());
-  
+
   useEffect(() => {
     if (isDirectorMode) {
       // 進入 Director Mode
       sceneViewerRef.current?.pause();
       setIsPlaying(false);
-      
+
       // 保存並禁用所有模型的 LOOP 設置
       models.forEach(model => {
         savedLoopStatesRef.current.set(model.id, model.isLoopEnabled);
         updateModel(model.id, { isLoopEnabled: false });
       });
-      
+
       return () => {
         // 退出 Director Mode 時恢復 LOOP 設置
         models.forEach(model => {
@@ -308,7 +308,7 @@ function App() {
       finalHeight = finalWidth / targetRatio;
     }
 
-    console.log(`[AspectRatio] Container: ${containerSize.width}x${containerSize.height}, Target: ${aspectRatio} (${targetRatio.toFixed(2)}), Result: ${Math.round(finalWidth)}x${Math.round(finalHeight)}`);
+    // console.log(`[AspectRatio] Container: ${containerSize.width}x${containerSize.height}, Target: ${aspectRatio} (${targetRatio.toFixed(2)}), Result: ${Math.round(finalWidth)}x${Math.round(finalHeight)}`);
 
     return { width: finalWidth, height: finalHeight };
   }, [aspectRatio, customWidth, customHeight, containerSize]);
@@ -1149,7 +1149,7 @@ function App() {
                     />
                   ))}
                   {/* 3D SceneViewer - 始終渲染，使用 CSS 控制顯示/隱藏，避免條件渲染導致的 DOM 錯誤 */}
-                  <div 
+                  <div
                     className={`absolute inset-0 z-[100] ${is3DEnabled ? '' : 'invisible pointer-events-none'}`}
                   >
                     <SceneViewer
@@ -1242,17 +1242,17 @@ function App() {
           >
             {/* Director Mode Panel */}
             {isDirectorMode ? (
-              <DirectorPanel 
+              <DirectorPanel
                 actionSources={actionSources}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
                 onUpdateModelAnimation={(modelId, animationId, localTime, localFrame) => {
-                  console.log('[Director] Update model animation:', {
-                    modelId,
-                    animationId,
-                    localTime,
-                    localFrame,
-                  });
-                  
+                  // console.log('[Director] Update model animation:', {
+                  //   modelId,
+                  //   animationId,
+                  //   localTime,
+                  //   localFrame,
+                  // });
+
                   // 通過 updateModel 更新對應模型的 currentTime
                   // 這樣每個模型都能獨立播放
                   const targetModel = models.find(m => m.id === modelId);
@@ -1266,7 +1266,7 @@ function App() {
                     targetModel.audioTracks.forEach((track: AudioTrack) => {
                       track.triggers.forEach((trigger) => {
                         if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
+                          // console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
                           audioControllerRef.current.play(track);
                         }
                       });
@@ -1275,16 +1275,16 @@ function App() {
                     // 觸發特效
                     targetModel.effects.forEach((effect: EffectItem) => {
                       if (!effect.isLoaded) return;
-                      
+
                       effect.triggers.forEach((trigger) => {
                         if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
-                          
+                          // console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
+
                           // 計算位置（包含骨骼綁定）
                           let x = effect.position[0];
                           let y = effect.position[1];
                           let z = effect.position[2];
-                          
+
                           if (effect.boundBoneUuid && targetModel.model) {
                             const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
                             if (boundBone) {
@@ -1295,25 +1295,25 @@ function App() {
                               z = boneWorldPos.z + effect.position[2];
                             }
                           }
-                          
+
                           // 計算旋轉
                           let rx = effect.rotation[0];
                           let ry = effect.rotation[1];
                           let rz = effect.rotation[2];
-                          
+
                           if (effect.boundBoneUuid && targetModel.model) {
                             const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
                             if (boundBone) {
                               const boneWorldQuat = new THREE.Quaternion();
                               boundBone.getWorldQuaternion(boneWorldQuat);
                               const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-                              
+
                               rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
                               ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
                               rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
                             }
                           }
-                          
+
                           // 播放特效
                           PlayEffectUseCase.execute({
                             id: effect.id,
@@ -1339,41 +1339,41 @@ function App() {
                 >
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
                 </div>
-                
-                <ModelInspector
-              model={model}
-              clip={optimizedClip}
-              currentTime={currentTime}
-              duration={duration}
-              isPlaying={isPlaying}
-              onPlayPause={handlePlayPause}
-              onSeek={handleSeek}
-              onCreateClip={handleCreateClip}
-              createdClips={createdClips}
-              onSelectClip={handleSelectClip}
-              onDeleteCreatedClip={handleDeleteCreatedClip}
-              playlist={playlist}
-              isPlaylistPlaying={isPlaylistPlaying}
-              currentPlaylistIndex={currentPlaylistIndex}
-              onAddToPlaylist={handleAddToPlaylist}
-              onRemoveFromPlaylist={handleRemoveFromPlaylist}
-              onReorderPlaylist={handleReorderPlaylist}
-              onPlayPlaylist={handlePlayPlaylist}
-              onPausePlaylist={handlePausePlaylist}
 
-              isLoopEnabled={isLoopEnabled}
-              onToggleLoop={() => {
-                const newLoopState = !isLoopEnabled;
-                setIsLoopEnabled(newLoopState);
-                // 同步更新 activeModel 的循環設置
-                if (activeModelId) {
-                  updateModel(activeModelId, { isLoopEnabled: newLoopState });
-                }
-              }}
-              audioTracks={audioTracks}
-              effects={effects}
-              theme={currentTheme}
-            />
+                <ModelInspector
+                  model={model}
+                  clip={optimizedClip}
+                  currentTime={currentTime}
+                  duration={duration}
+                  isPlaying={isPlaying}
+                  onPlayPause={handlePlayPause}
+                  onSeek={handleSeek}
+                  onCreateClip={handleCreateClip}
+                  createdClips={createdClips}
+                  onSelectClip={handleSelectClip}
+                  onDeleteCreatedClip={handleDeleteCreatedClip}
+                  playlist={playlist}
+                  isPlaylistPlaying={isPlaylistPlaying}
+                  currentPlaylistIndex={currentPlaylistIndex}
+                  onAddToPlaylist={handleAddToPlaylist}
+                  onRemoveFromPlaylist={handleRemoveFromPlaylist}
+                  onReorderPlaylist={handleReorderPlaylist}
+                  onPlayPlaylist={handlePlayPlaylist}
+                  onPausePlaylist={handlePausePlaylist}
+
+                  isLoopEnabled={isLoopEnabled}
+                  onToggleLoop={() => {
+                    const newLoopState = !isLoopEnabled;
+                    setIsLoopEnabled(newLoopState);
+                    // 同步更新 activeModel 的循環設置
+                    if (activeModelId) {
+                      updateModel(activeModelId, { isLoopEnabled: newLoopState });
+                    }
+                  }}
+                  audioTracks={audioTracks}
+                  effects={effects}
+                  theme={currentTheme}
+                />
               </>
             )}
           </div>
@@ -1493,26 +1493,26 @@ function App() {
                 onRemoveModel={(id) => {
                   // 獲取要刪除的模型
                   const modelToRemove = models.find(m => m.id === id);
-                  
+
                   if (modelToRemove) {
                     // 1. 清理 Three.js 模型資源（Geometry, Material, Texture）
                     disposeModel(modelToRemove.model);
-                    
+
                     // 2. 清理音效資源
                     modelToRemove.audioTracks?.forEach((track) => {
                       audioControllerRef.current.cleanup(track.id);
                     });
-                    
+
                     // 3. 清理特效資源
                     modelToRemove.effects?.forEach((effect) => {
                       const effekseerAdapter = getEffekseerRuntimeAdapter();
                       effekseerAdapter.cleanup(effect.id);
                     });
-                    
+
                     // 4. 清理 Director Mode 中該模型的所有 Clips
                     useDirectorStore.getState().removeClipsByModelId(id);
                   }
-                  
+
                   // 5. 移除模型
                   removeModel(id);
                   // 如果刪除的是活動模型，已經在 hook 中處理了

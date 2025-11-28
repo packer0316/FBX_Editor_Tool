@@ -114,7 +114,7 @@ function EffekseerFrameBridge() {
     // 初始化 Effekseer（使用 Three.js 的 WebGL Context）
     React.useEffect(() => {
         const webglContext = gl.getContext() as WebGLRenderingContext;
-        
+
         console.log('[EffekseerFrameBridge] 開始初始化 Effekseer Runtime...');
         InitEffekseerRuntimeUseCase.execute({ webglContext })
             .then(() => {
@@ -129,7 +129,7 @@ function EffekseerFrameBridge() {
     // Effekseer 更新（只更新邏輯，不渲染）
     useFrame((_state, delta) => {
         if (!initialized) return;
-        
+
         const adapter = getEffekseerRuntimeAdapter();
         const context = adapter.effekseerContext;
         if (context) {
@@ -148,7 +148,7 @@ function EffekseerFrameBridge() {
 
         // 掛載 onAfterRender 回調
         const originalOnAfterRender = scene.onAfterRender;
-        
+
         scene.onAfterRender = (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => {
             // 先呼叫原始的 onAfterRender（如果有）
             if (originalOnAfterRender) {
@@ -157,18 +157,40 @@ function EffekseerFrameBridge() {
                 (originalOnAfterRender as (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void)(renderer, scene, camera);
             }
 
+            // 獲取 WebGL Context
+            const gl = renderer.getContext() as WebGLRenderingContext;
+
+            // 保存當前 Three.js 的 WebGL 狀態
+            const savedBlend = gl.getParameter(gl.BLEND);
+            const savedDepthTest = gl.getParameter(gl.DEPTH_TEST);
+            const savedDepthWrite = gl.getParameter(gl.DEPTH_WRITEMASK);
+            const savedCullFace = gl.getParameter(gl.CULL_FACE);
+
+            // 設置 Effekseer 需要的 WebGL 狀態
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.enable(gl.DEPTH_TEST);
+            gl.depthMask(true);
+            gl.disable(gl.CULL_FACE);
+
             // 同步相機矩陣
             const projMatrix = (camera as any).projectionMatrix.elements;
             const camMatrix = (camera as any).matrixWorldInverse.elements;
             context.setProjectionMatrix(projMatrix);
             context.setCameraMatrix(camMatrix);
-            
+
             // 繪製 Effekseer（在 Three.js 渲染完成後）
             context.draw();
-            
+
+            // 恢復 Three.js 的 WebGL 狀態
+            if (savedBlend) gl.enable(gl.BLEND); else gl.disable(gl.BLEND);
+            if (savedDepthTest) gl.enable(gl.DEPTH_TEST); else gl.disable(gl.DEPTH_TEST);
+            gl.depthMask(savedDepthWrite);
+            if (savedCullFace) gl.enable(gl.CULL_FACE); else gl.disable(gl.CULL_FACE);
+
             // 重置 Three.js 狀態（避免 Effekseer 破壞 WebGL 狀態）
             renderer.resetState();
-            
+
             // 如果正在錄影，手動請求新幀（確保 Effekseer 渲染內容被捕獲）
             if (recordingState.isRecording && recordingState.captureStream) {
                 const videoTrack = recordingState.captureStream.getVideoTracks()[0];
@@ -183,7 +205,7 @@ function EffekseerFrameBridge() {
             scene.onAfterRender = originalOnAfterRender;
         };
     }, [initialized, scene, camera]);
-    
+
     return null;
 }
 
@@ -307,7 +329,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 // 如果 clip 和 loop 都沒有改變且已經初始化，保持當前狀態，不重置
                 const clipChanged = currentClipRef.current !== clip;
                 const loopChanged = currentLoopRef.current !== loop;
-                
+
                 if (!clipChanged && !loopChanged && initializedRef.current && actionRef.current) {
                     // clip 和 loop 都相同且已初始化，不重置，讓模型繼續自己的播放狀態
                     return;
@@ -324,7 +346,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     if (mixerRef.current) {
                         mixerRef.current.removeEventListener('finished', handleFinish);
                     }
-                    
+
                     // 更新 loop 設置
                     if (!loop) {
                         actionRef.current.setLoop(THREE.LoopOnce, 1);
@@ -334,9 +356,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         actionRef.current.setLoop(THREE.LoopRepeat, Infinity);
                         actionRef.current.clampWhenFinished = false;
                     }
-                    
+
                     currentLoopRef.current = loop;
-                    
+
                     // 返回清理函數
                     return () => {
                         if (mixerRef.current) {
@@ -437,26 +459,26 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 if (actionRef.current && mixerRef.current) {
                     // 設置動畫時間
                     actionRef.current.time = time;
-                    
+
                     // 同步時間到 model.userData 供 ModelPreview 使用
                     if (model) {
                         model.userData.animationTime = time;
                     }
-                    
+
                     // 強制更新骨架位置（即使動畫暫停）
                     // 關鍵：必須先取消暫停，更新 mixer，再恢復暫停狀態
                     const wasPaused = actionRef.current.paused;
                     const wasPlaying = isPlayingRef.current;
-                    
+
                     // 確保 action 處於可更新狀態
                     actionRef.current.paused = false;
                     if (!actionRef.current.isRunning()) {
                         actionRef.current.play();
                     }
-                    
+
                     // 更新 mixer 以應用新的時間到骨架
                     mixerRef.current.update(0.001); // 使用極小的 delta 強制更新
-                    
+
                     // 恢復原狀態
                     actionRef.current.paused = wasPaused;
                     isPlayingRef.current = wasPlaying;
@@ -477,12 +499,12 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 if (onTimeUpdateRef.current && actionRef.current) {
                     // console.log('SceneViewer: sending time', actionRef.current.time);
                     onTimeUpdateRef.current(actionRef.current.time);
-                    
+
                     // 將當前動畫時間存到 model.userData 中，供 ModelPreview 同步使用
                     if (model) {
                         model.userData.animationTime = actionRef.current.time;
                     }
-                    
+
                     // 檢查動畫是否結束（非循環模式下）
                     if (!loopRef.current && actionRef.current.time >= actionRef.current.getClip().duration) {
                         // 動畫已結束，觸發 onFinish 回調並停止播放
@@ -1083,28 +1105,28 @@ type MultiModelProps = {
 
 const MultiModel = forwardRef<ModelRef, MultiModelProps>(
     ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false }, ref) => {
-        const { 
-            model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+        const {
+            model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible,
             isPlaying = false, currentTime, isLoopEnabled,
             isCameraOrbiting = false, cameraOrbitSpeed = 30,
             isModelRotating = false, modelRotationSpeed = 30
         } = modelInstance;
-        
+
         // 使用模型自己的 loop 設置，如果有的話
         const modelLoop = isLoopEnabled !== undefined ? isLoopEnabled : loop;
-        
+
         // 使用現有的 Model 組件處理動畫和 shader
         const modelRef = useRef<ModelRef>(null);
         const groupRef = useRef<THREE.Group>(null);
-        
+
         // 相機公轉累積角度
         const cameraOrbitAngleRef = useRef(0);
-        
+
         // 模型自轉累積角度
         const modelRotationAngleRef = useRef(rotation[1]); // 儲存 Y 軸初始角度
-        
+
         const { camera } = useThree();
-        
+
         // 每個模型都應該更新時間，即使不是活動模型
         // 但只有活動模型的時間更新會觸發 onTimeUpdate 回調（用於 UI 同步）
         const handleTimeUpdate = (time: number) => {
@@ -1114,59 +1136,59 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
             // 所有模型都會繼續播放和更新，但只有活動模型會同步到 UI
         };
-        
+
         // 相機公轉邏輯（只在活動模型上執行）
         useFrame((state, delta) => {
             if (isCameraOrbiting && isActiveModel && model) {
                 const controls = state.controls as any;
                 const modelPosition = new THREE.Vector3(...position);
-                
+
                 // 確保 OrbitControls 目標點設置為模型位置
                 if (controls && controls.target) {
                     controls.target.copy(modelPosition);
                 }
-                
+
                 // 計算當前相機到模型的實時距離（允許用戶用滾輪調整）
                 const currentDistance = camera.position.distanceTo(modelPosition);
-                
+
                 // 獲取相機的高度（Y 軸位置相對於模型）
                 const heightOffset = camera.position.y - modelPosition.y;
-                
+
                 // 計算水平距離（用於圓周運動）
                 const horizontalDistance = Math.sqrt(currentDistance * currentDistance - heightOffset * heightOffset);
-                
+
                 // 更新累積角度
                 cameraOrbitAngleRef.current += (cameraOrbitSpeed * delta * Math.PI) / 180;
-                
+
                 // 計算新的相機位置（水平圓周運動，保持高度）
                 const newX = modelPosition.x + horizontalDistance * Math.sin(cameraOrbitAngleRef.current);
                 const newZ = modelPosition.z + horizontalDistance * Math.cos(cameraOrbitAngleRef.current);
                 const newY = modelPosition.y + heightOffset;
-                
+
                 camera.position.set(newX, newY, newZ);
-                
+
                 // 讓相機始終朝向模型中心
                 camera.lookAt(modelPosition);
             }
         });
-        
+
         // 模型自轉邏輯
         useFrame((_state, delta) => {
             if (isModelRotating && groupRef.current) {
                 // 更新累積角度（度數）
                 modelRotationAngleRef.current += modelRotationSpeed * delta;
-                
+
                 // 將度數轉換為弧度並應用到 Y 軸旋轉
                 const rotationRad = [
                     (rotation[0] * Math.PI) / 180,
                     (modelRotationAngleRef.current * Math.PI) / 180,
                     (rotation[2] * Math.PI) / 180
                 ] as [number, number, number];
-                
+
                 groupRef.current.rotation.set(...rotationRad);
             }
         });
-        
+
         // 監聽外部 currentTime 變化（用於 Director Mode）
         useEffect(() => {
             if (currentTime !== undefined && modelRef.current) {
@@ -1213,30 +1235,30 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
 );
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
-    ({ 
-        model, 
-        playingClip, 
+    ({
+        model,
+        playingClip,
         models,
         activeModelId,
-        onTimeUpdate, 
-        shaderGroups = [], 
-        isShaderEnabled = true, 
-        loop, 
-        onFinish, 
-        backgroundColor = '#111827', 
-        cameraSettings, 
-        boundBone, 
-        isCameraBound, 
-        showGroundPlane, 
-        groundPlaneColor = '#444444', 
-        groundPlaneOpacity = 1.0, 
-        enableShadows = false, 
-        showGrid = true, 
-        gridColor = '#4a4a4a', 
-        gridCellColor = '#2a2a2a', 
-        toneMappingExposure, 
-        whitePoint: _whitePoint, 
-        hdriUrl, 
+        onTimeUpdate,
+        shaderGroups = [],
+        isShaderEnabled = true,
+        loop,
+        onFinish,
+        backgroundColor = '#111827',
+        cameraSettings,
+        boundBone,
+        isCameraBound,
+        showGroundPlane,
+        groundPlaneColor = '#444444',
+        groundPlaneOpacity = 1.0,
+        enableShadows = false,
+        showGrid = true,
+        gridColor = '#4a4a4a',
+        gridCellColor = '#2a2a2a',
+        toneMappingExposure,
+        whitePoint: _whitePoint,
+        hdriUrl,
         environmentIntensity,
         keyboardControlsEnabled = true,
         cameraMoveSpeed = 5.0,
@@ -1291,19 +1313,19 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     try {
                         // 獲取 canvas 元素
                         const canvas = glRef.current.domElement;
-                        
+
                         console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
-                        
+
                         // 使用 canvas.toDataURL 生成圖片
                         const dataURL = canvas.toDataURL('image/png', 1.0);
-                        
+
                         console.log('DataURL length:', dataURL.length);
-                        
+
                         // 驗證截圖不是空白的
                         if (dataURL === 'data:,' || dataURL.length < 100) {
                             throw new Error('Canvas appears to be empty');
                         }
-                        
+
                         // 創建下載連結
                         const link = document.createElement('a');
                         const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -1312,7 +1334,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         document.body.appendChild(link);
                         link.click();
                         document.body.removeChild(link);
-                        
+
                         console.log('Screenshot saved successfully:', link.download);
                     } catch (error) {
                         console.error('Failed to take screenshot:', error);
@@ -1337,15 +1359,15 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
 
                 try {
                     const canvas = glRef.current.domElement;
-                    
+
                     // 從 canvas 獲取視頻流（使用 0 FPS 表示手動捕獲模式）
                     // 這樣可以確保在 Effekseer 渲染完成後才捕獲畫面
                     const stream = canvas.captureStream(0); // 0 FPS = 手動捕獲
                     captureStreamRef.current = stream;
-                    
+
                     // 設置 MediaRecorder
                     let mimeType = 'video/webm;codecs=vp9';
-                    
+
                     // 檢查瀏覽器支持的格式
                     if (!MediaRecorder.isTypeSupported(mimeType)) {
                         console.warn('vp9 not supported, trying vp8');
@@ -1355,33 +1377,33 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             mimeType = 'video/webm';
                         }
                     }
-                    
+
                     const options: MediaRecorderOptions = {
                         mimeType: mimeType,
                         videoBitsPerSecond: 8000000 // 8 Mbps
                     };
-                    
+
                     const mediaRecorder = new MediaRecorder(stream, options);
                     recordedChunksRef.current = [];
-                    
+
                     // 更新全局錄影狀態
                     recordingState.isRecording = true;
                     recordingState.captureStream = stream;
-                    
+
                     mediaRecorder.ondataavailable = (event) => {
                         if (event.data.size > 0) {
                             recordedChunksRef.current.push(event.data);
                             console.log('Recorded chunk:', event.data.size, 'bytes');
                         }
                     };
-                    
+
                     mediaRecorder.onstop = () => {
                         console.log('Recording stopped, total chunks:', recordedChunksRef.current.length);
-                        
+
                         if (recordedChunksRef.current.length > 0) {
                             const blob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
                             const url = URL.createObjectURL(blob);
-                            
+
                             // 創建下載連結
                             const link = document.createElement('a');
                             const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
@@ -1390,33 +1412,33 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             document.body.appendChild(link);
                             link.click();
                             document.body.removeChild(link);
-                            
+
                             // 清理
                             setTimeout(() => URL.revokeObjectURL(url), 100);
-                            
+
                             console.log('Recording saved successfully:', link.download);
                         } else {
                             console.error('No recorded data');
                             alert('錄影失敗：沒有錄製到資料');
                         }
-                        
+
                         recordedChunksRef.current = [];
                         isRecordingRef.current = false;
                         // 清理全局錄影狀態
                         recordingState.isRecording = false;
                         recordingState.captureStream = null;
                     };
-                    
+
                     mediaRecorder.onerror = (event: Event) => {
                         console.error('MediaRecorder error:', event);
                         alert('錄影過程中發生錯誤');
                         isRecordingRef.current = false;
                     };
-                    
+
                     mediaRecorder.start(100); // 每 100ms 收集一次數據
                     mediaRecorderRef.current = mediaRecorder;
                     isRecordingRef.current = true;
-                    
+
                     console.log('Recording started with', mimeType);
                 } catch (error) {
                     console.error('Failed to start recording:', error);
