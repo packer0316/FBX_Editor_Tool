@@ -21,6 +21,7 @@
 - **React 3D 整合**：@react-three/fiber 9.4.0 + @react-three/drei 10.7.7
 - **樣式**：Tailwind CSS 3.4.18
 - **圖示**：Lucide React 0.554.0
+- **狀態管理**：Zustand（Director Mode 專用）
 
 ### 音訊處理
 - **Web Audio API**：原生瀏覽器 API
@@ -162,6 +163,28 @@ ExportModelUseCase.execute(model, optimizedClip, fileName)
 生成 GLB ArrayBuffer → 建立 Blob → 觸發下載
 ```
 
+### 6. Director Mode 播放流程
+
+```
+進入 Director Mode → 暫停所有模型、禁用 LOOP
+  ↓
+用戶拖曳動作到時間軸 → 創建 Clip（記錄 sourceModelId, startFrame）
+  ↓
+點擊播放 → useTimelinePlayback Hook
+  ↓
+requestAnimationFrame 循環更新 currentFrame
+  ↓
+檢查每個 Track 的 Clips 是否在播放範圍
+  ↓
+計算 Clip 局部時間 = (currentFrame - startFrame) / fps
+  ↓
+updateModel(modelId, { currentTime: localTime })
+  ↓
+同步觸發音效與特效（檢查 trigger.clipId 和 trigger.frame）
+  ↓
+SceneViewer 各模型獨立播放對應動畫
+```
+
 ---
 
 ## 💼 關鍵商業邏輯
@@ -234,6 +257,35 @@ ExportModelUseCase.execute(model, optimizedClip, fileName)
 - 移除片段時自動調整當前播放索引
 - 重新排序時會停止播放（安全考量）
 - 片段結束時自動播放下一個
+
+### 6. Director Mode（導演模式）
+
+**概念**：類似影片剪輯軟體的多軌道時間軸編輯器
+
+**核心類型**：
+- `DirectorTrack`：軌道，包含多個 Clip
+- `DirectorClip`：片段，記錄來源模型、動畫、起始幀
+- `TimelineState`：時間軸狀態（totalFrames, fps, currentFrame, isPlaying）
+
+**全域時間軸同步**：
+```typescript
+// 計算 Clip 局部時間
+function getClipLocalTime(globalFrame: number, clip: Clip, fps: number): number | null {
+  if (globalFrame < clip.startFrame || globalFrame > clip.endFrame) {
+    return null; // Clip 不在播放範圍
+  }
+  return (globalFrame - clip.startFrame) / fps;
+}
+```
+
+**狀態管理**：
+- 使用 Zustand 獨立管理 Director 狀態
+- 進入 Director Mode 時自動禁用所有模型的 LOOP 設置
+- 退出時恢復原始 LOOP 狀態
+
+**音效與特效同步**：
+- 片段的 `sourceModelId` 對應到模型的 `audioTracks` 和 `effects`
+- 檢查 `trigger.clipId` 和 `trigger.frame` 匹配時觸發
 
 ---
 
@@ -484,7 +536,8 @@ cameraSettings: { fov, near, far }
 - ✅ 使用 React `useState`、`useRef` 管理本地狀態
 - ✅ 複雜業務邏輯封裝在 Use Cases 中
 - ✅ UI 邏輯封裝在自訂 Hooks 中
-- ❌ 避免全域狀態管理庫（目前未使用 Redux、Zustand 等）
+- ✅ Director Mode 使用 Zustand 管理全域狀態（`directorStore`）
+- ❌ 其他功能避免全域狀態管理庫
 
 ### 檔案組織規則
 

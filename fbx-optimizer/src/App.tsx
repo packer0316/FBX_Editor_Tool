@@ -9,6 +9,10 @@ import ModelInspector from './presentation/features/model-inspector/components/M
 import AudioPanel from './presentation/features/audio-panel/components/AudioPanel';
 import EffectTestPanel, { type EffectItem } from './presentation/features/effect-panel/components/EffectTestPanel';
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
+import { DirectorPanel } from './presentation/features/director';
+import { useIsDirectorMode, useDirectorStore } from './presentation/stores/directorStore';
+import type { ActionSource } from './domain/entities/director/director.types';
+import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
@@ -25,6 +29,8 @@ import { CreateClipUseCase } from './application/use-cases/CreateClipUseCase';
 import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
 import { EffectSyncUseCase } from './application/use-cases/EffectSyncUseCase';
+import { PlayEffectUseCase } from './application/use-cases/PlayEffectUseCase';
+import { getEffekseerRuntimeAdapter } from './application/use-cases/effectRuntimeStore';
 import { InitializeLayerStackUseCase } from './application/use-cases/InitializeLayerStackUseCase';
 import { CreateLayerUseCase } from './application/use-cases/CreateLayerUseCase';
 import { UpdateLayerUseCase } from './application/use-cases/UpdateLayerUseCase';
@@ -46,6 +52,7 @@ import { useModelsManager } from './presentation/hooks/useModelsManager';
 
 // Utils
 import { sortLayersByPriority } from './utils/layer/layerUtils';
+import { disposeModel } from './utils/three/disposeUtils';
 
 // Layer Composer
 import { LayerManagerPanel } from './presentation/features/layer-composer/components/LayerManagerPanel';
@@ -59,6 +66,9 @@ export type { AudioTrack } from './domain/value-objects/AudioTrack';
 const BASE_LAYER_ID = 'layer_3d_base';
 
 function App() {
+  // Director Mode
+  const isDirectorMode = useIsDirectorMode();
+
   // 多模型管理
   const {
     models,
@@ -86,12 +96,41 @@ function App() {
   const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
+  // 進入 Director Mode 時暫停原本的播放並禁用 LOOP
+  const savedLoopStatesRef = useRef<Map<string, boolean>>(new Map());
+  
+  useEffect(() => {
+    if (isDirectorMode) {
+      // 進入 Director Mode
+      sceneViewerRef.current?.pause();
+      setIsPlaying(false);
+      
+      // 保存並禁用所有模型的 LOOP 設置
+      models.forEach(model => {
+        savedLoopStatesRef.current.set(model.id, model.isLoopEnabled);
+        updateModel(model.id, { isLoopEnabled: false });
+      });
+      
+      return () => {
+        // 退出 Director Mode 時恢復 LOOP 設置
+        models.forEach(model => {
+          const savedLoop = savedLoopStatesRef.current.get(model.id);
+          if (savedLoop !== undefined) {
+            updateModel(model.id, { isLoopEnabled: savedLoop });
+          }
+        });
+        savedLoopStatesRef.current.clear();
+      };
+    }
+  }, [isDirectorMode]); // 只依賴 isDirectorMode，避免頻繁執行
+
   // 鍵盤相機控制狀態
   const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
   const [cameraMoveSpeed, setCameraMoveSpeed] = useState(5.0);
 
   // Panel Resize
   const { panelHeight, handleMouseDown } = usePanelResize(384);
+  const { panelHeight: directorPanelHeight, handleMouseDown: handleDirectorMouseDown } = usePanelResize(400, 250, window.innerHeight - 150);
   const { rightPanelWidth, handleRightPanelMouseDown } = useRightPanelResize(
     320,
     280,
@@ -105,6 +144,40 @@ function App() {
 
   // Theme
   const { themeMode, setThemeMode, currentTheme } = useTheme('dark');
+
+  // Director Mode: 收集所有模型的動作來源
+  const MODEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+  const actionSources = useMemo<ActionSource[]>(() => {
+    return models.map((m, index) => {
+      // 收集所有 clips 並去重（避免 originalClip 和 masterClip 重複）
+      const allClips = [
+        m.originalClip,
+        m.masterClip,
+        ...m.createdClips,
+      ].filter((c): c is IdentifiableClip => c !== null);
+
+      // 用 clipId 去重
+      const seenIds = new Set<string>();
+      const uniqueClips = allClips.filter(c => {
+        const id = getClipId(c);
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+      });
+
+      return {
+        modelId: m.id,
+        modelName: m.name || `Model ${index + 1}`,
+        modelColor: MODEL_COLORS[index % MODEL_COLORS.length],
+        clips: uniqueClips.map(c => ({
+          clipId: getClipId(c),
+          displayName: getClipDisplayName(c),
+          durationFrames: Math.round(c.duration * 30),
+          durationSeconds: c.duration,
+        })),
+      };
+    });
+  }, [models]);
 
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
@@ -1139,17 +1212,109 @@ function App() {
           {/* 底部：模型檢測與動畫工具 */}
           <div
             className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative`}
-            style={{ height: `${panelHeight}px` }}
+            style={{ height: isDirectorMode ? `${directorPanelHeight}px` : `${panelHeight}px` }}
           >
-            {/* 拖拉調整高度的把手 */}
-            <div
-              className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
-              onMouseDown={handleMouseDown}
-            >
-              <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
-            </div>
+            {/* Director Mode Panel */}
+            {isDirectorMode ? (
+              <DirectorPanel 
+                actionSources={actionSources}
+                onResizeHandleMouseDown={handleDirectorMouseDown}
+                onUpdateModelAnimation={(modelId, animationId, localTime, localFrame) => {
+                  console.log('[Director] Update model animation:', {
+                    modelId,
+                    animationId,
+                    localTime,
+                    localFrame,
+                  });
+                  
+                  // 通過 updateModel 更新對應模型的 currentTime
+                  // 這樣每個模型都能獨立播放
+                  const targetModel = models.find(m => m.id === modelId);
+                  if (targetModel) {
+                    // 更新模型的當前播放時間
+                    updateModel(modelId, {
+                      currentTime: localTime,
+                    });
 
-            <ModelInspector
+                    // 觸發音效
+                    targetModel.audioTracks.forEach((track: AudioTrack) => {
+                      track.triggers.forEach((trigger) => {
+                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
+                          console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
+                          audioControllerRef.current.play(track);
+                        }
+                      });
+                    });
+
+                    // 觸發特效
+                    targetModel.effects.forEach((effect: EffectItem) => {
+                      if (!effect.isLoaded) return;
+                      
+                      effect.triggers.forEach((trigger) => {
+                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
+                          console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
+                          
+                          // 計算位置（包含骨骼綁定）
+                          let x = effect.position[0];
+                          let y = effect.position[1];
+                          let z = effect.position[2];
+                          
+                          if (effect.boundBoneUuid && targetModel.model) {
+                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
+                            if (boundBone) {
+                              const boneWorldPos = new THREE.Vector3();
+                              boundBone.getWorldPosition(boneWorldPos);
+                              x = boneWorldPos.x + effect.position[0];
+                              y = boneWorldPos.y + effect.position[1];
+                              z = boneWorldPos.z + effect.position[2];
+                            }
+                          }
+                          
+                          // 計算旋轉
+                          let rx = effect.rotation[0];
+                          let ry = effect.rotation[1];
+                          let rz = effect.rotation[2];
+                          
+                          if (effect.boundBoneUuid && targetModel.model) {
+                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
+                            if (boundBone) {
+                              const boneWorldQuat = new THREE.Quaternion();
+                              boundBone.getWorldQuaternion(boneWorldQuat);
+                              const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
+                              
+                              rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
+                              ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
+                              rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
+                            }
+                          }
+                          
+                          // 播放特效
+                          PlayEffectUseCase.execute({
+                            id: effect.id,
+                            x, y, z,
+                            rx: rx * Math.PI / 180,
+                            ry: ry * Math.PI / 180,
+                            rz: rz * Math.PI / 180,
+                            sx: effect.scale[0], sy: effect.scale[1], sz: effect.scale[2],
+                            speed: effect.speed
+                          });
+                        }
+                      });
+                    });
+                  }
+                }}
+              />
+            ) : (
+              <>
+                {/* 拖拉調整高度的把手 */}
+                <div
+                  className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
+                  onMouseDown={handleMouseDown}
+                >
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
+                </div>
+                
+                <ModelInspector
               model={model}
               clip={optimizedClip}
               currentTime={currentTime}
@@ -1183,6 +1348,8 @@ function App() {
               effects={effects}
               theme={currentTheme}
             />
+              </>
+            )}
           </div>
         </div>
 
@@ -1298,6 +1465,29 @@ function App() {
                 }}
                 onAddModel={handleFileUpload}
                 onRemoveModel={(id) => {
+                  // 獲取要刪除的模型
+                  const modelToRemove = models.find(m => m.id === id);
+                  
+                  if (modelToRemove) {
+                    // 1. 清理 Three.js 模型資源（Geometry, Material, Texture）
+                    disposeModel(modelToRemove.model);
+                    
+                    // 2. 清理音效資源
+                    modelToRemove.audioTracks?.forEach((track) => {
+                      audioControllerRef.current.cleanup(track.id);
+                    });
+                    
+                    // 3. 清理特效資源
+                    modelToRemove.effects?.forEach((effect) => {
+                      const effekseerAdapter = getEffekseerRuntimeAdapter();
+                      effekseerAdapter.cleanup(effect.id);
+                    });
+                    
+                    // 4. 清理 Director Mode 中該模型的所有 Clips
+                    useDirectorStore.getState().removeClipsByModelId(id);
+                  }
+                  
+                  // 5. 移除模型
                   removeModel(id);
                   // 如果刪除的是活動模型，已經在 hook 中處理了
                 }}

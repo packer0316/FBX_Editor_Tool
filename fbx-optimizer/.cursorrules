@@ -19,9 +19,10 @@ src/
 │   ├── audio/                 # WebAudioAdapter, AudioGraphBuilder
 │   └── effect/                # EffekseerRuntimeAdapter
 ├── presentation/              # React UI
-│   ├── features/              # 功能模組（scene-viewer, audio-panel...）
+│   ├── features/              # 功能模組（scene-viewer, audio-panel, director...）
 │   ├── hooks/                 # 共用 Hooks
-│   └── components/            # 共用組件（ProgressBar）
+│   ├── components/            # 共用組件（ProgressBar）
+│   └── stores/                # 狀態管理（directorStore）
 ├── utils/                     # 工具函數（array/, clip/, shader/...）
 └── types/                     # 類型定義（effekseer.d.ts, shaderTypes.ts）
 ```
@@ -141,6 +142,32 @@ interface IdentifiableClip extends THREE.AnimationClip {
 }
 ```
 
+### DirectorClip（Director Mode 片段）
+```typescript
+interface DirectorClip {
+  id: string;
+  trackId: string;
+  sourceModelId: string;        // 來源模型 ID
+  sourceModelName: string;      // 來源模型名稱
+  sourceAnimationId: string;    // 動畫 ID
+  sourceAnimationName: string;  // 動畫名稱
+  startFrame: number;           // 起始幀
+  durationFrames: number;       // 持續幀數
+}
+```
+
+### DirectorTrack（Director Mode 軌道）
+```typescript
+interface DirectorTrack {
+  id: string;
+  name: string;
+  order: number;
+  isMuted: boolean;
+  isLocked: boolean;
+  clips: DirectorClip[];
+}
+```
+
 ---
 
 ## 🚫 禁止事項
@@ -163,6 +190,34 @@ interface IdentifiableClip extends THREE.AnimationClip {
 4. **外部 API**：封裝在 Infrastructure（`infrastructure/`）
 5. **共用邏輯**：提取為 Hook（`presentation/hooks/`）
 6. **工具函數**：放在 `utils/[category]/`
+7. **全域狀態**：Director Mode 使用 Zustand（`presentation/stores/directorStore.ts`）
+
+---
+
+## 🎬 Director Mode 速查
+
+### 核心概念
+- **Track（軌道）**：橫向軌道，可放置多個 Clip
+- **Clip（片段）**：一個動畫在軌道上的實例
+- **Timeline（時間軸）**：全域時間軸（以幀為單位）
+- **Playhead（播放頭）**：當前播放位置
+
+### 關鍵功能
+- 多模型動畫統一編排（類似 Premiere Pro）
+- 拖放動作到時間軸
+- 全域時間軸播放控制
+- 音效與特效自動同步觸發
+- 進入時自動禁用模型 LOOP，退出時恢復
+
+### 狀態管理
+- 使用 `directorStore`（Zustand）管理全域狀態
+- 主要 Actions：`addClip`, `moveClip`, `removeClip`, `play`, `pause`, `setCurrentFrame`
+
+### 時間計算
+```typescript
+// 全域幀 → 片段局部時間
+localTime = (globalFrame - clip.startFrame) / fps
+```
 
 ---
 
@@ -170,3 +225,4 @@ interface IdentifiableClip extends THREE.AnimationClip {
 
 - **架構詳解**：`PROJECT_ARCHITECTURE.md`
 - **技術上下文**：`PROJECT_CONTEXT.md`
+- **Director Mode 設計**：`docs/DIRECTOR_MODE_DESIGN.md`

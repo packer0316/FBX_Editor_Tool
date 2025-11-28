@@ -34,7 +34,12 @@ export function useFileDrop(onDrop: (files: FileList) => void) {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsFileDragging(true);
+    // 只有拖曳外部檔案時才顯示拖放區域，忽略內部拖曳（如 Director Mode 的動作拖曳）
+    const hasFiles = e.dataTransfer.types.includes('Files');
+    const isInternalDrag = e.dataTransfer.types.includes('application/json');
+    if (hasFiles && !isInternalDrag) {
+      setIsFileDragging(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -45,7 +50,9 @@ export function useFileDrop(onDrop: (files: FileList) => void) {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsFileDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    // 只處理外部檔案，忽略內部拖曳
+    const isInternalDrag = e.dataTransfer.types.includes('application/json');
+    if (!isInternalDrag && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       onDrop(e.dataTransfer.files);
     }
   };
