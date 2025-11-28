@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Upload, Image as ImageIcon, GripHorizontal } from 'lucide-react';
 import * as THREE from 'three';
 import type { ThemeStyle } from '../../../hooks/useTheme';
@@ -27,7 +28,10 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
   });
 
   const fileInputRefs = useRef<{ [key: string]: HTMLInputElement | null }>({});
-  
+
+  // 視窗大小狀態
+  const [modalSize, setModalSize] = useState({ width: 750, height: 600 });
+
   // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
   const modalRef = useRef<HTMLDivElement>(null);
   const dragStateRef = useRef({
@@ -39,9 +43,18 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
     rafId: 0
   });
 
+  // 調整大小功能
+  const resizeStateRef = useRef({
+    isResizing: false,
+    startX: 0,
+    startY: 0,
+    startWidth: 750,
+    startHeight: 600
+  });
+
   const updateModalPosition = useCallback(() => {
     if (modalRef.current) {
-      modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+      modalRef.current.style.transform = `translate(calc(-50% + ${dragStateRef.current.currentX}px), calc(-50% + ${dragStateRef.current.currentY}px))`;
     }
   }, []);
 
@@ -50,28 +63,52 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
     dragStateRef.current.isDragging = true;
     dragStateRef.current.startX = e.clientX - dragStateRef.current.currentX;
     dragStateRef.current.startY = e.clientY - dragStateRef.current.currentY;
-    
+
     if (modalRef.current) {
       modalRef.current.style.cursor = 'grabbing';
     }
   }, []);
 
+  // 開始調整大小
+  const handleResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizeStateRef.current.isResizing = true;
+    resizeStateRef.current.startX = e.clientX;
+    resizeStateRef.current.startY = e.clientY;
+    resizeStateRef.current.startWidth = modalSize.width;
+    resizeStateRef.current.startHeight = modalSize.height;
+  }, [modalSize]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
-      if (!dragStateRef.current.isDragging) return;
-      
-      dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
-      dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
-      
-      // 使用 requestAnimationFrame 節流
-      if (dragStateRef.current.rafId) {
-        cancelAnimationFrame(dragStateRef.current.rafId);
+      // 處理拖動
+      if (dragStateRef.current.isDragging) {
+        dragStateRef.current.currentX = e.clientX - dragStateRef.current.startX;
+        dragStateRef.current.currentY = e.clientY - dragStateRef.current.startY;
+
+        // 使用 requestAnimationFrame 節流
+        if (dragStateRef.current.rafId) {
+          cancelAnimationFrame(dragStateRef.current.rafId);
+        }
+        dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
       }
-      dragStateRef.current.rafId = requestAnimationFrame(updateModalPosition);
+
+      // 處理調整大小
+      if (resizeStateRef.current.isResizing) {
+        const deltaX = e.clientX - resizeStateRef.current.startX;
+        const deltaY = e.clientY - resizeStateRef.current.startY;
+
+        setModalSize({
+          width: Math.max(500, Math.min(window.innerWidth * 0.95, resizeStateRef.current.startWidth + deltaX)),
+          height: Math.max(400, Math.min(window.innerHeight * 0.95, resizeStateRef.current.startHeight + deltaY))
+        });
+      }
     };
 
     const handleMouseUp = () => {
       dragStateRef.current.isDragging = false;
+      resizeStateRef.current.isResizing = false;
       if (modalRef.current) {
         modalRef.current.style.cursor = '';
       }
@@ -102,7 +139,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
         // 優先使用原始材質（shader 應用前的材質）
         const originalMaterial = (child as any).userData?.originalMaterial;
         const currentMaterial = child.material;
-        
+
         // 如果有原始材質，使用原始材質；否則使用當前材質
         const material = originalMaterial || currentMaterial;
         const materials = Array.isArray(material) ? material : [material];
@@ -154,7 +191,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
         (newTexture) => {
           // 完整複製原貼圖的所有關鍵屬性
           const oldTexture = textureInfo.texture;
-          
+
           // 基本屬性
           newTexture.name = file.name;
           newTexture.wrapS = oldTexture.wrapS;
@@ -163,10 +200,10 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
           newTexture.offset.copy(oldTexture.offset);
           newTexture.rotation = oldTexture.rotation;
           newTexture.center.copy(oldTexture.center);
-          
+
           // 翻轉設置
           newTexture.flipY = oldTexture.flipY;
-          
+
           // 顏色空間和編碼（關鍵！）
           // Three.js r152+ 使用 colorSpace，舊版使用 encoding
           if ('colorSpace' in oldTexture) {
@@ -174,20 +211,20 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
           } else if ('encoding' in oldTexture) {
             (newTexture as any).encoding = (oldTexture as any).encoding;
           }
-          
+
           // 過濾設置
           newTexture.minFilter = oldTexture.minFilter;
           newTexture.magFilter = oldTexture.magFilter;
           newTexture.anisotropy = oldTexture.anisotropy;
-          
+
           // Alpha 和混合設置
           newTexture.premultiplyAlpha = oldTexture.premultiplyAlpha;
           newTexture.format = oldTexture.format;
           newTexture.type = oldTexture.type;
-          
+
           // 生成 mipmap
           newTexture.generateMipmaps = oldTexture.generateMipmaps;
-          
+
           // 標記需要更新
           newTexture.needsUpdate = true;
 
@@ -198,7 +235,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                 // 1. 更新原始材質（userData.originalMaterial）- 這是 shader 應用前保存的材質
                 const originalMaterial = (child as any).userData?.originalMaterial;
                 let updatedOriginalMap = false;
-                
+
                 if (originalMaterial) {
                   const origMaterials = Array.isArray(originalMaterial) ? originalMaterial : [originalMaterial];
                   origMaterials.forEach((mat: any) => {
@@ -233,7 +270,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                   } else {
                     // 標準材質，找到並替換對應的貼圖
                     const textureTypes = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'emissiveMap', 'alphaMap'];
-                    
+
                     textureTypes.forEach((key) => {
                       if ((mat as any)[key] === textureInfo.texture) {
                         (mat as any)[key] = newTexture;
@@ -244,7 +281,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                 });
               }
             });
-            
+
             // 釋放舊貼圖
             textureInfo.texture.dispose();
           }
@@ -261,7 +298,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                 )
               );
             };
-            
+
             // 如果圖片已經載入完成
             if (newTexture.image.complete) {
               setTextures((prev) =>
@@ -353,21 +390,25 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
     return '';
   };
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-[99999] bg-black/50 backdrop-blur-sm"
       onClick={onClose}
     >
       <div
         ref={modalRef}
-        className={`relative w-[750px] max-w-[95vw] max-h-[80vh] ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col will-change-transform`}
+        className={`fixed ${theme.panelBg} border ${theme.panelBorder} rounded-2xl shadow-2xl overflow-hidden flex flex-col will-change-transform`}
         style={{
-          transform: 'translate(0px, 0px)', // 初始位置，會由 JS 直接更新
+          width: modalSize.width,
+          height: modalSize.height,
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 標題列 - 可拖動 */}
-        <div 
+        <div
           className={`flex items-center justify-between px-6 py-3 border-b ${theme.panelBorder} ${theme.toolbarBg} cursor-grab active:cursor-grabbing select-none`}
           onMouseDown={handleMouseDown}
         >
@@ -429,7 +470,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                       </button>
                       {/* 隱藏的檔案輸入 */}
                       <input
-                        ref={(el) => (fileInputRefs.current[textureKey] = el)}
+                        ref={(el) => { fileInputRefs.current[textureKey] = el; }}
                         type="file"
                         accept="image/*"
                         className="hidden"
@@ -464,7 +505,7 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
                       <div className="w-[90px] flex-shrink-0">
                         <div className="text-xs text-gray-400 mb-1">尺寸</div>
                         <div className="text-sm text-gray-300">
-                          {textureInfo.texture.image?.width || '?'} × {textureInfo.texture.image?.height || '?'}
+                          {(textureInfo.texture.image as any)?.width || '?'} × {(textureInfo.texture.image as any)?.height || '?'}
                         </div>
                       </div>
                     </div>
@@ -481,8 +522,22 @@ export default function TextureManagerModal({ model, onClose, theme }: TextureMa
             💡 提示：點擊「替換貼圖」按鈕來上傳新的貼圖檔案（支援 JPG、PNG 等格式）
           </p>
         </div>
+
+        {/* 調整大小拖把 - 右下角 */}
+        <div
+          className="absolute bottom-0 right-0 w-6 h-6 cursor-se-resize group"
+          onMouseDown={handleResizeStart}
+        >
+          <svg
+            className="w-full h-full text-gray-500 group-hover:text-blue-400 transition-colors"
+            viewBox="0 0 24 24"
+          >
+            <path fill="currentColor" d="M22 22H20V20H22V22ZM22 18H20V16H22V18ZM18 22H16V20H18V22ZM22 14H20V12H22V14ZM18 18H16V16H18V18ZM14 22H12V20H14V22Z" />
+          </svg>
+        </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
