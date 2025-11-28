@@ -11,6 +11,8 @@ import EffectTestPanel, { type EffectItem } from './presentation/features/effect
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { DirectorPanel } from './presentation/features/director';
 import { useIsDirectorMode } from './presentation/stores/directorStore';
+import type { ActionSource } from './domain/entities/director/director.types';
+import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
@@ -110,6 +112,40 @@ function App() {
 
   // Theme
   const { themeMode, setThemeMode, currentTheme } = useTheme('dark');
+
+  // Director Mode: 收集所有模型的動作來源
+  const MODEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+  const actionSources = useMemo<ActionSource[]>(() => {
+    return models.map((m, index) => {
+      // 收集所有 clips 並去重（避免 originalClip 和 masterClip 重複）
+      const allClips = [
+        m.originalClip,
+        m.masterClip,
+        ...m.createdClips,
+      ].filter((c): c is IdentifiableClip => c !== null);
+
+      // 用 clipId 去重
+      const seenIds = new Set<string>();
+      const uniqueClips = allClips.filter(c => {
+        const id = getClipId(c);
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+      });
+
+      return {
+        modelId: m.id,
+        modelName: m.name || `Model ${index + 1}`,
+        modelColor: MODEL_COLORS[index % MODEL_COLORS.length],
+        clips: uniqueClips.map(c => ({
+          clipId: getClipId(c),
+          displayName: getClipDisplayName(c),
+          durationFrames: Math.round(c.duration * 30),
+          durationSeconds: c.duration,
+        })),
+      };
+    });
+  }, [models]);
 
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
@@ -1158,7 +1194,7 @@ function App() {
 
             {/* Director Mode Panel */}
             {isDirectorMode ? (
-              <DirectorPanel actionSources={[]} />
+              <DirectorPanel actionSources={actionSources} />
             ) : (
               <ModelInspector
               model={model}

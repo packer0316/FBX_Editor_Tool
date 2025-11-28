@@ -63,7 +63,7 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = ({
 
   return (
     <div
-      className="h-6 bg-gray-800/80 border-b border-white/10 relative cursor-pointer select-none overflow-hidden"
+      className="h-full bg-gray-800/80 relative cursor-pointer select-none overflow-hidden"
       onClick={handleClick}
     >
       <div

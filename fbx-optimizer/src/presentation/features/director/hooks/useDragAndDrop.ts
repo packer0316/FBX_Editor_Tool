@@ -62,7 +62,8 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
     trackElement: HTMLElement
   ): number => {
     const rect = trackElement.getBoundingClientRect();
-    const x = clientX - rect.left + trackElement.scrollLeft;
+    // 使用 store 中的 scrollOffset，因為滾動發生在父容器
+    const x = clientX - rect.left + ui.scrollOffsetX;
     let frame = Math.max(0, Math.round(x / pixelsPerFrame));
     
     if (enableSnap) {
@@ -83,7 +84,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
     }
     
     return frame;
-  }, [pixelsPerFrame, enableSnap, snapThreshold, tracks, ui.draggingClipData?.clipId]);
+  }, [pixelsPerFrame, enableSnap, snapThreshold, tracks, ui.draggingClipData?.clipId, ui.scrollOffsetX]);
 
   // 動作來源拖曳開始
   const handleSourceDragStart = useCallback((

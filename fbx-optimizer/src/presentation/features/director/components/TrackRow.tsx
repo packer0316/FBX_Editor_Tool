@@ -13,12 +13,14 @@ interface TrackRowProps {
   track: DirectorTrack;
   pixelsPerFrame: number;
   timelineWidth: number;
+  isHeaderOnly?: boolean;
 }
 
 export const TrackRow: React.FC<TrackRowProps> = memo(({
   track,
   pixelsPerFrame,
   timelineWidth,
+  isHeaderOnly = false,
 }) => {
   const { removeTrack, updateTrack, ui } = useDirectorStore();
   const trackRef = useRef<HTMLDivElement>(null);
@@ -49,14 +51,14 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
     handleTrackDrop(e, track.id, trackRef.current);
   }, [handleTrackDrop, track.id]);
 
-  return (
-    <div
-      className={`h-12 flex border-b border-white/5 ${
-        ui.selectedTrackId === track.id ? 'bg-white/5' : ''
-      } ${track.isMuted ? 'opacity-50' : ''}`}
-    >
-      {/* 軌道標題區（固定位置） */}
-      <div className="w-32 flex-shrink-0 flex items-center gap-1 px-2 bg-gray-800/50 border-r border-white/10 sticky left-0 z-10">
+  // 渲染 Header（左側固定區域）
+  if (isHeaderOnly) {
+    return (
+      <div
+        className={`h-12 flex items-center gap-1 px-2 border-b border-white/5 ${
+          track.isMuted ? 'opacity-50' : ''
+        }`}
+      >
         <span className="text-xs text-gray-300 truncate flex-1" title={track.name}>
           {track.name}
         </span>
@@ -86,30 +88,29 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
           <Trash2 size={12} />
         </button>
       </div>
+    );
+  }
 
-      {/* 時間軸區域（可放置片段） */}
-      <div
-        ref={trackRef}
-        className={`flex-1 relative ${track.isLocked ? 'cursor-not-allowed' : ''}`}
-        style={{ width: timelineWidth }}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        {/* 格線背景 */}
-        <div className="absolute inset-0 pointer-events-none">
-          {/* 可以添加格線視覺效果 */}
-        </div>
-
-        {/* 片段 */}
-        {track.clips.map(clip => (
-          <ClipBlock
-            key={clip.id}
-            clip={clip}
-            pixelsPerFrame={pixelsPerFrame}
-            isLocked={track.isLocked}
-          />
-        ))}
-      </div>
+  // 渲染時間軸內容（右側可滾動區域）
+  return (
+    <div
+      ref={trackRef}
+      className={`h-12 relative border-b border-white/5 ${
+        ui.selectedTrackId === track.id ? 'bg-white/5' : ''
+      } ${track.isMuted ? 'opacity-50' : ''} ${track.isLocked ? 'cursor-not-allowed' : ''}`}
+      style={{ width: timelineWidth }}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {/* 片段 */}
+      {track.clips.map(clip => (
+        <ClipBlock
+          key={clip.id}
+          clip={clip}
+          pixelsPerFrame={pixelsPerFrame}
+          isLocked={track.isLocked}
+        />
+      ))}
     </div>
   );
 });
