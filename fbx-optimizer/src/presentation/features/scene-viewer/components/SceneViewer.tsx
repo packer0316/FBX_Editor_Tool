@@ -547,13 +547,14 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     (f: ShaderFeature) => f.type === 'matcap_add' && f.params.texture
                 );
 
+                const unlitFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'unlit');
                 const rimLightFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'rim_light');
                 const flashFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'flash');
                 const dissolveFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'dissolve');
                 const alphaTestFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'alpha_test');
                 const normalMapFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'normal_map');
 
-                const shouldUseShader = baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
+                const shouldUseShader = unlitFeature || baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
 
                 if (!shouldUseShader) {
                     child.material = child.userData.originalMaterial;
@@ -629,6 +630,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         baseTexture: { value: baseTexture },
                         baseColor: { value: baseColor },
                         uTime: { value: 0 },
+
+                        // Unlit Mode
+                        useUnlit: { value: 0.0 },
 
                         // Base Matcap
                         matcapTexture: { value: null },
@@ -708,6 +712,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
                                 uniform float uTime;
+                                
+                                // Unlit Mode (無光照模式)
+                                uniform float useUnlit;
                                 
                                 // Base Matcap
                                 uniform sampler2D matcapTexture;
@@ -822,12 +829,14 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     vec3 viewDir = normalize(vViewPosition);
                                 
                                     // --- Normal Map ---
-                                    if (useNormalMap > 0.5) {
+                                    // 只在非 Unlit 模式下使用 Normal Map
+                                    if (useNormalMap > 0.5 && useUnlit < 0.5) {
                                         viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, vUv, normalScale );
                                     }
                                 
                                     // --- Base Matcap (Mix) ---
-                                    if (useMatcap > 0.5) {
+                                    // Unlit 模式下跳过 Matcap
+                                    if (useMatcap > 0.5 && useUnlit < 0.5) {
                                         vec2 matcapUv;
                                         matcapUv.x = viewNormal.x * 0.49 + 0.5;
                                         matcapUv.y = -viewNormal.y * 0.49 + 0.5;
@@ -845,7 +854,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     }
                                 
                                     // --- Additive Matcap (Add) ---
-                                    if (useMatcapAdd > 0.5) {
+                                    // Unlit 模式下跳过 Additive Matcap
+                                    if (useMatcapAdd > 0.5 && useUnlit < 0.5) {
                                         vec2 matcapAddUv;
                                         matcapAddUv.x = viewNormal.x * 0.49 + 0.5;
                                         matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
@@ -869,7 +879,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     }
                                 
                                     // --- Rim Light ---
-                                    if (useRimLight > 0.5) {
+                                    // Unlit 模式下跳过 Rim Light
+                                    if (useRimLight > 0.5 && useUnlit < 0.5) {
                                         float dotNV = dot(viewDir, viewNormal);
                                         float rim = 1.0 - clamp(dotNV, 0.0, 1.0);
                                         rim = pow(rim, rimPower);
@@ -949,6 +960,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 child.material = shaderMat;
 
                 // Update Uniforms
+
+                // Unlit Mode
+                if (unlitFeature) {
+                    shaderMat.uniforms.useUnlit.value = 1.0;
+                } else {
+                    shaderMat.uniforms.useUnlit.value = 0.0;
+                }
 
                 // Base Matcap
                 if (baseMatcapFeature && baseMatcapTex) {
@@ -1455,8 +1473,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     onCreated={({ gl }) => {
                         // 統一輸出色彩空間為 sRGB
                         gl.outputColorSpace = THREE.SRGBColorSpace;
-                        // 設定 ACES Filmic Tone Mapping
-                        gl.toneMapping = THREE.ACESFilmicToneMapping;
+                        // 改用 Linear Tone Mapping 以匹配 Cocos Creator（保持顏色鮮豔度）
+                        gl.toneMapping = THREE.LinearToneMapping;
                         if (backgroundColor === 'transparent') {
                             gl.setClearAlpha(0);
                         } else {
