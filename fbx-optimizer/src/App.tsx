@@ -94,13 +94,33 @@ function App() {
   const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
 
-  // 進入 Director Mode 時暫停原本的播放
+  // 進入 Director Mode 時暫停原本的播放並禁用 LOOP
+  const savedLoopStatesRef = useRef<Map<string, boolean>>(new Map());
+  
   useEffect(() => {
     if (isDirectorMode) {
+      // 進入 Director Mode
       sceneViewerRef.current?.pause();
       setIsPlaying(false);
+      
+      // 保存並禁用所有模型的 LOOP 設置
+      models.forEach(model => {
+        savedLoopStatesRef.current.set(model.id, model.isLoopEnabled);
+        updateModel(model.id, { isLoopEnabled: false });
+      });
+      
+      return () => {
+        // 退出 Director Mode 時恢復 LOOP 設置
+        models.forEach(model => {
+          const savedLoop = savedLoopStatesRef.current.get(model.id);
+          if (savedLoop !== undefined) {
+            updateModel(model.id, { isLoopEnabled: savedLoop });
+          }
+        });
+        savedLoopStatesRef.current.clear();
+      };
     }
-  }, [isDirectorMode]);
+  }, [isDirectorMode]); // 只依賴 isDirectorMode，避免頻繁執行
 
   // 鍵盤相機控制狀態
   const [keyboardControlsEnabled, setKeyboardControlsEnabled] = useState(true);
