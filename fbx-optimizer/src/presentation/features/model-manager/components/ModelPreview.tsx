@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Grid } from '@react-three/drei';
 import * as THREE from 'three';
@@ -338,24 +339,14 @@ function ExpandedPreviewModal({
   // 視窗大小狀態
   const [modalSize, setModalSize] = useState(getInitialSize);
 
-  // 計算初始偏移（讓視窗在主場景區域中間）
-  const getInitialOffset = useCallback(() => {
-    const rightPanelWidth = 420;
-    const availableWidth = window.innerWidth - rightPanelWidth;
-    // 偏移量：讓視窗在左側區域置中
-    const offsetX = -(rightPanelWidth / 2);
-    return { x: offsetX, y: 0 };
-  }, []);
-
-  const initialOffset = getInitialOffset();
 
   // 拖動功能 - 使用 ref 直接操作 DOM 避免重新渲染
   const dragStateRef = useRef({
     isDragging: false,
     startX: 0,
     startY: 0,
-    currentX: initialOffset.x,
-    currentY: initialOffset.y,
+    currentX: 0,
+    currentY: 0,
     rafId: 0
   });
 
@@ -370,7 +361,7 @@ function ExpandedPreviewModal({
 
   const updateModalPosition = useCallback(() => {
     if (modalRef.current) {
-      modalRef.current.style.transform = `translate(${dragStateRef.current.currentX}px, ${dragStateRef.current.currentY}px)`;
+      modalRef.current.style.transform = `translate(calc(-50% + ${dragStateRef.current.currentX}px), calc(-50% + ${dragStateRef.current.currentY}px))`;
     }
   }, []);
 
@@ -419,9 +410,10 @@ function ExpandedPreviewModal({
         const deltaX = e.clientX - resizeStateRef.current.startX;
         const deltaY = e.clientY - resizeStateRef.current.startY;
 
+        // 同時調整寬度和高度，設置合理的最小和最大值
         setModalSize({
-          width: Math.max(500, Math.min(window.innerWidth * 0.9, resizeStateRef.current.startWidth + deltaX)),
-          height: Math.max(400, Math.min(window.innerHeight * 0.9, resizeStateRef.current.startHeight + deltaY))
+          width: Math.max(400, Math.min(window.innerWidth * 0.95, resizeStateRef.current.startWidth + deltaX)),
+          height: Math.max(300, Math.min(window.innerHeight * 0.95, resizeStateRef.current.startHeight + deltaY))
         });
       }
     };
@@ -446,18 +438,20 @@ function ExpandedPreviewModal({
     };
   }, [updateModalPosition]);
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/40 backdrop-blur-[2px]"
+      className="fixed inset-0 z-[99999] bg-black/40 backdrop-blur-[2px]"
       onClick={onClose}
     >
       <div
         ref={modalRef}
-        className="relative bg-gray-900 rounded-2xl border border-gray-600 overflow-hidden shadow-2xl will-change-transform flex flex-col"
+        className="fixed bg-gray-900 rounded-2xl border border-gray-600 overflow-hidden shadow-2xl will-change-transform flex flex-col"
         style={{
           width: modalSize.width,
           height: modalSize.height,
-          transform: `translate(${initialOffset.x}px, ${initialOffset.y}px)`,
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
         }}
         onClick={(e) => e.stopPropagation()}
       >
@@ -481,8 +475,8 @@ function ExpandedPreviewModal({
               }}
               onMouseDown={(e) => e.stopPropagation()}
               className={`px-3 py-1.5 rounded-lg border transition-colors flex items-center gap-2 text-xs ${showGrid
-                  ? 'bg-blue-500/90 text-white border-blue-400'
-                  : 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
+                ? 'bg-blue-500/90 text-white border-blue-400'
+                : 'bg-gray-700 hover:bg-gray-600 text-gray-300 border-gray-600'
                 }`}
               title={showGrid ? '隱藏格線' : '顯示格線'}
             >
@@ -539,7 +533,8 @@ function ExpandedPreviewModal({
           </svg>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -592,8 +587,8 @@ export default function ModelPreview({
               setShowGrid(!showGrid);
             }}
             className={`p-1.5 rounded border transition-all ${showGrid
-                ? 'bg-blue-500/80 text-white border-blue-400'
-                : 'bg-gray-900/80 hover:bg-gray-800 text-gray-400 hover:text-white border-gray-600 hover:border-gray-500'
+              ? 'bg-blue-500/80 text-white border-blue-400'
+              : 'bg-gray-900/80 hover:bg-gray-800 text-gray-400 hover:text-white border-gray-600 hover:border-gray-500'
               }`}
             title={showGrid ? '隱藏格線' : '顯示格線'}
           >
