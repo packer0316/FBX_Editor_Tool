@@ -301,14 +301,6 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
-              onClick={handleStartRename}
-              className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2"
-            >
-              <Edit3 size={12} />
-              <span>重新命名</span>
-            </button>
-            <div className="h-px bg-white/10 my-1" />
-            <button
               onClick={handleMoveUp}
               disabled={!canMoveUp}
               className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${

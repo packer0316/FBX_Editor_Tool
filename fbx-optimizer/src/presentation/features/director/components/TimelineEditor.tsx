@@ -123,18 +123,18 @@ export const TimelineEditor: React.FC = () => {
           <button
             onClick={handleZoomOut}
             className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-            title="縮小 (Ctrl+滾輪)"
+            title="縮小"
             disabled={ui.zoom <= MIN_ZOOM}
           >
             <ZoomOut size={14} />
           </button>
-          <span className="text-[10px] text-gray-500 w-8 text-center">
+          <span className="text-[10px] text-gray-500 w-8 text-center font-mono" title="Ctrl+滾輪縮放">
             {Math.round(ui.zoom * 100)}%
           </span>
           <button
             onClick={handleZoomIn}
             className="p-0.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-            title="放大 (Ctrl+滾輪)"
+            title="放大"
             disabled={ui.zoom >= MAX_ZOOM}
           >
             <ZoomIn size={14} />
