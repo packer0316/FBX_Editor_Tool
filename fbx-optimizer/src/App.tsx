@@ -238,8 +238,8 @@ function App() {
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   // Tone Mapping & Exposure Settings
-  // 預設曝光調整為 1.5，作為視覺上較中性的基準亮度
-  const [toneMappingExposure, setToneMappingExposure] = useState(1.5);
+  // 預設曝光調整為 1.2（提高亮度以匹配 Cocos Creator）
+  const [toneMappingExposure, setToneMappingExposure] = useState(1.2);
   const [whitePoint, setWhitePoint] = useState(1.0);
   const [selectedPreset, setSelectedPreset] = useState<CameraPresetType>('outdoor');
   const [hdriUrl, setHdriUrl] = useState<string>('');
@@ -371,6 +371,29 @@ function App() {
         instance.optimizedClip = optimized;
         instance.duration = instance.originalClip.duration;
       }
+
+      // 自動啟用 Shader 並添加 Unlit 功能
+      instance.isShaderEnabled = true;
+      instance.shaderGroups = [
+        {
+          id: `unlit_${Date.now()}`,
+          name: 'Unlit',
+          features: [
+            {
+              id: `unlit_feature_${Date.now()}`,
+              type: 'unlit',
+              name: 'Unlit (無光照)',
+              description: '無光照模式 - 只顯示貼圖顏色',
+              icon: '🔆',
+              expanded: false,
+              enabled: true,
+              params: {},
+            },
+          ],
+          selectedMeshes: instance.meshNames, // 應用到所有 mesh
+          expanded: true,
+        },
+      ];
 
       // 添加到模型列表
       addModel(instance);

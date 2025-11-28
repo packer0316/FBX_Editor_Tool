@@ -52,18 +52,10 @@ export class MaterialFixService {
     // BaseColor / Matcap / Emissive → sRGB
     if (textureType === 'baseColor' || textureType === 'matcap' || textureType === 'emissive') {
       texture.colorSpace = THREE.SRGBColorSpace;
-      // 為了向後兼容，也設定 encoding（Three.js r152+ 使用 colorSpace）
-      if ('encoding' in texture) {
-        (texture as any).encoding = THREE.sRGBEncoding;
-      }
     } 
     // Normal / Metallic / Roughness / Mask → Linear
     else if (textureType === 'normal' || textureType === 'metallic' || textureType === 'roughness' || textureType === 'mask') {
       texture.colorSpace = THREE.LinearSRGBColorSpace;
-      // 為了向後兼容，也設定 encoding
-      if ('encoding' in texture) {
-        (texture as any).encoding = THREE.LinearEncoding;
-      }
     }
   }
 

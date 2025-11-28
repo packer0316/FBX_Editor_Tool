@@ -1,5 +1,6 @@
 // Shader 功能類型定義
 export type ShaderFeatureType =
+    | 'unlit'
     | 'matcap'
     | 'matcap_add'
     | 'normal_map'

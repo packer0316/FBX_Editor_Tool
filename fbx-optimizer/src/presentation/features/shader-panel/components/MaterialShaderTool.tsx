@@ -17,6 +17,13 @@ interface MaterialShaderToolProps {
 // 可用的 Shader 功能列表
 const AVAILABLE_FEATURES: Omit<ShaderFeature, 'id' | 'expanded' | 'params'>[] = [
     {
+        type: 'unlit',
+        name: 'Unlit (無光照)',
+        description: '無光照模式 - 只顯示貼圖顏色',
+        icon: '🔆',
+        enabled: true,
+    },
+    {
         type: 'matcap',
         name: 'Matcap',
         description: '材質捕捉 - 模擬環境光照',
@@ -69,6 +76,8 @@ const AVAILABLE_FEATURES: Omit<ShaderFeature, 'id' | 'expanded' | 'params'>[] = 
 // 獲取功能的預設參數
 const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
     switch (type) {
+        case 'unlit':
+            return {}; // Unlit 不需要任何參數
         case 'matcap':
             return {
                 texture: null,
