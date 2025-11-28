@@ -115,6 +115,9 @@ interface DirectorActions {
   getActiveClipsAtFrame: (frame: number) => DirectorClip[];
   calculateTotalDuration: () => number;
   
+  // 資源清理
+  removeClipsByModelId: (modelId: string) => void;
+  
   // 重置
   reset: () => void;
 }
@@ -615,6 +618,24 @@ export const useDirectorStore = create<DirectorStore>()(
         }
         
         return maxEndFrame;
+      },
+      
+      // ========================================
+      // 資源清理
+      // ========================================
+      
+      /**
+       * 移除指定模型的所有 Clips
+       * 當模型被刪除時呼叫，清理該模型在時間軸上的所有片段
+       */
+      removeClipsByModelId: (modelId: string) => {
+        const { tracks } = get();
+        const newTracks = tracks.map(track => ({
+          ...track,
+          clips: track.clips.filter(clip => clip.sourceModelId !== modelId)
+        }));
+        
+        set({ tracks: newTracks }, undefined, 'removeClipsByModelId');
       },
       
       // ========================================

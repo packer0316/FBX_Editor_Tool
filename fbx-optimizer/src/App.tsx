@@ -10,7 +10,7 @@ import AudioPanel from './presentation/features/audio-panel/components/AudioPane
 import EffectTestPanel, { type EffectItem } from './presentation/features/effect-panel/components/EffectTestPanel';
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { DirectorPanel } from './presentation/features/director';
-import { useIsDirectorMode } from './presentation/stores/directorStore';
+import { useIsDirectorMode, useDirectorStore } from './presentation/stores/directorStore';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -30,6 +30,7 @@ import { PlaylistUseCase } from './application/use-cases/PlaylistUseCase';
 import { AudioSyncUseCase } from './application/use-cases/AudioSyncUseCase';
 import { EffectSyncUseCase } from './application/use-cases/EffectSyncUseCase';
 import { PlayEffectUseCase } from './application/use-cases/PlayEffectUseCase';
+import { getEffekseerRuntimeAdapter } from './application/use-cases/effectRuntimeStore';
 import { InitializeLayerStackUseCase } from './application/use-cases/InitializeLayerStackUseCase';
 import { CreateLayerUseCase } from './application/use-cases/CreateLayerUseCase';
 import { UpdateLayerUseCase } from './application/use-cases/UpdateLayerUseCase';
@@ -51,6 +52,7 @@ import { useModelsManager } from './presentation/hooks/useModelsManager';
 
 // Utils
 import { sortLayersByPriority } from './utils/layer/layerUtils';
+import { disposeModel } from './utils/three/disposeUtils';
 
 // Layer Composer
 import { LayerManagerPanel } from './presentation/features/layer-composer/components/LayerManagerPanel';
@@ -1463,6 +1465,29 @@ function App() {
                 }}
                 onAddModel={handleFileUpload}
                 onRemoveModel={(id) => {
+                  // 獲取要刪除的模型
+                  const modelToRemove = models.find(m => m.id === id);
+                  
+                  if (modelToRemove) {
+                    // 1. 清理 Three.js 模型資源（Geometry, Material, Texture）
+                    disposeModel(modelToRemove.model);
+                    
+                    // 2. 清理音效資源
+                    modelToRemove.audioTracks?.forEach((track) => {
+                      audioControllerRef.current.cleanup(track.id);
+                    });
+                    
+                    // 3. 清理特效資源
+                    modelToRemove.effects?.forEach((effect) => {
+                      const effekseerAdapter = getEffekseerRuntimeAdapter();
+                      effekseerAdapter.cleanup(effect.id);
+                    });
+                    
+                    // 4. 清理 Director Mode 中該模型的所有 Clips
+                    useDirectorStore.getState().removeClipsByModelId(id);
+                  }
+                  
+                  // 5. 移除模型
                   removeModel(id);
                   // 如果刪除的是活動模型，已經在 hook 中處理了
                 }}

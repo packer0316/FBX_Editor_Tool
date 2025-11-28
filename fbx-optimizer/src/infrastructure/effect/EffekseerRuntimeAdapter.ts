@@ -262,6 +262,23 @@ export class EffekseerRuntimeAdapter {
     }
 
     /**
+     * 清理指定特效的資源
+     * 
+     * 從載入的特效列表中移除指定的特效，釋放記憶體。
+     * 通常在刪除模型時呼叫此方法。
+     * 
+     * @param effectId - 要清理的特效 ID
+     */
+    public cleanup(effectId: string): void {
+        const effect = this.loadedEffects.get(effectId);
+        if (effect && this.effekseerContext) {
+            // Release effect resource
+            this.effekseerContext.releaseEffect(effect);
+            this.loadedEffects.delete(effectId);
+        }
+    }
+
+    /**
      * 更新 Effekseer 的播放狀態
      *
      * Effekseer API 的 `update` 以「幀數」為單位，因此這裡使用 `deltaTime * 60` 估計幀數。
