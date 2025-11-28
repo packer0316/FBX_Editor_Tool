@@ -29,7 +29,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   timelineWidth,
   isHeaderOnly = false,
 }) => {
-  const { tracks, removeTrack, updateTrack, reorderTracks, ui } = useDirectorStore();
+  const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui } = useDirectorStore();
   const trackRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0 });
   const [isRenaming, setIsRenaming] = useState(false);
@@ -107,6 +107,14 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
     // TODO: 實現複製軌道功能
     closeContextMenu();
   }, [closeContextMenu]);
+
+  // 刪除選中的片段
+  const handleDeleteSelectedClip = useCallback(() => {
+    if (ui.selectedClipId) {
+      removeClip(ui.selectedClipId);
+    }
+    closeContextMenu();
+  }, [ui.selectedClipId, removeClip, closeContextMenu]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     handleTrackDragOver(e, track.id);
@@ -336,6 +344,17 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
               <span>{track.isLocked ? '解鎖' : '鎖定'}</span>
             </button>
             <div className="h-px bg-white/10 my-1" />
+            <button
+              onClick={handleDeleteSelectedClip}
+              disabled={!ui.selectedClipId}
+              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                ui.selectedClipId ? 'text-red-400 hover:bg-red-500/10' : 'text-gray-600 cursor-not-allowed'
+              }`}
+              title={!ui.selectedClipId ? '請先選擇一個動畫片段' : ''}
+            >
+              <Trash2 size={12} />
+              <span>刪除動畫</span>
+            </button>
             <button
               onClick={() => { handleRemoveTrack(); closeContextMenu(); }}
               className="w-full px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
