@@ -736,6 +736,6 @@ if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.baseTexture) {
 ---
 
 **最後更新**：2025.11.28  
-**維護者**：(JR.H)  
+**維護者**：JR.H  
 **專案狀態**：生產就緒 ✅
 

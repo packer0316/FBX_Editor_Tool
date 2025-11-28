@@ -484,7 +484,7 @@ touch LICENSE
 <!-- LICENSE -->
 MIT License
 
-Copyright (c) 2025 (JR.H)
+Copyright (c) 2025 JR.H
 
 [完整 MIT 授權條款]
 
@@ -903,7 +903,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 ---
 
 **最後更新**：2025.11.28  
-**審查人員**：(JR.H)  
+**審查人員**：JR.H  
 **下次審查**：建議 3 個月後或重大更新時
 
 ---
@@ -921,7 +921,7 @@ echo "📝 創建 LICENSE 文件..."
 cat > LICENSE << 'EOF'
 MIT License
 
-Copyright (c) 2025 (JR.H)
+Copyright (c) 2025 JR.H
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

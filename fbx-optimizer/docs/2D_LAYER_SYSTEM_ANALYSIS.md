@@ -1119,7 +1119,7 @@ class CreateLayerUseCase {
 
 ---
 
-**文件維護者**：(JR.H)  
+**文件維護者**：JR.H  
 **最後更新**：2025.11.28  
 **狀態**：待審核 ✅
 
@@ -1130,8 +1130,8 @@ class CreateLayerUseCase {
 如有任何問題或建議，請透過以下方式聯繫：
 
 - **GitHub Issues**: [專案 Issues 頁面]
-- **Email**: [(JR.H)]
-- **Discord**: [(JR.H)]
+- **Email**: [JR.H]
+- **Discord**: [JR.H]
 
 ---
 

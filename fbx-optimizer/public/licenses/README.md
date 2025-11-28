@@ -133,7 +133,7 @@ npm install @breezystack/lamejs
 
 如有授權相關疑問，請聯繫：
 
-- **專案維護者**：(JR.H)
+- **專案維護者**：JR.H
 - **lamejs 問題**：https://github.com/zhuker/lamejs/issues
 - **Effekseer 問題**：https://github.com/effekseer/Effekseer/issues
 
@@ -158,5 +158,5 @@ npm install @breezystack/lamejs
 ---
 
 **最後更新**：2025.11.28  
-**文件維護**：(JR.H)
+**文件維護**：JR.H
 
