@@ -42,6 +42,9 @@ export interface DirectorClip {
   /** 來源模型 ID */
   sourceModelId: string;
   
+  /** 來源模型名稱 */
+  sourceModelName: string;
+  
   /** 動作名稱（來自 IdentifiableClip 的 displayName） */
   sourceAnimationName: string;
   
@@ -184,6 +187,9 @@ export interface DraggingClipData {
   /** 來源模型 ID */
   sourceModelId: string;
   
+  /** 來源模型名稱 */
+  sourceModelName: string;
+  
   /** 動作 ID */
   sourceAnimationId: string;
   
@@ -251,6 +257,7 @@ export type PlaybackMode = 'single' | 'playlist' | 'director';
 export interface CreateClipParams {
   trackId: string;
   sourceModelId: string;
+  sourceModelName: string;
   sourceAnimationId: string;
   sourceAnimationName: string;
   sourceAnimationDuration: number;

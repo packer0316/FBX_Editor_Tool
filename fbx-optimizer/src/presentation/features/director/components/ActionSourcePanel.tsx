@@ -37,6 +37,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = ({ actionSour
     e.dataTransfer.setData('application/json', JSON.stringify({
       type: 'new',
       sourceModelId: source.modelId,
+      sourceModelName: source.modelName,
       sourceAnimationId: clip.clipId,
       sourceAnimationName: clip.displayName,
       durationFrames: clip.durationFrames,
@@ -46,6 +47,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = ({ actionSour
     setDragging(true, {
       type: 'new',
       sourceModelId: source.modelId,
+      sourceModelName: source.modelName,
       sourceAnimationId: clip.clipId,
       sourceAnimationName: clip.displayName,
       durationFrames: clip.durationFrames,

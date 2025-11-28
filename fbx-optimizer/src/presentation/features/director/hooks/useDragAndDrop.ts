@@ -151,6 +151,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
         addClip({
           trackId,
           sourceModelId: data.sourceModelId,
+          sourceModelName: data.sourceModelName,
           sourceAnimationId: data.sourceAnimationId,
           sourceAnimationName: data.sourceAnimationName,
           sourceAnimationDuration: data.durationFrames,

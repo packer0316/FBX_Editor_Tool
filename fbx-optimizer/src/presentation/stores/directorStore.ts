@@ -278,6 +278,7 @@ export const useDirectorStore = create<DirectorStore>()(
           id: generateId(),
           trackId: params.trackId,
           sourceModelId: params.sourceModelId,
+          sourceModelName: params.sourceModelName,
           sourceAnimationId: params.sourceAnimationId,
           sourceAnimationName: params.sourceAnimationName,
           sourceAnimationDuration: params.sourceAnimationDuration,

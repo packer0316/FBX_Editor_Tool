@@ -111,11 +111,11 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       }}
     >
       <span className="text-xs text-white font-medium truncate drop-shadow-sm pointer-events-none">
-        {clip.sourceAnimationName}
+        {clip.sourceModelName} - {clip.sourceAnimationName}
       </span>
       
       {/* 片段時長顯示 */}
-      {width > 60 && (
+      {width > 80 && (
         <span className="ml-auto text-[10px] text-white/70 font-mono pointer-events-none">
           {clip.sourceAnimationDuration}f
         </span>
