@@ -372,22 +372,25 @@ function App() {
         instance.duration = instance.originalClip.duration;
       }
 
-      // 自動啟用 Shader 並添加 Unlit 功能
+      // 自動啟用 Shader 並添加 Normal Map 功能（預設不上傳貼圖，不影響渲染）
       instance.isShaderEnabled = true;
       instance.shaderGroups = [
         {
-          id: `unlit_${Date.now()}`,
-          name: 'Unlit',
+          id: `default_${Date.now()}`,
+          name: '預設組合',
           features: [
             {
-              id: `unlit_feature_${Date.now()}`,
-              type: 'unlit',
-              name: 'Unlit (無光照)',
-              description: '無光照模式 - 只顯示貼圖顏色',
-              icon: '🔆',
+              id: `normal_map_feature_${Date.now()}`,
+              type: 'normal_map',
+              name: 'Normal Map',
+              description: '法線貼圖 - 增加表面細節',
+              icon: '🗺️',
               expanded: false,
               enabled: true,
-              params: {},
+              params: {
+                texture: null,
+                strength: 1.0,
+              },
             },
           ],
           selectedMeshes: instance.meshNames, // 應用到所有 mesh
