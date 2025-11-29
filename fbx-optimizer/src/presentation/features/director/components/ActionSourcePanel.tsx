@@ -33,26 +33,23 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({ actio
     source: ActionSource,
     clip: ActionSourceItem
   ) => {
-    e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('application/json', JSON.stringify({
-      type: 'new',
+    const dragData = {
+      type: 'new' as const,
       sourceModelId: source.modelId,
       sourceModelName: source.modelName,
       sourceAnimationId: clip.clipId,
       sourceAnimationName: clip.displayName,
       durationFrames: clip.durationFrames,
       color: source.modelColor,
-    }));
+    };
     
-    setDragging(true, {
-      type: 'new',
-      sourceModelId: source.modelId,
-      sourceModelName: source.modelName,
-      sourceAnimationId: clip.clipId,
-      sourceAnimationName: clip.displayName,
-      durationFrames: clip.durationFrames,
-      color: source.modelColor,
-    });
+    console.log('[ActionSourcePanel] DragStart:', dragData);
+    
+    e.dataTransfer.effectAllowed = 'copyMove';
+    // 使用 text/plain 確保跨瀏覽器兼容性
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
+    
+    setDragging(true, dragData);
   };
 
   const handleDragEnd = () => {
