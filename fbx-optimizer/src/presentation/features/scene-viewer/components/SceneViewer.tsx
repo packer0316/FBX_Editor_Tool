@@ -513,6 +513,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
         });
 
         const materialsRef = useRef<THREE.ShaderMaterial[]>([]);
+        // 🔧 修復記憶體洩漏：追蹤所有動態載入的貼圖
+        const loadedTexturesRef = useRef<THREE.Texture[]>([]);
 
         useFrame((state) => {
             materialsRef.current.forEach(mat => {
@@ -527,6 +529,14 @@ const Model = forwardRef<ModelRef, ModelProps>(
 
             const textureLoader = new THREE.TextureLoader();
             materialsRef.current = [];
+            
+            // 🔧 清理上一次的貼圖（模型切換或 shader 設定變更時）
+            loadedTexturesRef.current.forEach(tex => {
+                if (tex && tex.dispose) {
+                    tex.dispose();
+                }
+            });
+            loadedTexturesRef.current = [];
 
             model.traverse((child: any) => {
                 if (!child.isMesh) return;
@@ -629,6 +639,15 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     }
                 );
                 setTextureColorSpace(flashMaskTex, 'linear'); // Set immediately if already loaded
+
+                // 🔧 收集所有動態載入的貼圖以便後續清理
+                const dynamicTextures = [
+                    baseMatcapTex, baseMatcapMaskTex,
+                    addMatcapTex, addMatcapMaskTex,
+                    dissolveTex, normalMapTex,
+                    flashTex, flashMaskTex
+                ].filter((tex): tex is THREE.Texture => tex !== null);
+                loadedTexturesRef.current.push(...dynamicTextures);
 
                 let shaderMat: THREE.ShaderMaterial;
 
@@ -1085,6 +1104,25 @@ const Model = forwardRef<ModelRef, ModelProps>(
 
                 materialsRef.current.push(shaderMat);
             });
+            
+            // 🔧 Cleanup：當模型切換或組件卸載時釋放貼圖和材質
+            return () => {
+                // 釋放所有追蹤的貼圖
+                loadedTexturesRef.current.forEach(tex => {
+                    if (tex && tex.dispose) {
+                        tex.dispose();
+                    }
+                });
+                loadedTexturesRef.current = [];
+                
+                // 釋放所有追蹤的 ShaderMaterial
+                materialsRef.current.forEach(mat => {
+                    if (mat && mat.dispose) {
+                        mat.dispose();
+                    }
+                });
+                materialsRef.current = [];
+            };
         }, [model, shaderGroups, isShaderEnabled]);
 
         if (!model) return null;

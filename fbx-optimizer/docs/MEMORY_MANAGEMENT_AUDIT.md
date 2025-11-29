@@ -13,13 +13,13 @@
 
 | 類別 | 狀態 | 評分 |
 |------|------|------|
-| Three.js 模型資源 | ⚠️ 部分問題 | 7/10 |
+| Three.js 模型資源 | ✅ 已修復 | 10/10 |
 | 動畫資源 | ✅ 良好 | 9/10 |
 | 音效資源 | ✅ 良好 | 9/10 |
 | 特效資源 | ✅ 良好 | 9/10 |
 | Director Mode Clips | ✅ 良好 | 10/10 |
-| Shader 材質 | ⚠️ 有問題 | 5/10 |
-| 貼圖資源 | ⚠️ 有問題 | 6/10 |
+| Shader 材質 | ✅ 已修復 | 10/10 |
+| 貼圖資源 | ✅ 已修復 | 10/10 |
 
 ---
 
@@ -324,27 +324,27 @@ useEffect(() => {
 
 ---
 
-## ✅ TODO LIST（待修復問題）
+## ✅ TODO LIST（已完成）
 
-> 以下為評分摘要中標記為「⚠️ 有問題」的類別
+> 以下為評分摘要中標記為「⚠️ 有問題」的類別，**全部已修復** ✅
 
-### 1. Three.js 模型資源（7/10）
+### 1. Three.js 模型資源（7/10 → 10/10）
 
-- [ ] **修復 `userData.originalMaterial` 未釋放**
+- [x] **修復 `userData.originalMaterial` 未釋放**
   - 檔案：`src/utils/three/disposeUtils.ts`
-  - 問題：原始材質保存在 `userData.originalMaterial` 中，刪除模型時未釋放
   - 修復：在 `disposeModel()` 中添加對 `userData.originalMaterial` 的清理
+  - 完成日期：2024-11-29
 
-### 2. Shader 材質（5/10）
+### 2. Shader 材質（5/10 → 10/10）
 
-- [ ] **修復 ShaderMaterial 洩漏**
+- [x] **修復 ShaderMaterial 洩漏**
   - 檔案：`src/presentation/features/scene-viewer/components/SceneViewer.tsx`
-  - 問題：每次更新 Shader 設定時創建新 `ShaderMaterial`，舊的未被 `dispose()`
-  - 修復：在創建新 `ShaderMaterial` 前，先釋放舊的材質
+  - 修復：在創建新 `ShaderMaterial` 前，釋放舊的材質及其 uniforms 中的貼圖
+  - 完成日期：2024-11-29
 
-### 3. 貼圖資源（6/10）
+### 3. 貼圖資源（6/10 → 10/10）
 
-- [ ] **修復動態貼圖洩漏**
+- [x] **修復動態貼圖洩漏**
   - 檔案：`src/presentation/features/scene-viewer/components/SceneViewer.tsx`
-  - 問題：Shader 效果的貼圖（Matcap、Flash、Dissolve、Normal Map）未被追蹤和釋放
-  - 修復：使用 `useRef` 追蹤載入的貼圖，在 cleanup 時釋放
+  - 修復：使用 `loadedTexturesRef` 追蹤載入的貼圖，在 cleanup 時釋放
+  - 完成日期：2024-11-29
