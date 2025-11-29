@@ -7,6 +7,7 @@ import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/InitEffekseerRuntimeUseCase';
 import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { KeyboardCameraControls } from './KeyboardCameraControls';
+import { FrameEmitter } from './FrameEmitter';
 
 export interface ModelRef {
     play: () => void;
@@ -86,6 +87,8 @@ interface SceneViewerProps {
     keyboardControlsEnabled?: boolean;
     cameraMoveSpeed?: number;
     cameraSprintMultiplier?: number;
+    // Director Mode
+    isDirectorMode?: boolean;
 }
 
 // Scene Settings Controller
@@ -1315,7 +1318,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         environmentIntensity,
         keyboardControlsEnabled = true,
         cameraMoveSpeed = 5.0,
-        cameraSprintMultiplier = 2.0
+        cameraSprintMultiplier = 2.0,
+        isDirectorMode = false
     }, ref) => {
         // 決定使用單模型還是多模型模式
         const isMultiModelMode = models && models.length > 0;
@@ -1580,6 +1584,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         glRef.current = gl;
                     }}>
                     <EffekseerFrameBridge />
+                    <FrameEmitter enabled={isDirectorMode} />
                     <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
                     {hdriUrl && <Environment files={hdriUrl} background blur={0.5} />}
                     <ambientLight intensity={0.8 * (environmentIntensity ?? 1.0)} />

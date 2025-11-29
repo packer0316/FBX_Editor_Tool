@@ -1233,6 +1233,7 @@ function App() {
                       whitePoint={whitePoint}
                       hdriUrl={hdriUrl || undefined}
                       environmentIntensity={environmentIntensity}
+                      isDirectorMode={isDirectorMode}
                     />
                   </div>
                   {/* 3D 預覽關閉提示 */}

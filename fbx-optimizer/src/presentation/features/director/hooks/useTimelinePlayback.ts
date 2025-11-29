@@ -2,23 +2,24 @@
  * useTimelinePlayback - 時間軸播放控制 Hook
  * 
  * 實現 Director Mode 的播放功能：
- * - requestAnimationFrame 播放循環
+ * - 訂閱 EventBus 的 tick 事件（由 SceneViewer 的 useFrame 發送）
  * - 根據當前幀計算各片段的局部時間
- * - 回調通知外部更新模型動畫
+ * - 發送 clipUpdate 事件通知 Model 更新動畫
  */
 
 import { useEffect, useRef, useCallback } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { directorEventBus } from '../../../../infrastructure/events';
 import { getClipLocalTime } from '../../../../utils/director/directorUtils';
 import type { ClipLocalTimeResult } from '../../../../domain/entities/director/director.types';
 
 export interface PlaybackCallbacks {
-  /** 當需要更新模型動畫時調用 */
-  onUpdateModelAnimation: (
+  /** 當需要更新模型動畫時調用（向後兼容，建議改用 EventBus） */
+  onUpdateModelAnimation?: (
     modelId: string,
     animationId: string,
     localTime: number,
-    localFrame: number // 當前幀數（用於觸發音效和特效）
+    localFrame: number
   ) => void;
   
   /** 當片段開始播放時調用 */
@@ -29,7 +30,7 @@ export interface PlaybackCallbacks {
 }
 
 interface UseTimelinePlaybackOptions {
-  callbacks: PlaybackCallbacks;
+  callbacks?: PlaybackCallbacks;
 }
 
 interface UseTimelinePlaybackReturn {
@@ -38,33 +39,30 @@ interface UseTimelinePlaybackReturn {
 }
 
 export function useTimelinePlayback(
-  options: UseTimelinePlaybackOptions
+  options: UseTimelinePlaybackOptions = {}
 ): UseTimelinePlaybackReturn {
   const { callbacks } = options;
   
   const {
     timeline,
     tracks,
-    setCurrentFrame,
   } = useDirectorStore();
   
-  const { isPlaying, currentFrame, fps, totalFrames, isLooping } = timeline;
+  const { isPlaying, currentFrame, fps } = timeline;
   
-  // Refs for animation loop
-  const lastTimeRef = useRef<number>(0);
-  const animationFrameRef = useRef<number>(0);
-  const currentFrameRef = useRef<number>(currentFrame); // 追蹤當前幀（避免閉包問題）
+  // Refs
+  const frameRef = useRef<number>(currentFrame);
+  const lastIntFrameRef = useRef<number>(Math.floor(currentFrame));
   const activeClipsRef = useRef<Map<string, ClipLocalTimeResult>>(new Map());
   const previousActiveClipIds = useRef<Set<string>>(new Set());
-  
-  // 同步 currentFrame 到 ref
-  useEffect(() => {
-    currentFrameRef.current = currentFrame;
-  }, [currentFrame]);
-  
-  // Callbacks ref to avoid stale closures
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
+
+  // 同步外部 currentFrame 變化（如 seek）
+  useEffect(() => {
+    frameRef.current = currentFrame;
+    lastIntFrameRef.current = Math.floor(currentFrame);
+  }, [currentFrame]);
 
   // 計算當前幀的所有活躍片段
   const getActiveClipsAtCurrentFrame = useCallback((frame: number): ClipLocalTimeResult[] => {
@@ -84,20 +82,29 @@ export function useTimelinePlayback(
     return results;
   }, [tracks, fps]);
 
-  // 更新所有活躍片段的動畫
+  // 更新所有活躍片段並發送事件
   const updateActiveClips = useCallback((frame: number) => {
+    const state = useDirectorStore.getState();
+    const currentFps = state.timeline.fps;
     const activeClips = getActiveClipsAtCurrentFrame(frame);
     const currentActiveClipIds = new Set<string>();
     
-    // 更新活躍片段的動畫
     for (const clipResult of activeClips) {
       const { clip, localTime } = clipResult;
       currentActiveClipIds.add(clip.id);
       
-      // 通知外部更新模型動畫
+      // 發送 clipUpdate 事件
       if (localTime !== null) {
-        const localFrame = Math.floor(localTime * fps);
-        callbacksRef.current.onUpdateModelAnimation(
+        const localFrame = Math.floor(localTime * currentFps);
+        directorEventBus.emitClipUpdate({
+          modelId: clip.sourceModelId,
+          animationId: clip.sourceAnimationId,
+          localTime,
+          localFrame,
+        });
+        
+        // 向後兼容：同時調用 callback
+        callbacksRef.current?.onUpdateModelAnimation?.(
           clip.sourceModelId,
           clip.sourceAnimationId,
           localTime,
@@ -107,7 +114,7 @@ export function useTimelinePlayback(
       
       // 檢查片段是否剛開始播放
       if (!previousActiveClipIds.current.has(clip.id)) {
-        callbacksRef.current.onClipStart?.(
+        callbacksRef.current?.onClipStart?.(
           clip.id,
           clip.sourceModelId,
           clip.sourceAnimationId
@@ -118,10 +125,9 @@ export function useTimelinePlayback(
     // 檢查片段是否結束
     for (const prevClipId of previousActiveClipIds.current) {
       if (!currentActiveClipIds.has(prevClipId)) {
-        // 找到結束的片段資訊
         const prevClip = activeClipsRef.current.get(prevClipId);
         if (prevClip) {
-          callbacksRef.current.onClipEnd?.(
+          callbacksRef.current?.onClipEnd?.(
             prevClip.clip.id,
             prevClip.clip.sourceModelId,
             prevClip.clip.sourceAnimationId
@@ -140,65 +146,42 @@ export function useTimelinePlayback(
     return activeClips;
   }, [getActiveClipsAtCurrentFrame]);
 
-  // 播放循環
+  // 訂閱 tick 事件（取代 requestAnimationFrame）
   useEffect(() => {
-    if (!isPlaying) {
-      // 停止播放時取消動畫幀
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = 0;
-      }
-      return;
-    }
-    
-    lastTimeRef.current = performance.now();
-    
-    const animate = (currentTime: number) => {
-      const deltaTime = (currentTime - lastTimeRef.current) / 1000; // 轉換為秒
-      lastTimeRef.current = currentTime;
-      
-      // 獲取當前狀態
+    if (!isPlaying) return;
+
+    const unsubscribe = directorEventBus.onTick(({ delta }) => {
       const state = useDirectorStore.getState();
-      const { fps: currentFps, totalFrames: currentTotalFrames, isLooping: currentIsLooping } = state.timeline;
-      
-      // 計算新的幀位置（使用 ref 避免閉包問題）
-      const frameDelta = deltaTime * currentFps;
-      let newFrame = currentFrameRef.current + frameDelta;
-      
-      // 處理循環或結束
-      if (newFrame >= currentTotalFrames) {
-        if (currentIsLooping) {
-          newFrame = newFrame % currentTotalFrames;
+      const { fps: currentFps, totalFrames, isLooping } = state.timeline;
+
+      // 計算新幀
+      let newFrame = frameRef.current + delta * currentFps;
+
+      // 處理循環/結束
+      if (newFrame >= totalFrames) {
+        if (isLooping) {
+          newFrame = newFrame % totalFrames;
         } else {
-          newFrame = currentTotalFrames;
-          // 播放結束，停止
+          newFrame = totalFrames;
           state.pause();
           return;
         }
       }
-      
-      // 更新當前幀
+
+      frameRef.current = newFrame;
+
+      // 只在整數幀變化時更新 store（節流）
       const frameInt = Math.floor(newFrame);
-      currentFrameRef.current = newFrame; // 保持小數精度
-      state.setCurrentFrame(frameInt);
-      
-      // 更新活躍片段
+      if (frameInt !== lastIntFrameRef.current) {
+        lastIntFrameRef.current = frameInt;
+        state.setCurrentFrame(frameInt);
+      }
+
+      // 更新活躍片段並發送事件
       updateActiveClips(frameInt);
-      
-      // 繼續下一幀
-      if (useDirectorStore.getState().timeline.isPlaying) {
-        animationFrameRef.current = requestAnimationFrame(animate);
-      }
-    };
-    
-    animationFrameRef.current = requestAnimationFrame(animate);
-    
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-        animationFrameRef.current = 0;
-      }
-    };
+    });
+
+    return unsubscribe;
   }, [isPlaying, updateActiveClips]);
 
   // 當手動改變幀位置時（非播放狀態），也更新活躍片段
@@ -217,4 +200,3 @@ export function useTimelinePlayback(
 }
 
 export default useTimelinePlayback;
-
