@@ -185,28 +185,17 @@ useFrame((_state, delta) => {
 - [x] **3.4 創建 DirectorEffectTrigger Hook** ✅
   - 檔案：`src/presentation/features/director/hooks/useDirectorEffectTrigger.ts`
 
-#### Phase 4：整合與優化（低優先級）
+#### Phase 4：整合與優化（低優先級）✅ 已完成
 
-- [ ] **4.1 添加 Seek 事件支援**
-  - 檔案：`DirectorEventBus.ts`, `useTimelinePlayback.ts`
-  - 任務：
-    - 當用戶拖曳時間軸時發送 `seek` 事件
-    - Model 訂閱並跳轉到指定時間
-  - 預估：30 分鐘
+- [x] **4.1 添加 Seek 事件支援** ✅
+  - Seek 已內建於 currentFrame 變化 + updateActiveClips
 
-- [ ] **4.2 節流 Store 更新**
-  - 檔案：`useTimelinePlayback.ts`
-  - 任務：
-    - 只在整數幀變化時更新 Zustand store
-    - 使用 ref 追蹤小數幀，避免頻繁渲染
-  - 預估：20 分鐘
+- [x] **4.2 節流 Store 更新** ✅
+  - 已在 Phase 2 實現（只在整數幀變化時更新 store）
 
-- [ ] **4.3 添加事件類型定義**
-  - 檔案：`src/domain/entities/director/director.types.ts`
-  - 任務：
-    - 定義 `DirectorEvent` 類型
-    - 類型安全的事件 payload
-  - 預估：20 分鐘
+- [x] **4.3 添加事件類型定義** ✅
+  - 檔案：`src/domain/entities/director/directorEvents.types.ts`
+  - 類型移至 Domain 層，符合 DDD
 
 ---
 
@@ -490,10 +479,10 @@ describe('DirectorEventBus', () => {
 
 | Phase | 任務 | 預估時間 | 優先級 | 狀態 |
 |-------|------|----------|--------|------|
-| Phase 1 | Event Bus 基礎設施 | 1 小時 | 🔴 高 | ✅ |
-| Phase 2 | 重構 useTimelinePlayback | 1.5 小時 | 🔴 高 | ✅ |
-| Phase 3 | 重構動畫更新機制 | 2.5 小時 | 🟠 中 | ✅ |
-| Phase 4 | 整合與優化 | 1 小時 | 🟡 低 | 待定 |
+| Phase 1 | Event Bus 基礎設施 | 1 小時 | 🔴 高 | ✅ 完成 |
+| Phase 2 | 重構 useTimelinePlayback | 1.5 小時 | 🔴 高 | ✅ 完成 |
+| Phase 3 | 重構動畫更新機制 | 2.5 小時 | 🟠 中 | ✅ 完成 |
+| Phase 4 | 整合與優化 | 1 小時 | 🟡 低 | ✅ 完成 |
 
 **總計**：約 6 小時
 

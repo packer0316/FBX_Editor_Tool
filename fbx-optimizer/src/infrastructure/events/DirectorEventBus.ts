@@ -4,20 +4,9 @@
  * 解耦 SceneViewer 和 Director 之間的通訊
  */
 
-export interface TickEvent {
-  delta: number;
-}
+import type { TickEvent, SeekEvent, ClipUpdateEvent } from '../../domain/entities/director/directorEvents.types';
 
-export interface SeekEvent {
-  frame: number;
-}
-
-export interface ClipUpdateEvent {
-  modelId: string;
-  animationId: string;
-  localTime: number;
-  localFrame: number;
-}
+export type { TickEvent, SeekEvent, ClipUpdateEvent };
 
 type EventHandler<T> = (event: T) => void;
 
