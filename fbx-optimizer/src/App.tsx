@@ -522,6 +522,17 @@ function App() {
       }, 0);
     }
   }, [activeModelId, activeModel]); // 同時監聽 activeModelId 和 activeModel，確保正確重置
+  
+  // 當取消選中模型時，同步暫停狀態到模型實例
+  const prevActiveModelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    // 如果之前有選中的模型，現在取消選中了
+    if (prevActiveModelIdRef.current && !activeModelId) {
+      // 更新之前選中模型的 isPlaying 狀態為 false
+      updateModel(prevActiveModelIdRef.current, { isPlaying: false });
+    }
+    prevActiveModelIdRef.current = activeModelId;
+  }, [activeModelId, updateModel]);
 
   // 當活動模型的狀態改變時，同步回 ModelInstance（只在用戶操作時）
   // 使用 useRef 來追蹤上一次的值，只在真正改變時才更新
