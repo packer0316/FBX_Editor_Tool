@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, Environment } from '@react-three/drei';
+import { OrbitControls, Grid, Environment, TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
@@ -92,6 +92,9 @@ interface SceneViewerProps {
     cameraSprintMultiplier?: number;
     // Director Mode
     isDirectorMode?: boolean;
+    // Transform Gizmo
+    showTransformGizmo?: boolean;
+    onModelPositionChange?: (modelId: string, position: [number, number, number]) => void;
 }
 
 // Scene Settings Controller
@@ -1178,10 +1181,11 @@ type MultiModelProps = {
     enableShadows?: boolean;
     isActiveModel?: boolean; // 是否為活動模型（只有活動模型才執行相機公轉）
     isDirectorMode?: boolean; // Director Mode 下使用 EventBus
+    onGroupRefMount?: (groupRef: THREE.Group | null) => void; // Transform Gizmo 用
 };
 
 const MultiModel = forwardRef<ModelRef, MultiModelProps>(
-    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false }, ref) => {
+    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false, onGroupRefMount }, ref) => {
         const { 
             id: modelId,
             model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
@@ -1196,6 +1200,18 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
         // 使用現有的 Model 組件處理動畫和 shader
         const modelRef = useRef<ModelRef>(null);
         const groupRef = useRef<THREE.Group>(null);
+
+        // 通知 groupRef 掛載（用於 Transform Gizmo）
+        useEffect(() => {
+            if (onGroupRefMount && isActiveModel) {
+                onGroupRefMount(groupRef.current);
+            }
+            return () => {
+                if (onGroupRefMount && isActiveModel) {
+                    onGroupRefMount(null);
+                }
+            };
+        }, [onGroupRefMount, isActiveModel, model]);
         
         // 相機公轉累積角度
         const cameraOrbitAngleRef = useRef(0);
@@ -1326,6 +1342,61 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
     }
 );
 
+// TransformGizmo 組件 - 用於顯示和控制模型位置
+interface TransformGizmoProps {
+    object: THREE.Object3D | null;
+    modelId: string;
+    onPositionChange: (modelId: string, position: [number, number, number]) => void;
+    orbitControlsRef: React.RefObject<any>;
+}
+
+function TransformGizmo({ object, modelId, onPositionChange, orbitControlsRef }: TransformGizmoProps) {
+    const transformRef = useRef<any>(null);
+
+    useEffect(() => {
+        if (!transformRef.current) return;
+
+        const controls = transformRef.current;
+        
+        // 當拖曳時禁用 OrbitControls
+        const handleDraggingChanged = (event: { value: boolean }) => {
+            if (orbitControlsRef.current) {
+                orbitControlsRef.current.enabled = !event.value;
+            }
+        };
+
+        // 當變換結束時更新位置
+        const handleObjectChange = () => {
+            if (object) {
+                const pos = object.position;
+                onPositionChange(modelId, [pos.x, pos.y, pos.z]);
+            }
+        };
+
+        controls.addEventListener('dragging-changed', handleDraggingChanged);
+        controls.addEventListener('objectChange', handleObjectChange);
+
+        return () => {
+            controls.removeEventListener('dragging-changed', handleDraggingChanged);
+            controls.removeEventListener('objectChange', handleObjectChange);
+        };
+    }, [object, modelId, onPositionChange, orbitControlsRef]);
+
+    if (!object) return null;
+
+    return (
+        <TransformControls
+            ref={transformRef}
+            object={object}
+            mode="translate"
+            size={0.7}
+            showX
+            showY
+            showZ
+        />
+    );
+}
+
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
     ({ 
         model, 
@@ -1355,7 +1426,9 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         keyboardControlsEnabled = true,
         cameraMoveSpeed = 5.0,
         cameraSprintMultiplier = 2.0,
-        isDirectorMode = false
+        isDirectorMode = false,
+        showTransformGizmo = false,
+        onModelPositionChange
     }, ref) => {
         // 決定使用單模型還是多模型模式
         const isMultiModelMode = models && models.length > 0;
@@ -1376,6 +1449,9 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         const recordedChunksRef = useRef<Blob[]>([]);
         const isRecordingRef = useRef<boolean>(false);
         const captureStreamRef = useRef<MediaStream | null>(null);
+        
+        // Transform Gizmo: 追蹤活動模型的 Object3D
+        const [activeModelObject, setActiveModelObject] = useState<THREE.Group | null>(null);
 
         useEffect(() => {
             if (!glRef.current) {
@@ -1679,6 +1755,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 enableShadows={enableShadows}
                                 isActiveModel={isActive}
                                 isDirectorMode={isDirectorMode}
+                                onGroupRefMount={isActive && showTransformGizmo ? setActiveModelObject : undefined}
                             />
                         );
                     })}
@@ -1711,6 +1788,15 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             RIGHT: THREE.MOUSE.PAN
                         }}
                     />
+                    {/* Transform Gizmo */}
+                    {showTransformGizmo && activeModelObject && onModelPositionChange && activeModelId && (
+                        <TransformGizmo
+                            object={activeModelObject}
+                            modelId={activeModelId}
+                            onPositionChange={onModelPositionChange}
+                            orbitControlsRef={orbitControlsRef}
+                        />
+                    )}
                     <KeyboardCameraControls
                         enabled={keyboardControlsEnabled}
                         moveSpeed={cameraMoveSpeed}

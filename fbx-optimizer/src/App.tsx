@@ -1258,6 +1258,10 @@ function App() {
                       hdriUrl={hdriUrl || undefined}
                       environmentIntensity={environmentIntensity}
                       isDirectorMode={isDirectorMode}
+                      showTransformGizmo={!!activeModelId && !isDirectorMode}
+                      onModelPositionChange={(modelId, position) => {
+                        updateModel(modelId, { position });
+                      }}
                     />
                   </div>
                   {/* 3D 預覽關閉提示 */}
