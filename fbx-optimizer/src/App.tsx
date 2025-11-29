@@ -59,6 +59,9 @@ import { LayerManagerPanel } from './presentation/features/layer-composer/compon
 import { PreviewModeToggle } from './presentation/features/layer-composer/components/PreviewModeToggle';
 import { Layer2DRenderer } from './presentation/features/layer-composer/components/Layer2DRenderer';
 
+// Performance Monitor
+import { PerformanceMonitor, type RendererInfo } from './presentation/features/performance-monitor';
+
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
 export type { AudioTrack } from './domain/value-objects/AudioTrack';
@@ -218,8 +221,32 @@ function App() {
   const [enableShadows, setEnableShadows] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
 
+  // Performance Monitor
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
+  const [rendererInfo, setRendererInfo] = useState<RendererInfo | null>(null);
+
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
+
+  // Performance Monitor: 定期獲取 renderer info
+  useEffect(() => {
+    if (!showPerformanceMonitor) {
+      setRendererInfo(null);
+      return;
+    }
+
+    const updateRendererInfo = () => {
+      if (sceneViewerRef.current) {
+        const info = sceneViewerRef.current.getRendererInfo();
+        setRendererInfo(info);
+      }
+    };
+
+    // 每 100ms 更新一次（比 requestAnimationFrame 更輕量）
+    const intervalId = setInterval(updateRendererInfo, 100);
+
+    return () => clearInterval(intervalId);
+  }, [showPerformanceMonitor]);
 
   // Layer Composer state
   const [layers, setLayers] = useState<Layer[]>(() => InitializeLayerStackUseCase.execute());
@@ -1002,6 +1029,8 @@ function App() {
           setKeyboardControlsEnabled={setKeyboardControlsEnabled}
           cameraMoveSpeed={cameraMoveSpeed}
           setCameraMoveSpeed={setCameraMoveSpeed}
+          showPerformanceMonitor={showPerformanceMonitor}
+          setShowPerformanceMonitor={setShowPerformanceMonitor}
         />
 
         {/* 左側：3D 預覽區 */}
@@ -1148,6 +1177,13 @@ function App() {
                       pointerEnabled={isPointerEditing}
                     />
                   ))}
+                  {/* Performance Monitor - 顯示在預覽框左下角 */}
+                  <PerformanceMonitor
+                    visible={showPerformanceMonitor}
+                    rendererInfo={rendererInfo}
+                    currentTheme={currentTheme}
+                  />
+
                   {/* 3D SceneViewer - 始終渲染，使用 CSS 控制顯示/隱藏，避免條件渲染導致的 DOM 錯誤 */}
                   <div 
                     className={`absolute inset-0 z-[100] ${is3DEnabled ? '' : 'invisible pointer-events-none'}`}

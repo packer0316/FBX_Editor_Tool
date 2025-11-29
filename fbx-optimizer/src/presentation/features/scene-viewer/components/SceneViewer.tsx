@@ -16,12 +16,27 @@ export interface ModelRef {
     getDuration: () => number;
 }
 
+export interface RendererInfo {
+    render: {
+        calls: number;
+        triangles: number;
+        points: number;
+        lines: number;
+    };
+    memory: {
+        geometries: number;
+        textures: number;
+    };
+    programs: number | null;
+}
+
 export interface SceneViewerRef extends ModelRef {
     resetCamera: () => void;
     takeScreenshot: () => void;
     startRecording: () => void;
     stopRecording: () => void;
     isRecording: () => boolean;
+    getRendererInfo: () => RendererInfo | null;
 }
 
 interface ModelInstanceForRender {
@@ -1447,7 +1462,24 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     recordingState.captureStream = null;
                 }
             },
-            isRecording: () => isRecordingRef.current
+            isRecording: () => isRecordingRef.current,
+            getRendererInfo: () => {
+                if (!glRef.current) return null;
+                const info = glRef.current.info;
+                return {
+                    render: {
+                        calls: info.render.calls,
+                        triangles: info.render.triangles,
+                        points: info.render.points,
+                        lines: info.render.lines
+                    },
+                    memory: {
+                        geometries: info.memory.geometries,
+                        textures: info.memory.textures
+                    },
+                    programs: info.programs?.length ?? null
+                };
+            }
         }));
 
         // Effekseer 初始化已移至 EffekseerFrameBridge 組件中
