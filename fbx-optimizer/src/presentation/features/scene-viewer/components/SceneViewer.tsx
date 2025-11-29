@@ -1347,12 +1347,20 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
 interface TransformGizmoProps {
     object: THREE.Object3D | null;
     modelId: string;
+    visible: boolean; // 控制 Gizmo 可見性（不重建組件）
     onPositionChange: (modelId: string, position: [number, number, number]) => void;
     orbitControlsRef: React.RefObject<any>;
 }
 
-function TransformGizmo({ object, modelId, onPositionChange, orbitControlsRef }: TransformGizmoProps) {
+function TransformGizmo({ object, modelId, visible, onPositionChange, orbitControlsRef }: TransformGizmoProps) {
     const transformRef = useRef<any>(null);
+
+    // 控制 TransformControls 可見性
+    useEffect(() => {
+        if (transformRef.current) {
+            transformRef.current.visible = visible;
+        }
+    }, [visible]);
 
     useEffect(() => {
         if (!transformRef.current) return;
@@ -1762,7 +1770,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 enableShadows={enableShadows}
                                 isActiveModel={isActive}
                                 isDirectorMode={isDirectorMode}
-                                onGroupRefMount={isActive && showTransformGizmo ? setActiveModelObject : undefined}
+                                onGroupRefMount={isActive ? setActiveModelObject : undefined}
                             />
                         );
                     })}
@@ -1795,11 +1803,12 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             RIGHT: THREE.MOUSE.PAN
                         }}
                     />
-                    {/* Transform Gizmo - 只在模型可見時顯示 */}
-                    {showTransformGizmo && activeModelObject && onModelPositionChange && activeModelId && activeModelInstance?.visible && (
+                    {/* Transform Gizmo - 始終掛載，通過 visible 控制顯示 */}
+                    {activeModelObject && onModelPositionChange && activeModelId && (
                         <TransformGizmo
                             object={activeModelObject}
                             modelId={activeModelId}
+                            visible={showTransformGizmo && (activeModelInstance?.visible ?? true)}
                             onPositionChange={onModelPositionChange}
                             orbitControlsRef={orbitControlsRef}
                         />
