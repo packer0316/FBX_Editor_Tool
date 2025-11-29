@@ -1390,6 +1390,7 @@ function TransformGizmo({ object, modelId, onPositionChange, orbitControlsRef }:
             ref={transformRef}
             object={object}
             mode="translate"
+            space="local"
             size={0.7}
             showX
             showY
@@ -1442,6 +1443,11 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         const activeModelIndex = isMultiModelMode && activeModelId && models
             ? models.findIndex(m => m.id === activeModelId)
             : 0;
+
+        // 獲取活動模型實例（用於 Transform Gizmo 可見性檢查）
+        const activeModelInstance = isMultiModelMode && activeModelIndex >= 0 && models
+            ? models[activeModelIndex]
+            : null;
 
         const modelRef = useRef<ModelRef>(null);
         const orbitControlsRef = useRef<any>(null);
@@ -1789,8 +1795,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             RIGHT: THREE.MOUSE.PAN
                         }}
                     />
-                    {/* Transform Gizmo */}
-                    {showTransformGizmo && activeModelObject && onModelPositionChange && activeModelId && (
+                    {/* Transform Gizmo - 只在模型可見時顯示 */}
+                    {showTransformGizmo && activeModelObject && onModelPositionChange && activeModelId && activeModelInstance?.visible && (
                         <TransformGizmo
                             object={activeModelObject}
                             modelId={activeModelId}

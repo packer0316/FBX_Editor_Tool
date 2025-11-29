@@ -283,7 +283,9 @@ export default function ModelCard({
           {/* 3D 預覽 */}
           <div className="space-y-1">
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-gray-400">模型預覽</label>
+              <label className="text-xs text-gray-400">
+                模型預覽 <span className="text-gray-500">{modelInstance.file?.name || modelInstance.name}</span>
+              </label>
               <button
                 onClick={(e) => {
                   e.stopPropagation();

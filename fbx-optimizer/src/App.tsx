@@ -562,27 +562,70 @@ function App() {
 
     // 檢查是否有實際改變
     if (prevStateRef.current) {
-      const hasChanged =
-        prevStateRef.current.shaderGroups !== currentState.shaderGroups ||
-        prevStateRef.current.isShaderEnabled !== currentState.isShaderEnabled ||
-        prevStateRef.current.originalClip !== currentState.originalClip ||
-        prevStateRef.current.masterClip !== currentState.masterClip ||
-        prevStateRef.current.optimizedClip !== currentState.optimizedClip ||
-        prevStateRef.current.createdClips !== currentState.createdClips ||
-        prevStateRef.current.tolerance !== currentState.tolerance ||
-        prevStateRef.current.audioTracks !== currentState.audioTracks ||
-        prevStateRef.current.effects !== currentState.effects ||
-        prevStateRef.current.isPlaying !== currentState.isPlaying ||
-        prevStateRef.current.currentTime !== currentState.currentTime ||
-        prevStateRef.current.duration !== currentState.duration ||
-        prevStateRef.current.isLoopEnabled !== currentState.isLoopEnabled;
+      const updates: Partial<typeof currentState> = {};
+      let hasChanged = false;
+
+      // 只更新實際改變的屬性，而不是整個對象
+      if (prevStateRef.current.shaderGroups !== currentState.shaderGroups) {
+        updates.shaderGroups = currentState.shaderGroups;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isShaderEnabled !== currentState.isShaderEnabled) {
+        updates.isShaderEnabled = currentState.isShaderEnabled;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.originalClip !== currentState.originalClip) {
+        updates.originalClip = currentState.originalClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.masterClip !== currentState.masterClip) {
+        updates.masterClip = currentState.masterClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.optimizedClip !== currentState.optimizedClip) {
+        updates.optimizedClip = currentState.optimizedClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.createdClips !== currentState.createdClips) {
+        updates.createdClips = currentState.createdClips;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.tolerance !== currentState.tolerance) {
+        updates.tolerance = currentState.tolerance;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.audioTracks !== currentState.audioTracks) {
+        updates.audioTracks = currentState.audioTracks;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.effects !== currentState.effects) {
+        updates.effects = currentState.effects;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isPlaying !== currentState.isPlaying) {
+        updates.isPlaying = currentState.isPlaying;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.currentTime !== currentState.currentTime) {
+        updates.currentTime = currentState.currentTime;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.duration !== currentState.duration) {
+        updates.duration = currentState.duration;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isLoopEnabled !== currentState.isLoopEnabled) {
+        updates.isLoopEnabled = currentState.isLoopEnabled;
+        hasChanged = true;
+      }
 
       if (hasChanged) {
-        updateModel(activeModelId, currentState);
+        updateModel(activeModelId, updates);
         prevStateRef.current = currentState;
       }
     } else {
-      // 第一次設置
+      // 第一次設置 - 只更新需要同步的屬性，不覆蓋其他屬性（如 showTransformGizmo, position 等）
+      updateModel(activeModelId, currentState);
       prevStateRef.current = currentState;
     }
   }, [
