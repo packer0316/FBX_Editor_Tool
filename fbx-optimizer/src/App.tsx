@@ -11,6 +11,8 @@ import EffectTestPanel, { type EffectItem } from './presentation/features/effect
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { DirectorPanel } from './presentation/features/director';
 import { useIsDirectorMode, useDirectorStore } from './presentation/stores/directorStore';
+import { useDirectorAudioTrigger } from './presentation/features/director/hooks/useDirectorAudioTrigger';
+import { useDirectorEffectTrigger } from './presentation/features/director/hooks/useDirectorEffectTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -204,6 +206,28 @@ function App() {
   const lastEffectTimeRef = useRef<number>(0);
   const lastAudioFrameRef = useRef<number>(-1);
   const lastEffectFrameRef = useRef<number>(-1);
+
+  // Director Mode: 音效觸發
+  useDirectorAudioTrigger({
+    enabled: isDirectorMode,
+    models: models.map(m => ({
+      id: m.id,
+      audioTracks: m.audioTracks,
+    })),
+    audioController: audioControllerRef.current,
+  });
+
+  // Director Mode: 特效觸發
+  useDirectorEffectTrigger({
+    enabled: isDirectorMode,
+    models: models.map(m => ({
+      id: m.id,
+      model: m.model,
+      bones: m.bones,
+      effects: m.effects,
+    })),
+  });
+
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
     near: 0.1,
@@ -1282,90 +1306,6 @@ function App() {
               <DirectorPanel 
                 actionSources={actionSources}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
-                onUpdateModelAnimation={(modelId, animationId, localTime, localFrame) => {
-                  console.log('[Director] Update model animation:', {
-                    modelId,
-                    animationId,
-                    localTime,
-                    localFrame,
-                  });
-                  
-                  // 通過 updateModel 更新對應模型的 currentTime
-                  // 這樣每個模型都能獨立播放
-                  const targetModel = models.find(m => m.id === modelId);
-                  if (targetModel) {
-                    // 更新模型的當前播放時間
-                    updateModel(modelId, {
-                      currentTime: localTime,
-                    });
-
-                    // 觸發音效
-                    targetModel.audioTracks.forEach((track: AudioTrack) => {
-                      track.triggers.forEach((trigger) => {
-                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
-                          audioControllerRef.current.play(track);
-                        }
-                      });
-                    });
-
-                    // 觸發特效
-                    targetModel.effects.forEach((effect: EffectItem) => {
-                      if (!effect.isLoaded) return;
-                      
-                      effect.triggers.forEach((trigger) => {
-                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
-                          
-                          // 計算位置（包含骨骼綁定）
-                          let x = effect.position[0];
-                          let y = effect.position[1];
-                          let z = effect.position[2];
-                          
-                          if (effect.boundBoneUuid && targetModel.model) {
-                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
-                            if (boundBone) {
-                              const boneWorldPos = new THREE.Vector3();
-                              boundBone.getWorldPosition(boneWorldPos);
-                              x = boneWorldPos.x + effect.position[0];
-                              y = boneWorldPos.y + effect.position[1];
-                              z = boneWorldPos.z + effect.position[2];
-                            }
-                          }
-                          
-                          // 計算旋轉
-                          let rx = effect.rotation[0];
-                          let ry = effect.rotation[1];
-                          let rz = effect.rotation[2];
-                          
-                          if (effect.boundBoneUuid && targetModel.model) {
-                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
-                            if (boundBone) {
-                              const boneWorldQuat = new THREE.Quaternion();
-                              boundBone.getWorldQuaternion(boneWorldQuat);
-                              const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-                              
-                              rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
-                              ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
-                              rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
-                            }
-                          }
-                          
-                          // 播放特效
-                          PlayEffectUseCase.execute({
-                            id: effect.id,
-                            x, y, z,
-                            rx: rx * Math.PI / 180,
-                            ry: ry * Math.PI / 180,
-                            rz: rz * Math.PI / 180,
-                            sx: effect.scale[0], sy: effect.scale[1], sz: effect.scale[2],
-                            speed: effect.speed
-                          });
-                        }
-                      });
-                    });
-                  }
-                }}
               />
             ) : (
               <>

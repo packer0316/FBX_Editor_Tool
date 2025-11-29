@@ -168,38 +168,22 @@ useFrame((_state, delta) => {
   - 計算活躍 clips 並發送 `clipUpdate` 事件
   - 保持向後兼容（同時調用 callback）
 
-#### Phase 3：重構動畫更新機制（中優先級）
+#### Phase 3：重構動畫更新機制（中優先級）✅ 已完成
 
-- [ ] **3.1 Model 組件訂閱 clipUpdate**
-  - 檔案：`src/presentation/features/scene-viewer/components/SceneViewer.tsx`
-  - 任務：
-    - 在 Director Mode 下訂閱 `clipUpdate` 事件
-    - 直接設置 `action.time` 而非調用 `seekTo`
-    - 調用 `mixer.update(0)` 強制應用
-  - 預估：1 小時
+- [x] **3.1 Model 組件訂閱 clipUpdate** ✅
+  - 添加 `setAnimationTime` 方法（直接設置 action.time）
+  - MultiModel 訂閱 clipUpdate 事件
+  - Director Mode 下跳過 currentTime prop 觸發的 seekTo
 
-- [ ] **3.2 移除 App.tsx 中的 onUpdateModelAnimation**
-  - 檔案：`src/App.tsx`
-  - 任務：
-    - 刪除 `onUpdateModelAnimation` callback
-    - 刪除相關的 `updateModel` 調用
-    - 音效/特效觸發改為訂閱事件
-  - 預估：45 分鐘
+- [x] **3.2 移除 App.tsx 中的 onUpdateModelAnimation** ✅
+  - 刪除 80+ 行 callback 代碼
+  - 改用 EventBus 驅動
 
-- [ ] **3.3 創建 DirectorAudioTrigger Hook**
+- [x] **3.3 創建 DirectorAudioTrigger Hook** ✅
   - 檔案：`src/presentation/features/director/hooks/useDirectorAudioTrigger.ts`
-  - 任務：
-    - 訂閱 `clipUpdate` 事件
-    - 處理音效觸發邏輯
-    - 解耦音效與動畫更新
-  - 預估：30 分鐘
 
-- [ ] **3.4 創建 DirectorEffectTrigger Hook**
+- [x] **3.4 創建 DirectorEffectTrigger Hook** ✅
   - 檔案：`src/presentation/features/director/hooks/useDirectorEffectTrigger.ts`
-  - 任務：
-    - 訂閱 `clipUpdate` 事件
-    - 處理特效觸發邏輯
-  - 預估：30 分鐘
 
 #### Phase 4：整合與優化（低優先級）
 
@@ -504,12 +488,12 @@ describe('DirectorEventBus', () => {
 
 ## 📅 實施時程
 
-| Phase | 任務 | 預估時間 | 優先級 |
-|-------|------|----------|--------|
-| Phase 1 | Event Bus 基礎設施 | 1 小時 | 🔴 高 |
-| Phase 2 | 重構 useTimelinePlayback | 1.5 小時 | 🔴 高 |
-| Phase 3 | 重構動畫更新機制 | 2.5 小時 | 🟠 中 |
-| Phase 4 | 整合與優化 | 1 小時 | 🟡 低 |
+| Phase | 任務 | 預估時間 | 優先級 | 狀態 |
+|-------|------|----------|--------|------|
+| Phase 1 | Event Bus 基礎設施 | 1 小時 | 🔴 高 | ✅ |
+| Phase 2 | 重構 useTimelinePlayback | 1.5 小時 | 🔴 高 | ✅ |
+| Phase 3 | 重構動畫更新機制 | 2.5 小時 | 🟠 中 | ✅ |
+| Phase 4 | 整合與優化 | 1 小時 | 🟡 低 | 待定 |
 
 **總計**：約 6 小時
 

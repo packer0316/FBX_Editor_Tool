@@ -8,6 +8,7 @@ import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/I
 import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { KeyboardCameraControls } from './KeyboardCameraControls';
 import { FrameEmitter } from './FrameEmitter';
+import { directorEventBus } from '../../../../infrastructure/events';
 
 export interface ModelRef {
     play: () => void;
@@ -15,6 +16,8 @@ export interface ModelRef {
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
     getDuration: () => number;
+    /** 直接設置動畫時間（不觸發播放邏輯，用於 Director Mode） */
+    setAnimationTime: (time: number) => void;
 }
 
 export interface RendererInfo {
@@ -482,6 +485,22 @@ const Model = forwardRef<ModelRef, ModelProps>(
             },
             getCurrentTime: () => actionRef.current?.time ?? 0,
             getDuration: () => actionRef.current?.getClip().duration ?? 0,
+            setAnimationTime: (time: number) => {
+                if (actionRef.current && mixerRef.current) {
+                    // 確保 action 處於可更新狀態
+                    const wasRunning = actionRef.current.isRunning();
+                    if (!wasRunning) {
+                        actionRef.current.play();
+                    }
+                    
+                    // 設置時間
+                    actionRef.current.time = time;
+                    actionRef.current.paused = true; // Director Mode 下保持暫停
+                    
+                    // 強制更新骨架
+                    mixerRef.current.update(0);
+                }
+            },
         }));
 
         const onTimeUpdateRef = useRef(onTimeUpdate);
@@ -1136,6 +1155,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
 // MultiModel Component for rendering multiple models with individual transforms
 type MultiModelProps = {
     modelInstance: {
+        id: string; // 模型 ID（用於 Director Mode 事件匹配）
         model: THREE.Group | null;
         clip: THREE.AnimationClip | null;
         shaderGroups: ShaderGroup[];
@@ -1157,11 +1177,13 @@ type MultiModelProps = {
     onFinish?: () => void;
     enableShadows?: boolean;
     isActiveModel?: boolean; // 是否為活動模型（只有活動模型才執行相機公轉）
+    isDirectorMode?: boolean; // Director Mode 下使用 EventBus
 };
 
 const MultiModel = forwardRef<ModelRef, MultiModelProps>(
-    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false }, ref) => {
+    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false }, ref) => {
         const { 
+            id: modelId,
             model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
             isPlaying = false, currentTime, isLoopEnabled,
             isCameraOrbiting = false, cameraOrbitSpeed = 30,
@@ -1245,12 +1267,25 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
         });
         
-        // 監聽外部 currentTime 變化（用於 Director Mode）
+        // 監聯外部 currentTime 變化（非 Director Mode 時）
         useEffect(() => {
-            if (currentTime !== undefined && modelRef.current) {
+            if (!isDirectorMode && currentTime !== undefined && modelRef.current) {
                 modelRef.current.seekTo(currentTime);
             }
-        }, [currentTime]);
+        }, [currentTime, isDirectorMode]);
+
+        // Director Mode：訂閱 clipUpdate 事件，直接設置動畫時間
+        useEffect(() => {
+            if (!isDirectorMode) return;
+
+            const unsubscribe = directorEventBus.onClipUpdate((event) => {
+                if (event.modelId === modelId && modelRef.current) {
+                    modelRef.current.setAnimationTime(event.localTime);
+                }
+            });
+
+            return unsubscribe;
+        }, [isDirectorMode, modelId]);
 
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
@@ -1258,6 +1293,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             seekTo: (time: number) => modelRef.current?.seekTo(time),
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
+            setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
         }));
 
         if (!model || !visible) return null;
@@ -1359,6 +1395,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             seekTo: (time: number) => modelRef.current?.seekTo(time),
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
+            setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
             resetCamera: () => {
                 console.log('resetCamera called', orbitControlsRef.current);
                 if (orbitControlsRef.current) {
@@ -1633,6 +1670,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 ref={isActive ? modelRef : undefined}
                                 modelInstance={{
                                     ...modelInstance,
+                                    id: modelInstance.id || `model-${index}`,
                                     clip
                                 }}
                                 onTimeUpdate={isActive ? onTimeUpdate : undefined}
@@ -1640,6 +1678,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 onFinish={isActive ? onFinish : undefined}
                                 enableShadows={enableShadows}
                                 isActiveModel={isActive}
+                                isDirectorMode={isDirectorMode}
                             />
                         );
                     })}
