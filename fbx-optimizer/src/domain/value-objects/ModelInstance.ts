@@ -80,6 +80,12 @@ export interface ModelInstance {
   renderPriority: number;
   /** 是否可見 */
   visible: boolean;
+  /** 是否顯示 Transform Gizmo（三軸座標控制器） */
+  showTransformGizmo: boolean;
+  /** 是否顯示線框（Wireframe） */
+  showWireframe: boolean;
+  /** 模型透明度 (0.0 - 1.0) */
+  opacity: number;
   
   // 自動旋轉設定
   /** 相機是否繞模型公轉 */

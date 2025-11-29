@@ -24,6 +24,17 @@ export function disposeModel(model: THREE.Group | null): void {
   if (!model) return;
 
   model.traverse((child) => {
+    // 釋放 userData 中保存的原始材質（Shader 切換時會保存）
+    if ((child as any).userData?.originalMaterial) {
+      const originalMat = (child as any).userData.originalMaterial;
+      if (Array.isArray(originalMat)) {
+        originalMat.forEach((mat) => disposeMaterial(mat));
+      } else {
+        disposeMaterial(originalMat);
+      }
+      delete (child as any).userData.originalMaterial;
+    }
+
     // 释放 Geometry
     if ((child as any).geometry) {
       (child as any).geometry.dispose();

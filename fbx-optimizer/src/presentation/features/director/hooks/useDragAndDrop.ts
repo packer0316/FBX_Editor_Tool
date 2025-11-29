@@ -93,8 +93,8 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
   ) => {
     const dragData: DraggingClipData = { type: 'new', ...data };
     
-    e.dataTransfer.effectAllowed = 'copy';
-    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
     
     setDragging(true, dragData);
   }, [setDragging]);
@@ -107,8 +107,8 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
   ) => {
     const dragData: DraggingClipData = { type: 'existing', clipId, ...data };
     
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/json', JSON.stringify(dragData));
+    e.dataTransfer.effectAllowed = 'copyMove';
+    e.dataTransfer.setData('text/plain', JSON.stringify(dragData));
     
     setDragging(true, dragData);
   }, [setDragging]);
@@ -118,13 +118,22 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
     e: React.DragEvent,
     trackId: string
   ) => {
+    // 必須先調用 preventDefault() 才能接收 drop 事件
+    e.preventDefault();
+    
     const track = getTrackById(trackId);
-    if (!track || track.isLocked) {
+    
+    if (!track) {
+      console.warn('[useDragAndDrop] DragOver: Track not found:', trackId);
       e.dataTransfer.dropEffect = 'none';
       return;
     }
     
-    e.preventDefault();
+    if (track.isLocked) {
+      e.dataTransfer.dropEffect = 'none';
+      return;
+    }
+    
     e.dataTransfer.dropEffect = ui.draggingClipData?.type === 'new' ? 'copy' : 'move';
   }, [getTrackById, ui.draggingClipData?.type]);
 
@@ -136,19 +145,43 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
   ) => {
     e.preventDefault();
     
+    console.log('[useDragAndDrop] Drop on track:', trackId);
+    
     const track = getTrackById(trackId);
-    if (!track || track.isLocked) return;
+    if (!track) {
+      console.warn('[useDragAndDrop] Drop: Track not found:', trackId);
+      return;
+    }
+    if (track.isLocked) {
+      console.log('[useDragAndDrop] Drop: Track is locked:', trackId);
+      return;
+    }
     
     try {
-      const dataStr = e.dataTransfer.getData('application/json');
-      if (!dataStr) return;
+      let dataStr = e.dataTransfer.getData('text/plain');
+      console.log('[useDragAndDrop] Drop data from dataTransfer:', dataStr);
       
-      const data = JSON.parse(dataStr) as DraggingClipData;
+      // Fallback: 如果 dataTransfer 沒有數據，使用 store 中的 draggingClipData
+      let data: DraggingClipData | null = null;
+      
+      if (dataStr) {
+        data = JSON.parse(dataStr) as DraggingClipData;
+      } else if (ui.draggingClipData) {
+        console.log('[useDragAndDrop] Using fallback from store:', ui.draggingClipData);
+        data = ui.draggingClipData;
+      }
+      
+      if (!data) {
+        console.warn('[useDragAndDrop] Drop: No data available');
+        return;
+      }
       const startFrame = calculateDropFrame(e.clientX, trackElement);
+      
+      console.log('[useDragAndDrop] Parsed data:', data, 'startFrame:', startFrame);
       
       if (data.type === 'new') {
         // 新增片段
-        addClip({
+        const result = addClip({
           trackId,
           sourceModelId: data.sourceModelId,
           sourceModelName: data.sourceModelName,
@@ -158,20 +191,22 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
           startFrame,
           color: data.color,
         });
+        console.log('[useDragAndDrop] addClip result:', result);
       } else if (data.type === 'existing' && data.clipId) {
         // 移動現有片段
-        moveClip({
+        const result = moveClip({
           clipId: data.clipId,
           newTrackId: trackId,
           newStartFrame: startFrame,
         });
+        console.log('[useDragAndDrop] moveClip result:', result);
       }
-    } catch {
-      // 忽略解析錯誤
+    } catch (error) {
+      console.error('[useDragAndDrop] Drop error:', error);
     }
     
     setDragging(false, null);
-  }, [getTrackById, calculateDropFrame, addClip, moveClip, setDragging]);
+  }, [getTrackById, calculateDropFrame, addClip, moveClip, setDragging, ui.draggingClipData]);
 
   // 拖曳結束
   const handleDragEnd = useCallback(() => {

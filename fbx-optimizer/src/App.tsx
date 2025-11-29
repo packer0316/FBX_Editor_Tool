@@ -11,6 +11,8 @@ import EffectTestPanel, { type EffectItem } from './presentation/features/effect
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { DirectorPanel } from './presentation/features/director';
 import { useIsDirectorMode, useDirectorStore } from './presentation/stores/directorStore';
+import { useDirectorAudioTrigger } from './presentation/features/director/hooks/useDirectorAudioTrigger';
+import { useDirectorEffectTrigger } from './presentation/features/director/hooks/useDirectorEffectTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -49,6 +51,7 @@ import { useFileDrop } from './presentation/hooks/useFileDrop';
 import { useClickOutside } from './presentation/hooks/useClickOutside';
 import { useBoneExtraction } from './presentation/hooks/useBoneExtraction';
 import { useModelsManager } from './presentation/hooks/useModelsManager';
+import { useClipOptimizer } from './presentation/hooks/useClipOptimizer';
 
 // Utils
 import { sortLayersByPriority } from './utils/layer/layerUtils';
@@ -58,6 +61,9 @@ import { disposeModel } from './utils/three/disposeUtils';
 import { LayerManagerPanel } from './presentation/features/layer-composer/components/LayerManagerPanel';
 import { PreviewModeToggle } from './presentation/features/layer-composer/components/PreviewModeToggle';
 import { Layer2DRenderer } from './presentation/features/layer-composer/components/Layer2DRenderer';
+
+// Performance Monitor
+import { PerformanceMonitor, type RendererInfo } from './presentation/features/performance-monitor';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
@@ -79,6 +85,9 @@ function App() {
     removeModel,
     updateModel,
   } = useModelsManager();
+
+  // 🔧 Clip 優化 Hook（帶快取，避免重複計算）
+  const { optimize: optimizeClip } = useClipOptimizer();
 
   const [file, setFile] = useState<File | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
@@ -201,6 +210,28 @@ function App() {
   const lastEffectTimeRef = useRef<number>(0);
   const lastAudioFrameRef = useRef<number>(-1);
   const lastEffectFrameRef = useRef<number>(-1);
+
+  // Director Mode: 音效觸發
+  useDirectorAudioTrigger({
+    enabled: isDirectorMode,
+    models: models.map(m => ({
+      id: m.id,
+      audioTracks: m.audioTracks,
+    })),
+    audioController: audioControllerRef.current,
+  });
+
+  // Director Mode: 特效觸發
+  useDirectorEffectTrigger({
+    enabled: isDirectorMode,
+    models: models.map(m => ({
+      id: m.id,
+      model: m.model,
+      bones: m.bones,
+      effects: m.effects,
+    })),
+  });
+
   const [cameraSettings, setCameraSettings] = useState({
     fov: 50,
     near: 0.1,
@@ -218,8 +249,32 @@ function App() {
   const [enableShadows, setEnableShadows] = useState(false);
   const [showGrid, setShowGrid] = useState(true);
 
+  // Performance Monitor
+  const [showPerformanceMonitor, setShowPerformanceMonitor] = useState(false);
+  const [rendererInfo, setRendererInfo] = useState<RendererInfo | null>(null);
+
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
+
+  // Performance Monitor: 定期獲取 renderer info
+  useEffect(() => {
+    if (!showPerformanceMonitor) {
+      setRendererInfo(null);
+      return;
+    }
+
+    const updateRendererInfo = () => {
+      if (sceneViewerRef.current) {
+        const info = sceneViewerRef.current.getRendererInfo();
+        setRendererInfo(info);
+      }
+    };
+
+    // 每 100ms 更新一次（比 requestAnimationFrame 更輕量）
+    const intervalId = setInterval(updateRendererInfo, 100);
+
+    return () => clearInterval(intervalId);
+  }, [showPerformanceMonitor]);
 
   // Layer Composer state
   const [layers, setLayers] = useState<Layer[]>(() => InitializeLayerStackUseCase.execute());
@@ -446,7 +501,9 @@ function App() {
         isSyncingRef.current = false;
       }, 0);
     } else if (!activeModel) {
-      // 沒有活動模型時重置
+      // 沒有活動模型時重置（包括取消選中模型）
+      isSyncingRef.current = true;
+      setFile(null);
       setModel(null);
       setMeshNames([]);
       setShaderGroups([]);
@@ -458,9 +515,24 @@ function App() {
       setEffects([]);
       setDuration(0);
       setIsPlaying(false);
+      setCurrentTime(0);
       sceneViewerRef.current?.pause();
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 0);
     }
-  }, [activeModelId]); // 只監聽 activeModelId，避免循環
+  }, [activeModelId, activeModel]); // 同時監聽 activeModelId 和 activeModel，確保正確重置
+  
+  // 當取消選中模型時，同步暫停狀態到模型實例
+  const prevActiveModelIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    // 如果之前有選中的模型，現在取消選中了
+    if (prevActiveModelIdRef.current && !activeModelId) {
+      // 更新之前選中模型的 isPlaying 狀態為 false
+      updateModel(prevActiveModelIdRef.current, { isPlaying: false });
+    }
+    prevActiveModelIdRef.current = activeModelId;
+  }, [activeModelId, updateModel]);
 
   // 當活動模型的狀態改變時，同步回 ModelInstance（只在用戶操作時）
   // 使用 useRef 來追蹤上一次的值，只在真正改變時才更新
@@ -501,27 +573,70 @@ function App() {
 
     // 檢查是否有實際改變
     if (prevStateRef.current) {
-      const hasChanged =
-        prevStateRef.current.shaderGroups !== currentState.shaderGroups ||
-        prevStateRef.current.isShaderEnabled !== currentState.isShaderEnabled ||
-        prevStateRef.current.originalClip !== currentState.originalClip ||
-        prevStateRef.current.masterClip !== currentState.masterClip ||
-        prevStateRef.current.optimizedClip !== currentState.optimizedClip ||
-        prevStateRef.current.createdClips !== currentState.createdClips ||
-        prevStateRef.current.tolerance !== currentState.tolerance ||
-        prevStateRef.current.audioTracks !== currentState.audioTracks ||
-        prevStateRef.current.effects !== currentState.effects ||
-        prevStateRef.current.isPlaying !== currentState.isPlaying ||
-        prevStateRef.current.currentTime !== currentState.currentTime ||
-        prevStateRef.current.duration !== currentState.duration ||
-        prevStateRef.current.isLoopEnabled !== currentState.isLoopEnabled;
+      const updates: Partial<typeof currentState> = {};
+      let hasChanged = false;
+
+      // 只更新實際改變的屬性，而不是整個對象
+      if (prevStateRef.current.shaderGroups !== currentState.shaderGroups) {
+        updates.shaderGroups = currentState.shaderGroups;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isShaderEnabled !== currentState.isShaderEnabled) {
+        updates.isShaderEnabled = currentState.isShaderEnabled;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.originalClip !== currentState.originalClip) {
+        updates.originalClip = currentState.originalClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.masterClip !== currentState.masterClip) {
+        updates.masterClip = currentState.masterClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.optimizedClip !== currentState.optimizedClip) {
+        updates.optimizedClip = currentState.optimizedClip;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.createdClips !== currentState.createdClips) {
+        updates.createdClips = currentState.createdClips;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.tolerance !== currentState.tolerance) {
+        updates.tolerance = currentState.tolerance;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.audioTracks !== currentState.audioTracks) {
+        updates.audioTracks = currentState.audioTracks;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.effects !== currentState.effects) {
+        updates.effects = currentState.effects;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isPlaying !== currentState.isPlaying) {
+        updates.isPlaying = currentState.isPlaying;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.currentTime !== currentState.currentTime) {
+        updates.currentTime = currentState.currentTime;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.duration !== currentState.duration) {
+        updates.duration = currentState.duration;
+        hasChanged = true;
+      }
+      if (prevStateRef.current.isLoopEnabled !== currentState.isLoopEnabled) {
+        updates.isLoopEnabled = currentState.isLoopEnabled;
+        hasChanged = true;
+      }
 
       if (hasChanged) {
-        updateModel(activeModelId, currentState);
+        updateModel(activeModelId, updates);
         prevStateRef.current = currentState;
       }
     } else {
-      // 第一次設置
+      // 第一次設置 - 只更新需要同步的屬性，不覆蓋其他屬性（如 showTransformGizmo, position 等）
+      updateModel(activeModelId, currentState);
       prevStateRef.current = currentState;
     }
   }, [
@@ -542,22 +657,29 @@ function App() {
     activeModel
   ]);
 
-  // 當 tolerance 改變時重新優化
+  // 🔧 當 tolerance 改變時重新優化（使用帶快取的 Hook）
   useEffect(() => {
     if (originalClip) {
       // 使用 debounce 避免頻繁計算
       const timer = setTimeout(() => {
-        const optimized = optimizeAnimationClip(originalClip, tolerance) as IdentifiableClip;
-        setOptimizedClip(optimized);
+        const optimized = optimizeClip(originalClip, tolerance);
+        if (optimized) {
+          setOptimizedClip(optimized);
+        }
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [tolerance, originalClip]);
+  }, [tolerance, originalClip, optimizeClip]);
 
 
 
   // 動畫控制處理
   const handlePlayPause = () => {
+    // 沒有模型時不執行任何操作
+    if (!model || !optimizedClip) {
+      return;
+    }
+
     const newPlayingState = !isPlaying;
     if (newPlayingState) {
       sceneViewerRef.current?.play();
@@ -573,6 +695,11 @@ function App() {
   };
 
   const handleSeek = (time: number) => {
+    // 沒有模型時不執行任何操作
+    if (!model || !optimizedClip) {
+      return;
+    }
+
     sceneViewerRef.current?.seekTo(time);
     setCurrentTime(time);
     // 重置觸發狀態，避免跳過觸發
@@ -1002,6 +1129,8 @@ function App() {
           setKeyboardControlsEnabled={setKeyboardControlsEnabled}
           cameraMoveSpeed={cameraMoveSpeed}
           setCameraMoveSpeed={setCameraMoveSpeed}
+          showPerformanceMonitor={showPerformanceMonitor}
+          setShowPerformanceMonitor={setShowPerformanceMonitor}
         />
 
         {/* 左側：3D 預覽區 */}
@@ -1148,6 +1277,13 @@ function App() {
                       pointerEnabled={isPointerEditing}
                     />
                   ))}
+                  {/* Performance Monitor - 顯示在預覽框左下角 */}
+                  <PerformanceMonitor
+                    visible={showPerformanceMonitor}
+                    rendererInfo={rendererInfo}
+                    currentTheme={currentTheme}
+                  />
+
                   {/* 3D SceneViewer - 始終渲染，使用 CSS 控制顯示/隱藏，避免條件渲染導致的 DOM 錯誤 */}
                   <div 
                     className={`absolute inset-0 z-[100] ${is3DEnabled ? '' : 'invisible pointer-events-none'}`}
@@ -1164,6 +1300,8 @@ function App() {
                         rotation: m.rotation,
                         scale: m.scale,
                         visible: m.visible,
+                        showWireframe: m.showWireframe,
+                        opacity: m.opacity,
                         isPlaying: m.isPlaying,
                         currentTime: m.currentTime,
                         isLoopEnabled: m.isLoopEnabled,
@@ -1197,6 +1335,11 @@ function App() {
                       whitePoint={whitePoint}
                       hdriUrl={hdriUrl || undefined}
                       environmentIntensity={environmentIntensity}
+                      isDirectorMode={isDirectorMode}
+                      showTransformGizmo={!!activeModel && !isDirectorMode && activeModel.showTransformGizmo}
+                      onModelPositionChange={(modelId, position) => {
+                        updateModel(modelId, { position });
+                      }}
                     />
                   </div>
                   {/* 3D 預覽關閉提示 */}
@@ -1245,90 +1388,6 @@ function App() {
               <DirectorPanel 
                 actionSources={actionSources}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
-                onUpdateModelAnimation={(modelId, animationId, localTime, localFrame) => {
-                  console.log('[Director] Update model animation:', {
-                    modelId,
-                    animationId,
-                    localTime,
-                    localFrame,
-                  });
-                  
-                  // 通過 updateModel 更新對應模型的 currentTime
-                  // 這樣每個模型都能獨立播放
-                  const targetModel = models.find(m => m.id === modelId);
-                  if (targetModel) {
-                    // 更新模型的當前播放時間
-                    updateModel(modelId, {
-                      currentTime: localTime,
-                    });
-
-                    // 觸發音效
-                    targetModel.audioTracks.forEach((track: AudioTrack) => {
-                      track.triggers.forEach((trigger) => {
-                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering audio:', track.name, 'at frame', localFrame);
-                          audioControllerRef.current.play(track);
-                        }
-                      });
-                    });
-
-                    // 觸發特效
-                    targetModel.effects.forEach((effect: EffectItem) => {
-                      if (!effect.isLoaded) return;
-                      
-                      effect.triggers.forEach((trigger) => {
-                        if (trigger.clipId === animationId && trigger.frame === localFrame) {
-                          console.log('[Director] Triggering effect:', effect.name, 'at frame', localFrame);
-                          
-                          // 計算位置（包含骨骼綁定）
-                          let x = effect.position[0];
-                          let y = effect.position[1];
-                          let z = effect.position[2];
-                          
-                          if (effect.boundBoneUuid && targetModel.model) {
-                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
-                            if (boundBone) {
-                              const boneWorldPos = new THREE.Vector3();
-                              boundBone.getWorldPosition(boneWorldPos);
-                              x = boneWorldPos.x + effect.position[0];
-                              y = boneWorldPos.y + effect.position[1];
-                              z = boneWorldPos.z + effect.position[2];
-                            }
-                          }
-                          
-                          // 計算旋轉
-                          let rx = effect.rotation[0];
-                          let ry = effect.rotation[1];
-                          let rz = effect.rotation[2];
-                          
-                          if (effect.boundBoneUuid && targetModel.model) {
-                            const boundBone = targetModel.bones.find(b => b.uuid === effect.boundBoneUuid);
-                            if (boundBone) {
-                              const boneWorldQuat = new THREE.Quaternion();
-                              boundBone.getWorldQuaternion(boneWorldQuat);
-                              const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-                              
-                              rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
-                              ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
-                              rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
-                            }
-                          }
-                          
-                          // 播放特效
-                          PlayEffectUseCase.execute({
-                            id: effect.id,
-                            x, y, z,
-                            rx: rx * Math.PI / 180,
-                            ry: ry * Math.PI / 180,
-                            rz: rz * Math.PI / 180,
-                            sx: effect.scale[0], sy: effect.scale[1], sz: effect.scale[2],
-                            speed: effect.speed
-                          });
-                        }
-                      });
-                    });
-                  }
-                }}
               />
             ) : (
               <>
@@ -1363,6 +1422,10 @@ function App() {
 
               isLoopEnabled={isLoopEnabled}
               onToggleLoop={() => {
+                // 沒有模型時不執行任何操作
+                if (!model || !optimizedClip) {
+                  return;
+                }
                 const newLoopState = !isLoopEnabled;
                 setIsLoopEnabled(newLoopState);
                 // 同步更新 activeModel 的循環設置
@@ -1487,6 +1550,7 @@ function App() {
                 models={models}
                 activeModelId={activeModelId}
                 onSelectModel={(id) => {
+                  // 支援取消選中（id 為 null）
                   setActiveModelId(id);
                 }}
                 onAddModel={handleFileUpload}

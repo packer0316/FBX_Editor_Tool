@@ -15,7 +15,7 @@ import type { ActionSource } from '../../../../domain/entities/director/director
 interface DirectorPanelProps {
   /** 動作來源列表（從模型中收集） */
   actionSources: ActionSource[];
-  /** 更新模型動畫的回調 */
+  /** 更新模型動畫的回調（向後兼容，建議改用 EventBus 訂閱） */
   onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number, localFrame: number) => void;
   /** 調整高度把手的 mouseDown 處理 */
   onResizeHandleMouseDown?: (e: React.MouseEvent) => void;
@@ -28,10 +28,10 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
 }) => {
   const { isDirectorMode, exitDirectorMode } = useDirectorStore();
 
-  // 使用播放控制 Hook
+  // 使用播放控制 Hook（透過 EventBus 發送事件，同時保持向後兼容 callback）
   const { activeClips } = useTimelinePlayback({
     callbacks: {
-      onUpdateModelAnimation: onUpdateModelAnimation ?? (() => {}),
+      onUpdateModelAnimation,
     },
   });
 

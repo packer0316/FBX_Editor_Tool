@@ -7,7 +7,7 @@ import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 interface ModelManagerPanelProps {
   models: ModelInstance[];
   activeModelId: string | null;
-  onSelectModel: (id: string) => void;
+  onSelectModel: (id: string | null) => void;
   onAddModel: (files: FileList) => Promise<void>;
   onRemoveModel: (id: string) => void;
   onRenameModel: (id: string, newName: string) => void;
@@ -18,6 +18,11 @@ interface ModelManagerPanelProps {
       rotation?: [number, number, number];
       scale?: [number, number, number];
       visible?: boolean;
+      showTransformGizmo?: boolean;
+      isCameraOrbiting?: boolean;
+      cameraOrbitSpeed?: number;
+      isModelRotating?: boolean;
+      modelRotationSpeed?: number;
     }
   ) => void;
   isLoading?: boolean;
@@ -101,7 +106,15 @@ export default function ModelManagerPanel({
       </div>
 
       {/* 模型列表 */}
-      <div className="flex-1 overflow-y-auto space-y-2 px-1 custom-scrollbar">
+      <div 
+        className="flex-1 overflow-y-auto space-y-2 px-1 custom-scrollbar"
+        onClick={(e) => {
+          // 點擊空白區域時取消選中
+          if (e.target === e.currentTarget) {
+            onSelectModel(null);
+          }
+        }}
+      >
         {models.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-gray-500">
             <Package className="w-12 h-12 mb-2 opacity-50" />
@@ -114,7 +127,14 @@ export default function ModelManagerPanel({
               key={modelInstance.id}
               modelInstance={modelInstance}
               isActive={modelInstance.id === activeModelId}
-              onSelect={() => onSelectModel(modelInstance.id)}
+              onSelect={() => {
+                // Toggle 行為：如果已選中，則取消選中；否則選中
+                if (modelInstance.id === activeModelId) {
+                  onSelectModel(null);
+                } else {
+                  onSelectModel(modelInstance.id);
+                }
+              }}
               onRemove={() => onRemoveModel(modelInstance.id)}
               onRename={(newName) => onRenameModel(modelInstance.id, newName)}
               onUpdateTransform={(updates) => onUpdateModelTransform(modelInstance.id, updates)}

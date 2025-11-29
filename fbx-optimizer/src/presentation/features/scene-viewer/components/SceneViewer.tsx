@@ -1,12 +1,14 @@
-import React, { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
+import React, { useEffect, useRef, useImperativeHandle, forwardRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Grid, Environment } from '@react-three/drei';
+import { OrbitControls, Grid, Environment, TransformControls } from '@react-three/drei';
 import * as THREE from 'three';
 import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/InitEffekseerRuntimeUseCase';
 import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { KeyboardCameraControls } from './KeyboardCameraControls';
+import { FrameEmitter } from './FrameEmitter';
+import { directorEventBus } from '../../../../infrastructure/events';
 
 export interface ModelRef {
     play: () => void;
@@ -14,6 +16,22 @@ export interface ModelRef {
     seekTo: (time: number) => void;
     getCurrentTime: () => number;
     getDuration: () => number;
+    /** 直接設置動畫時間（不觸發播放邏輯，用於 Director Mode） */
+    setAnimationTime: (time: number) => void;
+}
+
+export interface RendererInfo {
+    render: {
+        calls: number;
+        triangles: number;
+        points: number;
+        lines: number;
+    };
+    memory: {
+        geometries: number;
+        textures: number;
+    };
+    programs: number | null;
 }
 
 export interface SceneViewerRef extends ModelRef {
@@ -22,6 +40,7 @@ export interface SceneViewerRef extends ModelRef {
     startRecording: () => void;
     stopRecording: () => void;
     isRecording: () => boolean;
+    getRendererInfo: () => RendererInfo | null;
 }
 
 interface ModelInstanceForRender {
@@ -34,6 +53,8 @@ interface ModelInstanceForRender {
     rotation: [number, number, number];
     scale: [number, number, number];
     visible: boolean;
+    showWireframe?: boolean;
+    opacity?: number;
 }
 
 interface SceneViewerProps {
@@ -71,6 +92,11 @@ interface SceneViewerProps {
     keyboardControlsEnabled?: boolean;
     cameraMoveSpeed?: number;
     cameraSprintMultiplier?: number;
+    // Director Mode
+    isDirectorMode?: boolean;
+    // Transform Gizmo
+    showTransformGizmo?: boolean;
+    onModelPositionChange?: (modelId: string, position: [number, number, number]) => void;
 }
 
 // Scene Settings Controller
@@ -464,6 +490,22 @@ const Model = forwardRef<ModelRef, ModelProps>(
             },
             getCurrentTime: () => actionRef.current?.time ?? 0,
             getDuration: () => actionRef.current?.getClip().duration ?? 0,
+            setAnimationTime: (time: number) => {
+                if (actionRef.current && mixerRef.current) {
+                    // 確保 action 處於可更新狀態
+                    const wasRunning = actionRef.current.isRunning();
+                    if (!wasRunning) {
+                        actionRef.current.play();
+                    }
+                    
+                    // 設置時間
+                    actionRef.current.time = time;
+                    actionRef.current.paused = true; // Director Mode 下保持暫停
+                    
+                    // 強制更新骨架
+                    mixerRef.current.update(0);
+                }
+            },
         }));
 
         const onTimeUpdateRef = useRef(onTimeUpdate);
@@ -498,6 +540,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
         });
 
         const materialsRef = useRef<THREE.ShaderMaterial[]>([]);
+        // 🔧 修復記憶體洩漏：追蹤所有動態載入的貼圖
+        const loadedTexturesRef = useRef<THREE.Texture[]>([]);
 
         useFrame((state) => {
             materialsRef.current.forEach(mat => {
@@ -512,6 +556,14 @@ const Model = forwardRef<ModelRef, ModelProps>(
 
             const textureLoader = new THREE.TextureLoader();
             materialsRef.current = [];
+            
+            // 🔧 清理上一次的貼圖（模型切換或 shader 設定變更時）
+            loadedTexturesRef.current.forEach(tex => {
+                if (tex && tex.dispose) {
+                    tex.dispose();
+                }
+            });
+            loadedTexturesRef.current = [];
 
             model.traverse((child: any) => {
                 if (!child.isMesh) return;
@@ -615,21 +667,57 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 );
                 setTextureColorSpace(flashMaskTex, 'linear'); // Set immediately if already loaded
 
+                // 🔧 收集所有動態載入的貼圖以便後續清理
+                const dynamicTextures = [
+                    baseMatcapTex, baseMatcapMaskTex,
+                    addMatcapTex, addMatcapMaskTex,
+                    dissolveTex, normalMapTex,
+                    flashTex, flashMaskTex
+                ].filter((tex): tex is THREE.Texture => tex !== null);
+                loadedTexturesRef.current.push(...dynamicTextures);
+
                 let shaderMat: THREE.ShaderMaterial;
 
                 // ALWAYS recreate shader when features change to ensure defines are updated
                 // (especially important when textures are added/removed)
+                
+                // 🔧 修復記憶體洩漏：在創建新 ShaderMaterial 前，釋放舊的
+                if (child.material instanceof THREE.ShaderMaterial) {
+                    // 釋放舊 ShaderMaterial 的 uniforms 中的貼圖（但不釋放 originalMaterial 中的貼圖）
+                    const oldMat = child.material;
+                    if (oldMat.uniforms) {
+                        const textureUniforms = [
+                            'matcapTexture', 'matcapMaskTexture',
+                            'matcapAddTexture', 'matcapAddMaskTexture',
+                            'flashTexture', 'flashMaskTexture',
+                            'dissolveTexture', 'normalMap'
+                        ];
+                        textureUniforms.forEach(name => {
+                            const uniform = oldMat.uniforms[name];
+                            if (uniform?.value && uniform.value.dispose) {
+                                uniform.value.dispose();
+                            }
+                        });
+                    }
+                    oldMat.dispose();
+                }
+                
                 const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
                 const baseTexture = originalMaterial.map || null;
                 const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
                 const isSkinnedMesh = (child as any).isSkinnedMesh;
 
+                // 保存當前的 wireframe 和 side 設置
+                const currentWireframe = child.material instanceof THREE.Material ? (child.material as any).wireframe || false : false;
+                const currentSide = child.material instanceof THREE.Material ? (child.material as any).side || THREE.FrontSide : THREE.FrontSide;
+                
                 shaderMat = new THREE.ShaderMaterial({
                     uniforms: {
                         // Base
                         baseTexture: { value: baseTexture },
                         baseColor: { value: baseColor },
                         uTime: { value: 0 },
+                        uOpacity: { value: 1.0 },
 
                         // Unlit Mode
                         useUnlit: { value: 0.0 },
@@ -712,6 +800,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
                                 uniform float uTime;
+                                uniform float uOpacity;
                                 
                                 // Unlit Mode (無光照模式)
                                 uniform float useUnlit;
@@ -938,7 +1027,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     }
                                     
                                     // 將 Linear 顏色輸出給 three.js，後續由 toneMapping_fragment / colorspace_fragment 統一處理
-                                    gl_FragColor = vec4(finalColor, baseTexColor.a);
+                                    // 應用透明度
+                                    float finalAlpha = baseTexColor.a * uOpacity;
+                                    gl_FragColor = vec4(finalColor, finalAlpha);
 
                                     #include <tonemapping_fragment>
                                     #include <colorspace_fragment>
@@ -957,6 +1048,12 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 } as any);
                 // 在建立後再設定 skinning，避免 three.js 對建構參數提出警告
                 (shaderMat as any).skinning = isSkinnedMesh;
+                // 恢復 wireframe 和 side 設置
+                (shaderMat as any).wireframe = currentWireframe;
+                (shaderMat as any).side = currentSide;
+                // 設置透明度相關
+                shaderMat.transparent = true;
+                shaderMat.depthWrite = true; // 保持深度寫入以正確渲染
                 child.material = shaderMat;
 
                 // Update Uniforms
@@ -1048,6 +1145,25 @@ const Model = forwardRef<ModelRef, ModelProps>(
 
                 materialsRef.current.push(shaderMat);
             });
+            
+            // 🔧 Cleanup：當模型切換或組件卸載時釋放貼圖和材質
+            return () => {
+                // 釋放所有追蹤的貼圖
+                loadedTexturesRef.current.forEach(tex => {
+                    if (tex && tex.dispose) {
+                        tex.dispose();
+                    }
+                });
+                loadedTexturesRef.current = [];
+                
+                // 釋放所有追蹤的 ShaderMaterial
+                materialsRef.current.forEach(mat => {
+                    if (mat && mat.dispose) {
+                        mat.dispose();
+                    }
+                });
+                materialsRef.current = [];
+            };
         }, [model, shaderGroups, isShaderEnabled]);
 
         if (!model) return null;
@@ -1058,6 +1174,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
 // MultiModel Component for rendering multiple models with individual transforms
 type MultiModelProps = {
     modelInstance: {
+        id: string; // 模型 ID（用於 Director Mode 事件匹配）
         model: THREE.Group | null;
         clip: THREE.AnimationClip | null;
         shaderGroups: ShaderGroup[];
@@ -1066,6 +1183,8 @@ type MultiModelProps = {
         rotation: [number, number, number];
         scale: [number, number, number];
         visible: boolean;
+        showWireframe?: boolean; // 是否顯示線框
+        opacity?: number; // 模型透明度
         isPlaying?: boolean; // 播放狀態
         currentTime?: number; // 當前時間
         isLoopEnabled?: boolean; // 循環設置
@@ -1079,12 +1198,17 @@ type MultiModelProps = {
     onFinish?: () => void;
     enableShadows?: boolean;
     isActiveModel?: boolean; // 是否為活動模型（只有活動模型才執行相機公轉）
+    isDirectorMode?: boolean; // Director Mode 下使用 EventBus
+    onGroupRefMount?: (groupRef: THREE.Group | null) => void; // Transform Gizmo 用
 };
 
 const MultiModel = forwardRef<ModelRef, MultiModelProps>(
-    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false }, ref) => {
+    ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false, onGroupRefMount }, ref) => {
         const { 
+            id: modelId,
             model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+            showWireframe = false,
+            opacity = 1.0,
             isPlaying = false, currentTime, isLoopEnabled,
             isCameraOrbiting = false, cameraOrbitSpeed = 30,
             isModelRotating = false, modelRotationSpeed = 30
@@ -1096,6 +1220,101 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
         // 使用現有的 Model 組件處理動畫和 shader
         const modelRef = useRef<ModelRef>(null);
         const groupRef = useRef<THREE.Group>(null);
+
+        // 通知 groupRef 掛載（用於 Transform Gizmo）
+        useEffect(() => {
+            if (onGroupRefMount && isActiveModel) {
+                onGroupRefMount(groupRef.current);
+            }
+            return () => {
+                if (onGroupRefMount && isActiveModel) {
+                    onGroupRefMount(null);
+                }
+            };
+        }, [onGroupRefMount, isActiveModel, model]);
+        
+        // Wireframe 設置（使用 material.wireframe，跟隨骨骼動畫）
+        useEffect(() => {
+            if (!model) return;
+            
+            model.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    // 保存原始設置
+                    if (child.userData.originalWireframe === undefined) {
+                        child.userData.originalWireframe = false;
+                    }
+                    if (child.userData.originalSide === undefined) {
+                        child.userData.originalSide = child.material instanceof THREE.Material 
+                            ? (child.material as any).side 
+                            : THREE.FrontSide;
+                    }
+                    
+                    // 應用 wireframe 和背面剔除
+                    if (child.material) {
+                        const applyToMaterial = (mat: THREE.Material) => {
+                            (mat as any).wireframe = showWireframe;
+                            // 背面剔除：wireframe 模式下強制只渲染正面
+                            if (showWireframe) {
+                                (mat as any).side = THREE.FrontSide;
+                            } else {
+                                (mat as any).side = child.userData.originalSide || THREE.FrontSide;
+                            }
+                            mat.needsUpdate = true;
+                        };
+                        
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(applyToMaterial);
+                        } else {
+                            applyToMaterial(child.material);
+                        }
+                    }
+                }
+            });
+        }, [model, showWireframe]);
+        
+        // 應用透明度到所有 Mesh
+        useEffect(() => {
+            if (!model) return;
+            
+            // 當開啟 wireframe 時，自動設置透明度為 50%
+            const effectiveOpacity = showWireframe ? 0.5 : opacity;
+            
+            const applyOpacity = () => {
+                model.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        // 應用透明度
+                        if (child.material) {
+                            const applyToMaterial = (mat: THREE.Material) => {
+                                // 對於 ShaderMaterial，使用 uniform
+                                if ((mat as any).uniforms?.uOpacity !== undefined) {
+                                    (mat as any).uniforms.uOpacity.value = effectiveOpacity;
+                                }
+                                // 對於普通材質，設置 opacity 屬性
+                                (mat as any).transparent = effectiveOpacity < 1.0;
+                                (mat as any).opacity = effectiveOpacity;
+                                mat.needsUpdate = true;
+                            };
+                            
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(applyToMaterial);
+                            } else {
+                                applyToMaterial(child.material);
+                            }
+                        }
+                    }
+                });
+            };
+            
+            // 立即應用
+            applyOpacity();
+            
+            // 延遲應用確保 shader 更新後也能生效
+            const timeoutId = setTimeout(applyOpacity, 100);
+            
+            return () => {
+                clearTimeout(timeoutId);
+            };
+        }, [model, opacity, showWireframe, isShaderEnabled, shaderGroups]);
         
         // 相機公轉累積角度
         const cameraOrbitAngleRef = useRef(0);
@@ -1167,12 +1386,25 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
         });
         
-        // 監聽外部 currentTime 變化（用於 Director Mode）
+        // 監聯外部 currentTime 變化（非 Director Mode 時）
         useEffect(() => {
-            if (currentTime !== undefined && modelRef.current) {
+            if (!isDirectorMode && currentTime !== undefined && modelRef.current) {
                 modelRef.current.seekTo(currentTime);
             }
-        }, [currentTime]);
+        }, [currentTime, isDirectorMode]);
+
+        // Director Mode：訂閱 clipUpdate 事件，直接設置動畫時間
+        useEffect(() => {
+            if (!isDirectorMode) return;
+
+            const unsubscribe = directorEventBus.onClipUpdate((event) => {
+                if (event.modelId === modelId && modelRef.current) {
+                    modelRef.current.setAnimationTime(event.localTime);
+                }
+            });
+
+            return unsubscribe;
+        }, [isDirectorMode, modelId]);
 
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
@@ -1180,9 +1412,10 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             seekTo: (time: number) => modelRef.current?.seekTo(time),
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
+            setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
         }));
 
-        if (!model || !visible) return null;
+        if (!model) return null;
 
         // 將度數轉換為弧度
         const rotationRad = rotation.map(deg => (deg * Math.PI) / 180) as [number, number, number];
@@ -1193,6 +1426,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
                 position={position}
                 rotation={rotationRad}
                 scale={scale}
+                visible={visible}
             >
                 <Model
                     ref={modelRef}
@@ -1211,6 +1445,70 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
         );
     }
 );
+
+// TransformGizmo 組件 - 用於顯示和控制模型位置
+interface TransformGizmoProps {
+    object: THREE.Object3D | null;
+    modelId: string;
+    visible: boolean; // 控制 Gizmo 可見性（不重建組件）
+    onPositionChange: (modelId: string, position: [number, number, number]) => void;
+    orbitControlsRef: React.RefObject<any>;
+}
+
+function TransformGizmo({ object, modelId, visible, onPositionChange, orbitControlsRef }: TransformGizmoProps) {
+    const transformRef = useRef<any>(null);
+
+    // 控制 TransformControls 可見性
+    useEffect(() => {
+        if (transformRef.current) {
+            transformRef.current.visible = visible;
+        }
+    }, [visible]);
+
+    useEffect(() => {
+        if (!transformRef.current) return;
+
+        const controls = transformRef.current;
+        
+        // 當拖曳時禁用 OrbitControls
+        const handleDraggingChanged = (event: { value: boolean }) => {
+            if (orbitControlsRef.current) {
+                orbitControlsRef.current.enabled = !event.value;
+            }
+        };
+
+        // 當變換結束時更新位置
+        const handleObjectChange = () => {
+            if (object) {
+                const pos = object.position;
+                onPositionChange(modelId, [pos.x, pos.y, pos.z]);
+            }
+        };
+
+        controls.addEventListener('dragging-changed', handleDraggingChanged);
+        controls.addEventListener('objectChange', handleObjectChange);
+
+        return () => {
+            controls.removeEventListener('dragging-changed', handleDraggingChanged);
+            controls.removeEventListener('objectChange', handleObjectChange);
+        };
+    }, [object, modelId, onPositionChange, orbitControlsRef]);
+
+    if (!object) return null;
+
+    return (
+        <TransformControls
+            ref={transformRef}
+            object={object}
+            mode="translate"
+            space="local"
+            size={0.7}
+            showX
+            showY
+            showZ
+        />
+    );
+}
 
 const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
     ({ 
@@ -1240,7 +1538,10 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         environmentIntensity,
         keyboardControlsEnabled = true,
         cameraMoveSpeed = 5.0,
-        cameraSprintMultiplier = 2.0
+        cameraSprintMultiplier = 2.0,
+        isDirectorMode = false,
+        showTransformGizmo = false,
+        onModelPositionChange
     }, ref) => {
         // 決定使用單模型還是多模型模式
         const isMultiModelMode = models && models.length > 0;
@@ -1254,6 +1555,11 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             ? models.findIndex(m => m.id === activeModelId)
             : 0;
 
+        // 獲取活動模型實例（用於 Transform Gizmo 可見性檢查）
+        const activeModelInstance = isMultiModelMode && activeModelIndex >= 0 && models
+            ? models[activeModelIndex]
+            : null;
+
         const modelRef = useRef<ModelRef>(null);
         const orbitControlsRef = useRef<any>(null);
         const glRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -1261,6 +1567,9 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         const recordedChunksRef = useRef<Blob[]>([]);
         const isRecordingRef = useRef<boolean>(false);
         const captureStreamRef = useRef<MediaStream | null>(null);
+        
+        // Transform Gizmo: 追蹤活動模型的 Object3D
+        const [activeModelObject, setActiveModelObject] = useState<THREE.Group | null>(null);
 
         useEffect(() => {
             if (!glRef.current) {
@@ -1280,6 +1589,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             seekTo: (time: number) => modelRef.current?.seekTo(time),
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
+            setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
             resetCamera: () => {
                 console.log('resetCamera called', orbitControlsRef.current);
                 if (orbitControlsRef.current) {
@@ -1447,7 +1757,24 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     recordingState.captureStream = null;
                 }
             },
-            isRecording: () => isRecordingRef.current
+            isRecording: () => isRecordingRef.current,
+            getRendererInfo: () => {
+                if (!glRef.current) return null;
+                const info = glRef.current.info;
+                return {
+                    render: {
+                        calls: info.render.calls,
+                        triangles: info.render.triangles,
+                        points: info.render.points,
+                        lines: info.render.lines
+                    },
+                    memory: {
+                        geometries: info.memory.geometries,
+                        textures: info.memory.textures
+                    },
+                    programs: info.programs?.length ?? null
+                };
+            }
         }));
 
         // Effekseer 初始化已移至 EffekseerFrameBridge 組件中
@@ -1488,6 +1815,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         glRef.current = gl;
                     }}>
                     <EffekseerFrameBridge />
+                    <FrameEmitter enabled={isDirectorMode} />
                     <SceneSettings toneMappingExposure={toneMappingExposure} environmentIntensity={environmentIntensity} />
                     {hdriUrl && <Environment files={hdriUrl} background blur={0.5} />}
                     <ambientLight intensity={0.8 * (environmentIntensity ?? 1.0)} />
@@ -1536,6 +1864,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 ref={isActive ? modelRef : undefined}
                                 modelInstance={{
                                     ...modelInstance,
+                                    id: modelInstance.id || `model-${index}`,
                                     clip
                                 }}
                                 onTimeUpdate={isActive ? onTimeUpdate : undefined}
@@ -1543,6 +1872,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                                 onFinish={isActive ? onFinish : undefined}
                                 enableShadows={enableShadows}
                                 isActiveModel={isActive}
+                                isDirectorMode={isDirectorMode}
+                                onGroupRefMount={isActive ? setActiveModelObject : undefined}
                             />
                         );
                     })}
@@ -1575,6 +1906,16 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                             RIGHT: THREE.MOUSE.PAN
                         }}
                     />
+                    {/* Transform Gizmo - 始終掛載，通過 visible 控制顯示 */}
+                    {activeModelObject && onModelPositionChange && activeModelId && (
+                        <TransformGizmo
+                            object={activeModelObject}
+                            modelId={activeModelId}
+                            visible={showTransformGizmo && (activeModelInstance?.visible ?? true)}
+                            onPositionChange={onModelPositionChange}
+                            orbitControlsRef={orbitControlsRef}
+                        />
+                    )}
                     <KeyboardCameraControls
                         enabled={keyboardControlsEnabled}
                         moveSpeed={cameraMoveSpeed}

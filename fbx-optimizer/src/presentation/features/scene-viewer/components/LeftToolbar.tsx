@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Grid, Camera } from 'lucide-react';
+import { Grid, Camera, Activity } from 'lucide-react';
 import { type ThemeStyle, themeOptions, type ThemeMode } from '../../../hooks/useTheme';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { CAMERA_PRESETS, type CameraPresetType } from '../../../../domain/value-objects/CameraPreset';
@@ -51,6 +51,10 @@ interface LeftToolbarProps {
     setKeyboardControlsEnabled: (enabled: boolean) => void;
     cameraMoveSpeed: number;
     setCameraMoveSpeed: (speed: number) => void;
+
+    // Performance Monitor
+    showPerformanceMonitor: boolean;
+    setShowPerformanceMonitor: (show: boolean) => void;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -91,7 +95,9 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     keyboardControlsEnabled,
     setKeyboardControlsEnabled,
     cameraMoveSpeed,
-    setCameraMoveSpeed
+    setCameraMoveSpeed,
+    showPerformanceMonitor,
+    setShowPerformanceMonitor
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -205,6 +211,20 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                 </button>
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
                     {showGrid ? '隱藏網格' : '顯示網格'}
+                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                </div>
+            </div>
+
+            {/* Tool: Performance Monitor Toggle */}
+            <div className="group relative">
+                <button
+                    onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
+                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showPerformanceMonitor ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : `${currentTheme.button} hover:bg-white/10`}`}
+                >
+                    <Activity size={20} />
+                </button>
+                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    {showPerformanceMonitor ? '隱藏效能監控' : '顯示效能監控'}
                     <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
                 </div>
             </div>

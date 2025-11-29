@@ -145,10 +145,14 @@ function ModelRenderer({
     setIsReady(true);
 
     return () => {
-      // 清理
-      if (mixerRef.current) {
+      // 🔧 清理 AnimationMixer 快取（避免記憶體洩漏）
+      if (mixerRef.current && clonedModelRef.current) {
         mixerRef.current.stopAllAction();
+        // 清理整個克隆模型的快取
+        mixerRef.current.uncacheRoot(clonedModelRef.current);
       }
+      
+      // 清理克隆模型的資源
       if (clonedModelRef.current) {
         clonedModelRef.current.traverse((child) => {
           if ((child as any).geometry) {
