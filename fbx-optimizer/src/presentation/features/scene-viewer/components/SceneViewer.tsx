@@ -634,6 +634,28 @@ const Model = forwardRef<ModelRef, ModelProps>(
 
                 // ALWAYS recreate shader when features change to ensure defines are updated
                 // (especially important when textures are added/removed)
+                
+                // 🔧 修復記憶體洩漏：在創建新 ShaderMaterial 前，釋放舊的
+                if (child.material instanceof THREE.ShaderMaterial) {
+                    // 釋放舊 ShaderMaterial 的 uniforms 中的貼圖（但不釋放 originalMaterial 中的貼圖）
+                    const oldMat = child.material;
+                    if (oldMat.uniforms) {
+                        const textureUniforms = [
+                            'matcapTexture', 'matcapMaskTexture',
+                            'matcapAddTexture', 'matcapAddMaskTexture',
+                            'flashTexture', 'flashMaskTexture',
+                            'dissolveTexture', 'normalMap'
+                        ];
+                        textureUniforms.forEach(name => {
+                            const uniform = oldMat.uniforms[name];
+                            if (uniform?.value && uniform.value.dispose) {
+                                uniform.value.dispose();
+                            }
+                        });
+                    }
+                    oldMat.dispose();
+                }
+                
                 const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
                 const baseTexture = originalMaterial.map || null;
                 const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
