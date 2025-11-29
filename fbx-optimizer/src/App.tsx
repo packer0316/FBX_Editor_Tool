@@ -51,6 +51,7 @@ import { useFileDrop } from './presentation/hooks/useFileDrop';
 import { useClickOutside } from './presentation/hooks/useClickOutside';
 import { useBoneExtraction } from './presentation/hooks/useBoneExtraction';
 import { useModelsManager } from './presentation/hooks/useModelsManager';
+import { useClipOptimizer } from './presentation/hooks/useClipOptimizer';
 
 // Utils
 import { sortLayersByPriority } from './utils/layer/layerUtils';
@@ -84,6 +85,9 @@ function App() {
     removeModel,
     updateModel,
   } = useModelsManager();
+
+  // 🔧 Clip 優化 Hook（帶快取，避免重複計算）
+  const { optimize: optimizeClip } = useClipOptimizer();
 
   const [file, setFile] = useState<File | null>(null);
   const [model, setModel] = useState<THREE.Group | null>(null);
@@ -593,17 +597,19 @@ function App() {
     activeModel
   ]);
 
-  // 當 tolerance 改變時重新優化
+  // 🔧 當 tolerance 改變時重新優化（使用帶快取的 Hook）
   useEffect(() => {
     if (originalClip) {
       // 使用 debounce 避免頻繁計算
       const timer = setTimeout(() => {
-        const optimized = optimizeAnimationClip(originalClip, tolerance) as IdentifiableClip;
-        setOptimizedClip(optimized);
+        const optimized = optimizeClip(originalClip, tolerance);
+        if (optimized) {
+          setOptimizedClip(optimized);
+        }
       }, 50);
       return () => clearTimeout(timer);
     }
-  }, [tolerance, originalClip]);
+  }, [tolerance, originalClip, optimizeClip]);
 
 
 

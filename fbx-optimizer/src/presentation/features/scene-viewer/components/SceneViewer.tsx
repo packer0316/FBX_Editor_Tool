@@ -1312,7 +1312,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
         }));
 
-        if (!model || !visible) return null;
+        if (!model) return null;
 
         // 將度數轉換為弧度
         const rotationRad = rotation.map(deg => (deg * Math.PI) / 180) as [number, number, number];
@@ -1323,6 +1323,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
                 position={position}
                 rotation={rotationRad}
                 scale={scale}
+                visible={visible}
             >
                 <Model
                     ref={modelRef}
