@@ -33,9 +33,7 @@ export const TimelineEditor: React.FC = () => {
 
   // 滑鼠滾輪縮放
   const handleWheel = useCallback((e: WheelEvent) => {
-    // 只有按住 Ctrl/Cmd 時才縮放，否則正常滾動
-    if (!e.ctrlKey && !e.metaKey) return;
-    
+    // 直接使用滾輪縮放時間軸
     e.preventDefault();
     
     const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
@@ -128,7 +126,7 @@ export const TimelineEditor: React.FC = () => {
           >
             <ZoomOut size={14} />
           </button>
-          <span className="text-[10px] text-gray-500 w-8 text-center font-mono" title="Ctrl+滾輪縮放">
+          <span className="text-[10px] text-gray-500 w-8 text-center font-mono" title="滾輪縮放">
             {Math.round(ui.zoom * 100)}%
           </span>
           <button

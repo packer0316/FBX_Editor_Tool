@@ -109,7 +109,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     // 可以返回一些快捷鍵提示資訊
     shortcuts: [
       { key: 'Space', description: '播放/暫停' },
-      { key: 'Ctrl + 滾輪', description: '縮放時間軸' },
+      { key: '滾輪', description: '縮放時間軸' },
       { key: 'Delete', description: '刪除選中片段' },
       { key: '←/→', description: '移動 1 幀' },
       { key: 'Shift + ←/→', description: '移動 10 幀' },
