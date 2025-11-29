@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d } from 'lucide-react';
 import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
@@ -86,6 +86,7 @@ interface ModelCardProps {
     rotation?: [number, number, number];
     scale?: [number, number, number];
     visible?: boolean;
+    showTransformGizmo?: boolean;
     isCameraOrbiting?: boolean;
     cameraOrbitSpeed?: number;
     isModelRotating?: boolean;
@@ -221,6 +222,20 @@ export default function ModelCard({
                 title="模型資訊"
               >
                 <Info className="w-3 h-3" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateTransform({ showTransformGizmo: !modelInstance.showTransformGizmo });
+                }}
+                className={`p-1 rounded transition-colors ${
+                  isActive && modelInstance.showTransformGizmo
+                    ? 'text-orange-400 hover:bg-gray-700'
+                    : 'text-gray-400 hover:text-orange-400 hover:bg-gray-700'
+                }`}
+                title={modelInstance.showTransformGizmo ? '隱藏三軸控制器' : '顯示三軸控制器'}
+              >
+                <Move3d className="w-3 h-3" />
               </button>
               <button
                 onClick={(e) => {

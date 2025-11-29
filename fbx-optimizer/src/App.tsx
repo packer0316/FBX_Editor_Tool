@@ -501,7 +501,9 @@ function App() {
         isSyncingRef.current = false;
       }, 0);
     } else if (!activeModel) {
-      // 沒有活動模型時重置
+      // 沒有活動模型時重置（包括取消選中模型）
+      isSyncingRef.current = true;
+      setFile(null);
       setModel(null);
       setMeshNames([]);
       setShaderGroups([]);
@@ -513,9 +515,13 @@ function App() {
       setEffects([]);
       setDuration(0);
       setIsPlaying(false);
+      setCurrentTime(0);
       sceneViewerRef.current?.pause();
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 0);
     }
-  }, [activeModelId]); // 只監聽 activeModelId，避免循環
+  }, [activeModelId, activeModel]); // 同時監聽 activeModelId 和 activeModel，確保正確重置
 
   // 當活動模型的狀態改變時，同步回 ModelInstance（只在用戶操作時）
   // 使用 useRef 來追蹤上一次的值，只在真正改變時才更新
@@ -615,6 +621,11 @@ function App() {
 
   // 動畫控制處理
   const handlePlayPause = () => {
+    // 沒有模型時不執行任何操作
+    if (!model || !optimizedClip) {
+      return;
+    }
+
     const newPlayingState = !isPlaying;
     if (newPlayingState) {
       sceneViewerRef.current?.play();
@@ -630,6 +641,11 @@ function App() {
   };
 
   const handleSeek = (time: number) => {
+    // 沒有模型時不執行任何操作
+    if (!model || !optimizedClip) {
+      return;
+    }
+
     sceneViewerRef.current?.seekTo(time);
     setCurrentTime(time);
     // 重置觸發狀態，避免跳過觸發
@@ -1264,7 +1280,7 @@ function App() {
                       hdriUrl={hdriUrl || undefined}
                       environmentIntensity={environmentIntensity}
                       isDirectorMode={isDirectorMode}
-                      showTransformGizmo={!!activeModelId && !isDirectorMode}
+                      showTransformGizmo={!!activeModel && !isDirectorMode && activeModel.showTransformGizmo}
                       onModelPositionChange={(modelId, position) => {
                         updateModel(modelId, { position });
                       }}
@@ -1350,6 +1366,10 @@ function App() {
 
               isLoopEnabled={isLoopEnabled}
               onToggleLoop={() => {
+                // 沒有模型時不執行任何操作
+                if (!model || !optimizedClip) {
+                  return;
+                }
                 const newLoopState = !isLoopEnabled;
                 setIsLoopEnabled(newLoopState);
                 // 同步更新 activeModel 的循環設置
@@ -1474,6 +1494,7 @@ function App() {
                 models={models}
                 activeModelId={activeModelId}
                 onSelectModel={(id) => {
+                  // 支援取消選中（id 為 null）
                   setActiveModelId(id);
                 }}
                 onAddModel={handleFileUpload}

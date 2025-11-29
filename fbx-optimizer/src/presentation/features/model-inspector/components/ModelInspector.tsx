@@ -699,12 +699,16 @@ export default function ModelInspector({
                     {/* Play/Pause Button */}
                     <button
                         onClick={onPlayPause}
-                        className={`group relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-lg hover:shadow-blue-500/30 hover:scale-105 active:scale-95 ${isPlaying
-                            ? 'bg-gradient-to-br from-blue-500 to-indigo-600'
-                            : 'bg-gradient-to-br from-blue-600 to-indigo-700'
-                            }`}
+                        disabled={!model || !clip}
+                        className={`group relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-lg ${
+                            !model || !clip
+                                ? 'bg-gray-700 cursor-not-allowed opacity-50'
+                                : isPlaying
+                                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 hover:shadow-blue-500/30 hover:scale-105 active:scale-95'
+                                    : 'bg-gradient-to-br from-blue-600 to-indigo-700 hover:shadow-blue-500/30 hover:scale-105 active:scale-95'
+                        }`}
                     >
-                        <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {model && clip && <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />}
                         {isPlaying ? <Pause size={24} className="text-white fill-current" /> : <Play size={24} className="text-white fill-current" />}
                     </button>
 
@@ -714,10 +718,14 @@ export default function ModelInspector({
                             e.stopPropagation();
                             onToggleLoop();
                         }}
-                        className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 border ${isLoopEnabled
-                            ? 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
-                            : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                            }`}
+                        disabled={!model || !clip}
+                        className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 border ${
+                            !model || !clip
+                                ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed opacity-50'
+                                : isLoopEnabled
+                                    ? 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
+                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
                         title={isLoopEnabled ? '循環播放：開啟' : '循環播放：關閉'}
                     >
                         <Repeat size={18} />
@@ -752,6 +760,7 @@ export default function ModelInspector({
                                 onChange={handleSliderChange}
                                 onMouseDown={handleSliderMouseDown}
                                 onMouseUp={handleSliderMouseUp}
+                                disabled={!model || !clip}
                                 style={{
                                     WebkitAppearance: 'none',
                                     appearance: 'none',
