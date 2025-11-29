@@ -167,6 +167,8 @@ export class LoadModelUseCase {
       renderPriority: 0,
       visible: true,
       showTransformGizmo: true,
+      showWireframe: false,
+      opacity: 1.0,
       isCameraOrbiting: false,
       cameraOrbitSpeed: 30,
       isModelRotating: false,

@@ -1289,6 +1289,8 @@ function App() {
                         rotation: m.rotation,
                         scale: m.scale,
                         visible: m.visible,
+                        showWireframe: m.showWireframe,
+                        opacity: m.opacity,
                         isPlaying: m.isPlaying,
                         currentTime: m.currentTime,
                         isLoopEnabled: m.isLoopEnabled,

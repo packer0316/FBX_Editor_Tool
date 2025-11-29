@@ -53,6 +53,8 @@ interface ModelInstanceForRender {
     rotation: [number, number, number];
     scale: [number, number, number];
     visible: boolean;
+    showWireframe?: boolean;
+    opacity?: number;
 }
 
 interface SceneViewerProps {
@@ -705,12 +707,17 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
                 const isSkinnedMesh = (child as any).isSkinnedMesh;
 
+                // 保存當前的 wireframe 和 side 設置
+                const currentWireframe = child.material instanceof THREE.Material ? (child.material as any).wireframe || false : false;
+                const currentSide = child.material instanceof THREE.Material ? (child.material as any).side || THREE.FrontSide : THREE.FrontSide;
+                
                 shaderMat = new THREE.ShaderMaterial({
                     uniforms: {
                         // Base
                         baseTexture: { value: baseTexture },
                         baseColor: { value: baseColor },
                         uTime: { value: 0 },
+                        uOpacity: { value: 1.0 },
 
                         // Unlit Mode
                         useUnlit: { value: 0.0 },
@@ -793,6 +800,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform sampler2D baseTexture;
                                 uniform vec3 baseColor;
                                 uniform float uTime;
+                                uniform float uOpacity;
                                 
                                 // Unlit Mode (無光照模式)
                                 uniform float useUnlit;
@@ -1019,7 +1027,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     }
                                     
                                     // 將 Linear 顏色輸出給 three.js，後續由 toneMapping_fragment / colorspace_fragment 統一處理
-                                    gl_FragColor = vec4(finalColor, baseTexColor.a);
+                                    // 應用透明度
+                                    float finalAlpha = baseTexColor.a * uOpacity;
+                                    gl_FragColor = vec4(finalColor, finalAlpha);
 
                                     #include <tonemapping_fragment>
                                     #include <colorspace_fragment>
@@ -1038,6 +1048,12 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 } as any);
                 // 在建立後再設定 skinning，避免 three.js 對建構參數提出警告
                 (shaderMat as any).skinning = isSkinnedMesh;
+                // 恢復 wireframe 和 side 設置
+                (shaderMat as any).wireframe = currentWireframe;
+                (shaderMat as any).side = currentSide;
+                // 設置透明度相關
+                shaderMat.transparent = true;
+                shaderMat.depthWrite = true; // 保持深度寫入以正確渲染
                 child.material = shaderMat;
 
                 // Update Uniforms
@@ -1167,6 +1183,8 @@ type MultiModelProps = {
         rotation: [number, number, number];
         scale: [number, number, number];
         visible: boolean;
+        showWireframe?: boolean; // 是否顯示線框
+        opacity?: number; // 模型透明度
         isPlaying?: boolean; // 播放狀態
         currentTime?: number; // 當前時間
         isLoopEnabled?: boolean; // 循環設置
@@ -1189,6 +1207,8 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
         const { 
             id: modelId,
             model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+            showWireframe = false,
+            opacity = 1.0,
             isPlaying = false, currentTime, isLoopEnabled,
             isCameraOrbiting = false, cameraOrbitSpeed = 30,
             isModelRotating = false, modelRotationSpeed = 30
@@ -1212,6 +1232,89 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
                 }
             };
         }, [onGroupRefMount, isActiveModel, model]);
+        
+        // Wireframe 設置（使用 material.wireframe，跟隨骨骼動畫）
+        useEffect(() => {
+            if (!model) return;
+            
+            model.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                    // 保存原始設置
+                    if (child.userData.originalWireframe === undefined) {
+                        child.userData.originalWireframe = false;
+                    }
+                    if (child.userData.originalSide === undefined) {
+                        child.userData.originalSide = child.material instanceof THREE.Material 
+                            ? (child.material as any).side 
+                            : THREE.FrontSide;
+                    }
+                    
+                    // 應用 wireframe 和背面剔除
+                    if (child.material) {
+                        const applyToMaterial = (mat: THREE.Material) => {
+                            (mat as any).wireframe = showWireframe;
+                            // 背面剔除：wireframe 模式下強制只渲染正面
+                            if (showWireframe) {
+                                (mat as any).side = THREE.FrontSide;
+                            } else {
+                                (mat as any).side = child.userData.originalSide || THREE.FrontSide;
+                            }
+                            mat.needsUpdate = true;
+                        };
+                        
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(applyToMaterial);
+                        } else {
+                            applyToMaterial(child.material);
+                        }
+                    }
+                }
+            });
+        }, [model, showWireframe]);
+        
+        // 應用透明度到所有 Mesh
+        useEffect(() => {
+            if (!model) return;
+            
+            // 當開啟 wireframe 時，自動設置透明度為 50%
+            const effectiveOpacity = showWireframe ? 0.5 : opacity;
+            
+            const applyOpacity = () => {
+                model.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        // 應用透明度
+                        if (child.material) {
+                            const applyToMaterial = (mat: THREE.Material) => {
+                                // 對於 ShaderMaterial，使用 uniform
+                                if ((mat as any).uniforms?.uOpacity !== undefined) {
+                                    (mat as any).uniforms.uOpacity.value = effectiveOpacity;
+                                }
+                                // 對於普通材質，設置 opacity 屬性
+                                (mat as any).transparent = effectiveOpacity < 1.0;
+                                (mat as any).opacity = effectiveOpacity;
+                                mat.needsUpdate = true;
+                            };
+                            
+                            if (Array.isArray(child.material)) {
+                                child.material.forEach(applyToMaterial);
+                            } else {
+                                applyToMaterial(child.material);
+                            }
+                        }
+                    }
+                });
+            };
+            
+            // 立即應用
+            applyOpacity();
+            
+            // 延遲應用確保 shader 更新後也能生效
+            const timeoutId = setTimeout(applyOpacity, 100);
+            
+            return () => {
+                clearTimeout(timeoutId);
+            };
+        }, [model, opacity, showWireframe, isShaderEnabled, shaderGroups]);
         
         // 相機公轉累積角度
         const cameraOrbitAngleRef = useRef(0);

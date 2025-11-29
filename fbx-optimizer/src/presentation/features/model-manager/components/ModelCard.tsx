@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d, Grid3x3 } from 'lucide-react';
 import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
@@ -87,6 +87,8 @@ interface ModelCardProps {
     scale?: [number, number, number];
     visible?: boolean;
     showTransformGizmo?: boolean;
+    showWireframe?: boolean;
+    opacity?: number;
     isCameraOrbiting?: boolean;
     cameraOrbitSpeed?: number;
     isModelRotating?: boolean;
@@ -236,6 +238,20 @@ export default function ModelCard({
                 title={modelInstance.showTransformGizmo ? '隱藏三軸控制器' : '顯示三軸控制器'}
               >
                 <Move3d className="w-3 h-3" />
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUpdateTransform({ showWireframe: !modelInstance.showWireframe });
+                }}
+                className={`p-1 rounded transition-colors ${
+                  modelInstance.showWireframe
+                    ? 'text-purple-400 hover:bg-gray-700'
+                    : 'text-gray-400 hover:text-purple-400 hover:bg-gray-700'
+                }`}
+                title={modelInstance.showWireframe ? '隱藏線框' : '顯示線框'}
+              >
+                <Grid3x3 className="w-3 h-3" />
               </button>
               <button
                 onClick={(e) => {
@@ -472,6 +488,26 @@ export default function ModelCard({
               className="w-full bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
               step={0.01}
               min={0.01}
+            />
+          </div>
+
+          {/* 透明度 */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <label className="text-xs text-gray-400">透明度 (Opacity)</label>
+              <span className="text-[10px] text-neon-blue font-mono">{Math.round(modelInstance.opacity * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={modelInstance.opacity}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value);
+                onUpdateTransform({ opacity: value });
+              }}
+              className="w-full h-1 slider-blue-track appearance-none cursor-pointer rounded-full"
             />
           </div>
 
