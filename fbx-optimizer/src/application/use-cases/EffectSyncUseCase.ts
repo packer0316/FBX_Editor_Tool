@@ -43,7 +43,7 @@ export class EffectSyncUseCase {
     if (time < this.lastTimeRef.current) {
       this.lastEffectFrameRef.current = -1;
       this.lastTimeRef.current = time;
-      console.log(`[EffectSync] Time went backward, resetting. New time: ${time.toFixed(3)}s`);
+      // console.log(`[EffectSync] Time went backward, resetting. New time: ${time.toFixed(3)}s`);
       return;
     }
 
