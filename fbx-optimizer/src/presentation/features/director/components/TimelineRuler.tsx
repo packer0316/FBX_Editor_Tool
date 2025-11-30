@@ -1,5 +1,7 @@
 /**
- * TimelineRuler - 時間刻度尺
+ * TimelineRuler - 時間刻度尺（支援虛擬化渲染）
+ * 
+ * TODO-5 & TODO-6: 只渲染可視區域的刻度，提升效能
  */
 
 import React, { useMemo, memo } from 'react';
@@ -10,6 +12,7 @@ interface TimelineRulerProps {
   fps: number;
   pixelsPerFrame: number;
   scrollOffsetX: number;
+  containerWidth?: number;  // 可視區域寬度（用於虛擬化渲染）
 }
 
 export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
@@ -17,6 +20,7 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
   fps,
   pixelsPerFrame,
   scrollOffsetX,
+  containerWidth = 1000,  // 預設值，向後兼容
 }) => {
   const { setCurrentFrame } = useDirectorStore();
 
@@ -34,11 +38,23 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
     }
   }, [pixelsPerFrame, fps]);
 
-  // 生成刻度
-  const ticks = useMemo(() => {
+  // TODO-6: 虛擬化渲染 - 只生成可視區域的刻度
+  const visibleTicks = useMemo(() => {
+    // 計算可視範圍（加 ±1 緩衝）
+    const startFrame = Math.max(0, Math.floor(scrollOffsetX / pixelsPerFrame) - minorInterval);
+    const endFrame = Math.min(
+      totalFrames,
+      Math.ceil((scrollOffsetX + containerWidth) / pixelsPerFrame) + minorInterval
+    );
+    
     const result: { frame: number; isMajor: boolean; label?: string }[] = [];
     
-    for (let frame = 0; frame <= totalFrames; frame += minorInterval) {
+    // 從最近的 minorInterval 倍數開始
+    const firstFrame = Math.max(0, Math.floor(startFrame / minorInterval) * minorInterval);
+    
+    for (let frame = firstFrame; frame <= endFrame; frame += minorInterval) {
+      if (frame < 0 || frame > totalFrames) continue;
+      
       const isMajor = frame % majorInterval === 0;
       const seconds = Math.floor(frame / fps);
       const minutes = Math.floor(seconds / 60);
@@ -52,7 +68,7 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
     }
     
     return result;
-  }, [totalFrames, fps, majorInterval, minorInterval]);
+  }, [totalFrames, fps, majorInterval, minorInterval, scrollOffsetX, containerWidth, pixelsPerFrame]);
 
   const handleClick = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -73,7 +89,7 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
           transform: `translateX(-${scrollOffsetX}px)`,
         }}
       >
-        {ticks.map(({ frame, isMajor, label }) => (
+        {visibleTicks.map(({ frame, isMajor, label }) => (
           <div
             key={frame}
             className="absolute top-0"

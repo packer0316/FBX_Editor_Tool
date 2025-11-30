@@ -437,6 +437,49 @@ describe('DirectorStore', () => {
       expect(useDirectorStore.getState().ui.zoom).toBe(4);
     });
 
+    it('setZoomWithScroll 應該同時更新 zoom 和 scrollOffset', () => {
+      const store = useDirectorStore.getState();
+      
+      store.setZoomWithScroll(2, 100, 50);
+      
+      const { ui } = useDirectorStore.getState();
+      expect(ui.zoom).toBe(2);
+      expect(ui.scrollOffsetX).toBe(100);
+      expect(ui.scrollOffsetY).toBe(50);
+    });
+
+    it('setZoomWithScroll 應該限制 zoom 範圍', () => {
+      const store = useDirectorStore.getState();
+      
+      // 測試最小值
+      store.setZoomWithScroll(0.1, 100, 50);
+      expect(useDirectorStore.getState().ui.zoom).toBe(0.25);
+      
+      // 測試最大值
+      store.setZoomWithScroll(10, 100, 50);
+      expect(useDirectorStore.getState().ui.zoom).toBe(4);
+    });
+
+    it('setZoomWithScroll 應該限制 scrollOffset 不為負數', () => {
+      const store = useDirectorStore.getState();
+      
+      store.setZoomWithScroll(1, -100, -50);
+      
+      const { ui } = useDirectorStore.getState();
+      expect(ui.scrollOffsetX).toBe(0);
+      expect(ui.scrollOffsetY).toBe(0);
+    });
+
+    it('setScrollOffset 應該設定滾動偏移', () => {
+      const store = useDirectorStore.getState();
+      
+      store.setScrollOffset(200, 100);
+      
+      const { ui } = useDirectorStore.getState();
+      expect(ui.scrollOffsetX).toBe(200);
+      expect(ui.scrollOffsetY).toBe(100);
+    });
+
     it('selectClip 應該選取片段', () => {
       const store = useDirectorStore.getState();
       

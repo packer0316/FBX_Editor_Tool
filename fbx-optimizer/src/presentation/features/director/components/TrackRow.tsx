@@ -1,8 +1,10 @@
 /**
- * TrackRow - 軌道元件
+ * TrackRow - 軌道元件（支援虛擬化渲染）
+ * 
+ * TODO-7: 只渲染可視區域的 ClipBlock
  */
 
-import React, { memo, useCallback, useRef, useState } from 'react';
+import React, { memo, useCallback, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Trash2, Lock, Unlock, Volume2, VolumeX, Edit3, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
@@ -21,6 +23,8 @@ interface TrackRowProps {
   pixelsPerFrame: number;
   timelineWidth: number;
   isHeaderOnly?: boolean;
+  scrollOffsetX?: number;     // TODO-7: 用於虛擬化渲染
+  containerWidth?: number;    // TODO-7: 用於虛擬化渲染
 }
 
 export const TrackRow: React.FC<TrackRowProps> = memo(({
@@ -28,8 +32,27 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   pixelsPerFrame,
   timelineWidth,
   isHeaderOnly = false,
+  scrollOffsetX,
+  containerWidth,
 }) => {
   const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui } = useDirectorStore();
+  
+  // TODO-7: 虛擬化渲染 - 只渲染可視區域的 Clips
+  const visibleClips = useMemo(() => {
+    // 如果沒有提供 scrollOffsetX 或 containerWidth，則渲染所有 clips（向後兼容）
+    if (scrollOffsetX === undefined || containerWidth === undefined) {
+      return track.clips;
+    }
+    
+    // 計算可視範圍（以幀為單位）
+    const visibleStart = scrollOffsetX / pixelsPerFrame;
+    const visibleEnd = (scrollOffsetX + containerWidth) / pixelsPerFrame;
+    
+    // 過濾：Clip 與可視區域有交集
+    return track.clips.filter(clip => {
+      return clip.endFrame >= visibleStart && clip.startFrame <= visibleEnd;
+    });
+  }, [track.clips, scrollOffsetX, containerWidth, pixelsPerFrame]);
   const trackRef = useRef<HTMLDivElement>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0 });
   const [isRenaming, setIsRenaming] = useState(false);
@@ -285,8 +308,8 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
         onDrop={handleDrop}
         onContextMenu={handleContextMenu}
       >
-        {/* 片段 */}
-        {track.clips.map(clip => (
+        {/* 片段（TODO-7: 使用虛擬化渲染） */}
+        {visibleClips.map(clip => (
           <ClipBlock
             key={clip.id}
             clip={clip}

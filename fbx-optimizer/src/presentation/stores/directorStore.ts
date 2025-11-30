@@ -105,6 +105,8 @@ interface DirectorActions {
   // UI 控制
   setZoom: (zoom: number) => void;
   setScrollOffset: (x: number, y: number) => void;
+  /** 合併更新 zoom 和 scrollOffset，避免雙重渲染導致閃爍 */
+  setZoomWithScroll: (zoom: number, scrollX: number, scrollY: number) => void;
   selectClip: (clipId: string | null) => void;
   selectTrack: (trackId: string | null) => void;
   setDragging: (isDragging: boolean, data?: DraggingClipData | null) => void;
@@ -177,8 +179,27 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       enterDirectorMode: () => {
+        const { tracks } = get();
+        
+        // 如果沒有 track，自動創建一個預設 track
+        let newTracks = tracks;
+        if (tracks.length === 0) {
+          const defaultTrack: DirectorTrack = {
+            id: generateId(),
+            name: 'Track 1',
+            order: 0,
+            isLocked: false,
+            isMuted: false,
+            clips: [],
+          };
+          newTracks = [defaultTrack];
+        }
+        
         set(
-          { isDirectorMode: true },
+          { 
+            isDirectorMode: true,
+            tracks: newTracks,
+          },
           undefined,
           'enterDirectorMode'
         );
@@ -537,6 +558,29 @@ export const useDirectorStore = create<DirectorStore>()(
           }),
           undefined,
           'setScrollOffset'
+        );
+      },
+      
+      /**
+       * 合併更新 zoom 和 scrollOffset
+       * 在縮放時間軸時使用，避免分開呼叫 setZoom 和 setScrollOffset 造成雙重渲染
+       */
+      setZoomWithScroll: (zoom: number, scrollX: number, scrollY: number) => {
+        const clampedZoom = Math.max(0.25, Math.min(zoom, 4));
+        const clampedScrollX = Math.max(0, scrollX);
+        const clampedScrollY = Math.max(0, scrollY);
+        
+        set(
+          (state) => ({
+            ui: { 
+              ...state.ui, 
+              zoom: clampedZoom,
+              scrollOffsetX: clampedScrollX,
+              scrollOffsetY: clampedScrollY,
+            },
+          }),
+          undefined,
+          'setZoomWithScroll'
         );
       },
       

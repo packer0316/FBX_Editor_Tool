@@ -13,49 +13,126 @@ import { DEFAULT_PIXELS_PER_FRAME, MIN_ZOOM, MAX_ZOOM } from '../../../../domain
 const DEFAULT_HEADER_WIDTH = 140; // 預設 Track 標題區寬度
 const MIN_HEADER_WIDTH = 80;
 const MAX_HEADER_WIDTH = 300;
-const ZOOM_STEP = 0.1; // 每次縮放步進
+
+// TODO-4: 指數縮放相關常數
+const ZOOM_SENSITIVITY = 0.002;  // 滾輪縮放靈敏度
+const ZOOM_BUTTON_FACTOR = 1.25; // 按鈕縮放倍率（放大/縮小 25%）
 
 export const TimelineEditor: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom } = useDirectorStore();
+  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll } = useDirectorStore();
   
   // 軌道名稱欄位寬度狀態
   const [headerWidth, setHeaderWidth] = useState(DEFAULT_HEADER_WIDTH);
   const [isResizingHeader, setIsResizingHeader] = useState(false);
   
+  // TODO-5 & TODO-6: 追踪容器寬度，用於虛擬化渲染
+  const [containerWidth, setContainerWidth] = useState(1000);
+  
+  // TODO-8: 縮放動畫過渡
+  const [isZooming, setIsZooming] = useState(false);
+  const zoomTimeoutRef = useRef<number>();
+  
+  // TODO-9: 縮放視覺回饋
+  const [showZoomToast, setShowZoomToast] = useState(false);
+  const toastTimeoutRef = useRef<number>();
+  
+  // ============================================
+  // TODO-2: 防止 Store ↔ DOM 無限循環的 Ref
+  // ============================================
+  const isInternalScrollRef = useRef(false);
+  const lastScrollXRef = useRef(0);
+  const lastScrollYRef = useRef(0);
+  
   const pixelsPerFrame = DEFAULT_PIXELS_PER_FRAME * ui.zoom;
   const timelineWidth = timeline.totalFrames * pixelsPerFrame;
 
+  // 處理使用者滾動，忽略程式觸發的滾動
   const handleScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
     const target = e.target as HTMLDivElement;
+    
+    // 若是程式觸發的滾動，且值接近預期，則忽略
+    if (isInternalScrollRef.current) {
+      const isExpectedX = Math.abs(target.scrollLeft - lastScrollXRef.current) < 2;
+      const isExpectedY = Math.abs(target.scrollTop - lastScrollYRef.current) < 2;
+      
+      if (isExpectedX && isExpectedY) {
+        isInternalScrollRef.current = false;
+        return;  // 忽略程式觸發的 scroll 事件
+      }
+    }
+    
+    // 使用者滾動，更新 Store
     setScrollOffset(target.scrollLeft, target.scrollTop);
   }, [setScrollOffset]);
+  
+  // 同步 Store scrollOffset → DOM scrollLeft/Top
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    const needUpdateX = Math.abs(container.scrollLeft - ui.scrollOffsetX) > 1;
+    const needUpdateY = Math.abs(container.scrollTop - ui.scrollOffsetY) > 1;
+    
+    if (needUpdateX || needUpdateY) {
+      // 標記為程式觸發的滾動
+      isInternalScrollRef.current = true;
+      lastScrollXRef.current = ui.scrollOffsetX;
+      lastScrollYRef.current = ui.scrollOffsetY;
+      
+      // 同步到 DOM
+      if (needUpdateX) container.scrollLeft = ui.scrollOffsetX;
+      if (needUpdateY) container.scrollTop = ui.scrollOffsetY;
+    }
+  }, [ui.scrollOffsetX, ui.scrollOffsetY]);
 
-  // 滑鼠滾輪縮放
+  // 滑鼠滾輪縮放（使用合併更新避免閃爍 + 指數縮放）
   const handleWheel = useCallback((e: WheelEvent) => {
     // 直接使用滾輪縮放時間軸
     e.preventDefault();
     
-    const delta = e.deltaY > 0 ? -ZOOM_STEP : ZOOM_STEP;
-    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, ui.zoom + delta));
+    // TODO-8: 標記正在縮放（禁用動畫）
+    setIsZooming(true);
+    if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+    zoomTimeoutRef.current = window.setTimeout(() => setIsZooming(false), 150);
+    
+    // TODO-9: 顯示縮放百分比 toast
+    setShowZoomToast(true);
+    if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    toastTimeoutRef.current = window.setTimeout(() => setShowZoomToast(false), 1000);
+    
+    // TODO-4: 指數縮放 - 根據 deltaY 計算縮放因子
+    // deltaY 正值 = 向下滾動 = 縮小，deltaY 負值 = 向上滾動 = 放大
+    const zoomFactor = Math.pow(1 + ZOOM_SENSITIVITY, -e.deltaY);
+    const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, ui.zoom * zoomFactor));
     
     // 以滑鼠位置為中心縮放
     if (containerRef.current) {
-      const rect = containerRef.current.getBoundingClientRect();
+      const container = containerRef.current;
+      const rect = container.getBoundingClientRect();
+      const currentContainerWidth = rect.width;
+      
+      // 計算滑鼠指向的幀位置
       const mouseX = e.clientX - rect.left + ui.scrollOffsetX;
       const frameAtMouse = mouseX / pixelsPerFrame;
       
-      // 更新 zoom
-      setZoom(newZoom);
-      
-      // 調整滾動位置以保持滑鼠位置不變
+      // 計算新的時間軸寬度和最大滾動值
       const newPixelsPerFrame = DEFAULT_PIXELS_PER_FRAME * newZoom;
-      const newScrollX = frameAtMouse * newPixelsPerFrame - (e.clientX - rect.left);
-      setScrollOffset(Math.max(0, newScrollX), ui.scrollOffsetY);
+      const newTimelineWidth = timeline.totalFrames * newPixelsPerFrame;
+      const maxScrollX = Math.max(0, newTimelineWidth - currentContainerWidth);
+      
+      // 計算新的滾動位置（保持滑鼠位置不變）
+      const rawScrollX = frameAtMouse * newPixelsPerFrame - (e.clientX - rect.left);
+      
+      // 邊界限制：左邊界 0，右邊界 maxScrollX
+      const newScrollX = Math.max(0, Math.min(rawScrollX, maxScrollX));
+      
+      // 使用合併更新（單次 set() 避免雙重渲染）
+      setZoomWithScroll(newZoom, newScrollX, ui.scrollOffsetY);
     } else {
       setZoom(newZoom);
     }
-  }, [ui.zoom, ui.scrollOffsetX, ui.scrollOffsetY, pixelsPerFrame, setZoom, setScrollOffset]);
+  }, [ui.zoom, ui.scrollOffsetX, ui.scrollOffsetY, pixelsPerFrame, timeline.totalFrames, setZoom, setZoomWithScroll]);
 
   // 綁定滾輪事件（需要 passive: false 來阻止默認行為）
   useEffect(() => {
@@ -65,14 +142,46 @@ export const TimelineEditor: React.FC = () => {
     container.addEventListener('wheel', handleWheel, { passive: false });
     return () => container.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
+  
+  // TODO-5 & TODO-6: 監聽容器大小變化
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    
+    // 初始化寬度
+    setContainerWidth(container.clientWidth);
+    
+    // 使用 ResizeObserver 監聽大小變化
+    const resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === container) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      }
+    });
+    
+    resizeObserver.observe(container);
+    
+    return () => resizeObserver.disconnect();
+  }, []);
+  
+  // TODO-8 & TODO-9: 清理 timeout（防止 Memory Leak）
+  useEffect(() => {
+    return () => {
+      if (zoomTimeoutRef.current) clearTimeout(zoomTimeoutRef.current);
+      if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
+    };
+  }, []);
 
-  // 縮放按鈕處理
+  // 縮放按鈕處理（TODO-4: 使用固定倍率縮放）
   const handleZoomIn = useCallback(() => {
-    setZoom(Math.min(MAX_ZOOM, ui.zoom + ZOOM_STEP));
+    const newZoom = Math.min(MAX_ZOOM, ui.zoom * ZOOM_BUTTON_FACTOR);
+    setZoom(newZoom);
   }, [ui.zoom, setZoom]);
 
   const handleZoomOut = useCallback(() => {
-    setZoom(Math.max(MIN_ZOOM, ui.zoom - ZOOM_STEP));
+    const newZoom = Math.max(MIN_ZOOM, ui.zoom / ZOOM_BUTTON_FACTOR);
+    setZoom(newZoom);
   }, [ui.zoom, setZoom]);
 
   // Header 寬度調整
@@ -150,6 +259,7 @@ export const TimelineEditor: React.FC = () => {
             fps={timeline.fps}
             pixelsPerFrame={pixelsPerFrame}
             scrollOffsetX={ui.scrollOffsetX}
+            containerWidth={containerWidth}
           />
         </div>
       </div>
@@ -196,9 +306,21 @@ export const TimelineEditor: React.FC = () => {
           className="flex-1 overflow-auto relative border-l border-white/10"
           onScroll={handleScroll}
         >
+          {/* TODO-9: 縮放百分比 Toast */}
+          {showZoomToast && (
+            <div className="absolute top-2 right-2 bg-black/80 text-white px-2 py-1 rounded text-xs font-mono z-50 pointer-events-none">
+              {Math.round(ui.zoom * 100)}%
+            </div>
+          )}
+          
           <div
             className="relative"
-            style={{ width: timelineWidth, minHeight: '100%' }}
+            style={{ 
+              width: timelineWidth, 
+              minHeight: '100%',
+              // TODO-8: 縮放時禁用動畫，停止後平滑過渡
+              transition: isZooming ? 'none' : 'width 0.15s ease-out',
+            }}
           >
             {tracks.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
@@ -213,6 +335,8 @@ export const TimelineEditor: React.FC = () => {
                     pixelsPerFrame={pixelsPerFrame}
                     timelineWidth={timelineWidth}
                     isHeaderOnly={false}
+                    scrollOffsetX={ui.scrollOffsetX}
+                    containerWidth={containerWidth}
                   />
                 ))}
               </div>

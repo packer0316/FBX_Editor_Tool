@@ -4,6 +4,10 @@
 
 import { useEffect, useCallback } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { MIN_ZOOM, MAX_ZOOM } from '../../../../domain/entities/director/director.types';
+
+// TODO-10: 鍵盤縮放倍率
+const KEYBOARD_ZOOM_FACTOR = 1.25;
 
 interface UseKeyboardShortcutsOptions {
   /** 是否啟用快捷鍵 */
@@ -21,6 +25,9 @@ interface UseKeyboardShortcutsOptions {
  * - Home: 跳到開頭
  * - End: 跳到結尾
  * - ESC: 關閉 Director Mode
+ * - +/=: 放大時間軸 (TODO-10)
+ * - -: 縮小時間軸 (TODO-10)
+ * - Ctrl+0: 重設縮放為 100% (TODO-10)
  */
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
   const { enabled = true } = options;
@@ -32,6 +39,7 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     play,
     pause,
     setCurrentFrame,
+    setZoom,
     removeClip,
     exitDirectorMode,
   } = useDirectorStore();
@@ -95,10 +103,30 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         exitDirectorMode();
         break;
 
+      // TODO-10: 鍵盤縮放快捷鍵
+      case '=':  // 或 '+' (需要 Shift)
+      case '+':
+        e.preventDefault();
+        setZoom(Math.min(MAX_ZOOM, ui.zoom * KEYBOARD_ZOOM_FACTOR));
+        break;
+
+      case '-':
+        e.preventDefault();
+        setZoom(Math.max(MIN_ZOOM, ui.zoom / KEYBOARD_ZOOM_FACTOR));
+        break;
+
+      case '0':
+        // Ctrl+0 或 Cmd+0: 重設為 100%
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          setZoom(1.0);
+        }
+        break;
+
       default:
         break;
     }
-  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, play, pause, setCurrentFrame, removeClip, exitDirectorMode]);
+  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -110,6 +138,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     shortcuts: [
       { key: 'Space', description: '播放/暫停' },
       { key: '滾輪', description: '縮放時間軸' },
+      { key: '+/-', description: '放大/縮小時間軸' },
+      { key: 'Ctrl + 0', description: '重設縮放' },
       { key: 'Delete', description: '刪除選中片段' },
       { key: '←/→', description: '移動 1 幀' },
       { key: 'Shift + ←/→', description: '移動 10 幀' },
