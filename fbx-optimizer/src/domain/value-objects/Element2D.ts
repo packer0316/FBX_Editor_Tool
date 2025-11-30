@@ -6,7 +6,7 @@ export type ElementUnit = 'px' | 'percent';
 /**
  * 2D 元素類型
  */
-export type Element2DType = 'image' | 'text' | 'shape' | 'html';
+export type Element2DType = 'image' | 'text' | 'shape' | 'html' | 'spine';
 
 /**
  * 位置設定
@@ -131,9 +131,54 @@ export interface HtmlElement2D extends Element2DBase {
 }
 
 /**
+ * Spine 適應模式
+ */
+export type SpineFitMode = 'fill' | 'contain' | 'cover' | 'none';
+
+/**
+ * Spine 動畫元素
+ */
+export interface SpineElement2D extends Element2DBase {
+  type: 'spine';
+  
+  /** Spine 實例 ID（對應 SpineInstance） */
+  spineInstanceId: string;
+  
+  /** 當前播放的動畫名稱 */
+  currentAnimation: string | null;
+  
+  /** 動畫是否循環 */
+  loop: boolean;
+  
+  /** 播放速度（1.0 = 正常） */
+  timeScale: number;
+  
+  /** 當前 Skin 名稱 */
+  currentSkin: string | null;
+  
+  /** Spine 內部縮放比例（1.0 = 原始大小） */
+  scale: number;
+  
+  /** 適應模式：fill | contain | cover | none */
+  fitMode: SpineFitMode;
+  
+  /** 翻轉 X 軸 */
+  flipX: boolean;
+  
+  /** 翻轉 Y 軸 */
+  flipY: boolean;
+  
+  /** 是否正在播放 */
+  isPlaying: boolean;
+  
+  /** 當前播放時間（秒） */
+  currentTime: number;
+}
+
+/**
  * 2D 元素聯集型別
  */
-export type Element2D = TextElement2D | ImageElement2D | ShapeElement2D | HtmlElement2D;
+export type Element2D = TextElement2D | ImageElement2D | ShapeElement2D | HtmlElement2D | SpineElement2D;
 
 /**
  * 判斷元素是否為圖片
@@ -150,6 +195,12 @@ export const isTextElement = (element: Element2D): element is TextElement2D => e
  */
 export const isShapeElement = (element: Element2D): element is ShapeElement2D => element.type === 'shape';
 
+/**
+ * 判斷元素是否為 HTML
+ */
+export const isHtmlElement = (element: Element2D): element is HtmlElement2D => element.type === 'html';
 
-
-
+/**
+ * 判斷元素是否為 Spine 動畫
+ */
+export const isSpineElement = (element: Element2D): element is SpineElement2D => element.type === 'spine';

@@ -60,7 +60,6 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   
   const { handleTrackDragOver, handleTrackDrop } = useDragAndDrop({
     pixelsPerFrame,
-    enableSnap: true,
   });
 
   const handleRemoveTrack = useCallback(() => {

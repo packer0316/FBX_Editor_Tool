@@ -1786,6 +1786,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             >
                 <Canvas
                     shadows={enableShadows}
+                    dpr={2}
                     camera={{
                         position: [0, 2, 5],
                         fov: cameraSettings?.fov || 50,

@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ThemeStyle } from '../../../hooks/useTheme';
+import { useSpineInstanceCount } from '../../../stores/spineStore';
 
 // 擴展 Performance 介面以支援 Chrome 專用的 memory API
 interface PerformanceMemory {
@@ -63,6 +64,9 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
     rendererInfo,
     currentTheme
 }) => {
+    // Spine 實例數量
+    const spineInstanceCount = useSpineInstanceCount();
+    
     const [stats, setStats] = useState<PerformanceStats>({
         fps: 0,
         frameTime: 0,
@@ -216,6 +220,22 @@ const PerformanceMonitor: React.FC<PerformanceMonitorProps> = ({
                         {stats.textures}
                     </span>
                 </div>
+
+                {/* Spine 區塊（只在有 Spine 時顯示） */}
+                {spineInstanceCount > 0 && (
+                    <>
+                        {/* 分隔線 */}
+                        <div className="h-px bg-white/5 my-1"></div>
+
+                        {/* Spine Instances */}
+                        <div className="flex justify-between items-center">
+                            <span className="text-gray-400">Spine 2D</span>
+                            <span className="text-violet-400">
+                                {spineInstanceCount}
+                            </span>
+                        </div>
+                    </>
+                )}
             </div>
         </div>
     );

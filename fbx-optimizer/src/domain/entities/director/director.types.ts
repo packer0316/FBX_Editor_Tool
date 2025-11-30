@@ -29,6 +29,11 @@ export const MAX_ZOOM = 5.0;
 // ============================================================================
 
 /**
+ * 動畫來源類型
+ */
+export type AnimationSourceType = '3d-model' | 'spine';
+
+/**
  * 片段（Clip）- 動作在軌道上的實例
  */
 export interface DirectorClip {
@@ -38,12 +43,25 @@ export interface DirectorClip {
   /** 所屬軌道 ID */
   trackId: string;
   
-  // 來源資訊
+  /** 來源類型：3D 模型或 Spine */
+  sourceType: AnimationSourceType;
+  
+  // 來源資訊（3D 模型）
   /** 來源模型 ID */
   sourceModelId: string;
   
   /** 來源模型名稱 */
   sourceModelName: string;
+  
+  // 來源資訊（Spine）
+  /** Spine 實例 ID（sourceType === 'spine' 時使用） */
+  spineInstanceId?: string;
+  
+  /** Spine 元素所在的 Layer ID */
+  spineLayerId?: string;
+  
+  /** Spine 元素 ID */
+  spineElementId?: string;
   
   /** 動作名稱（來自 IdentifiableClip 的 displayName） */
   sourceAnimationName: string;
@@ -172,6 +190,9 @@ export interface DirectorUIState {
   
   /** 拖曳中的片段資料 */
   draggingClipData: DraggingClipData | null;
+  
+  /** 片段吸附（Clip Snapping）開關 */
+  clipSnapping: boolean;
 }
 
 /**
@@ -184,11 +205,23 @@ export interface DraggingClipData {
   /** 片段 ID（existing 類型時使用） */
   clipId?: string;
   
-  /** 來源模型 ID */
+  /** 來源類型：3D 模型或 Spine */
+  sourceType: AnimationSourceType;
+  
+  /** 來源模型 ID（3D 模型） */
   sourceModelId: string;
   
   /** 來源模型名稱 */
   sourceModelName: string;
+  
+  /** Spine 實例 ID（Spine 類型） */
+  spineInstanceId?: string;
+  
+  /** Spine 元素所在的 Layer ID */
+  spineLayerId?: string;
+  
+  /** Spine 元素 ID */
+  spineElementId?: string;
   
   /** 動作 ID */
   sourceAnimationId: string;
@@ -228,17 +261,27 @@ export interface ActionSourceItem {
  * 模型動作來源（用於左側面板的模型分組）
  */
 export interface ActionSource {
-  /** 模型 ID */
+  /** 來源類型 */
+  sourceType: AnimationSourceType;
+  
+  /** 模型/Spine ID */
   modelId: string;
   
-  /** 模型名稱 */
+  /** 模型/Spine 名稱 */
   modelName: string;
   
-  /** 模型顏色（用於片段顯示） */
+  /** 顏色（用於片段顯示） */
   modelColor: string;
   
   /** 動作列表 */
   clips: ActionSourceItem[];
+  
+  /** Spine 相關資訊（sourceType === 'spine' 時） */
+  spineInfo?: {
+    layerId: string;
+    elementId: string;
+    instanceId: string;
+  };
 }
 
 // ============================================================================
@@ -259,6 +302,7 @@ export type PlaybackMode = 'single' | 'playlist' | 'director';
  */
 export interface CreateClipParams {
   trackId: string;
+  sourceType: AnimationSourceType;
   sourceModelId: string;
   sourceModelName: string;
   sourceAnimationId: string;
@@ -266,6 +310,11 @@ export interface CreateClipParams {
   sourceAnimationDuration: number;
   startFrame: number;
   color?: string;
+  
+  /** Spine 相關（sourceType === 'spine' 時） */
+  spineInstanceId?: string;
+  spineLayerId?: string;
+  spineElementId?: string;
 }
 
 /**

@@ -1,8 +1,10 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, GripVertical, HelpCircle, ImageIcon, Layers, Lock, PlusCircle, Trash2, Type, Unlock, X } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, GripVertical, HelpCircle, ImageIcon, Layers, Lock, PlusCircle, Trash2, Type, Unlock, X, Bone } from 'lucide-react';
 import type { Layer } from '../../../../domain/value-objects/Layer';
-import type { Element2D, ImageElement2D, ShapeElement2D, TextElement2D } from '../../../../domain/value-objects/Element2D';
-import { isImageElement, isShapeElement, isTextElement } from '../../../../domain/value-objects/Element2D';
+import type { Element2D, ImageElement2D, ShapeElement2D, TextElement2D, SpineElement2D, SpineFitMode } from '../../../../domain/value-objects/Element2D';
+import { isImageElement, isShapeElement, isTextElement, isSpineElement } from '../../../../domain/value-objects/Element2D';
+import type { SpineInstance } from '../../../../domain/value-objects/SpineInstance';
+import { SpineFileUploader } from '../../spine-panel/components/SpineFileUploader';
 import { sortLayersByPriority } from '../../../../utils/layer/layerUtils';
 
 interface LayerManagerPanelProps {
@@ -22,6 +24,7 @@ interface LayerManagerPanelProps {
   onReorderLayer: (direction: 'front' | 'back', fromIndex: number, toIndex: number) => void;
   onAddTextElement: (layerId: string) => void;
   onAddImageElement: (layerId: string, dataUrl: string) => void;
+  onAddSpineElement?: (layerId: string, spineInstance: SpineInstance) => void;
   onReorderElement: (layerId: string, fromIndex: number, toIndex: number) => void;
   onUpdateElement: (layerId: string, elementId: string, updates: Partial<Element2D>) => void;
   onRemoveElement: (layerId: string, elementId: string) => void;
@@ -208,6 +211,12 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
 
   const updateShapeElement = (updates: Partial<ShapeElement2D>) => {
     if (isShapeElement(element)) {
+      onUpdate(updates);
+    }
+  };
+
+  const updateSpineElement = (updates: Partial<SpineElement2D>) => {
+    if (isSpineElement(element)) {
       onUpdate(updates);
     }
   };
@@ -587,6 +596,81 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
             </div>
           )}
 
+          {/* Spine 設定 */}
+          {isSpineElement(element) && (
+            <div className="space-y-3 pt-2 border-t border-white/5">
+              {/* 縮放 */}
+              <div>
+                <label className="text-[10px] text-gray-400 uppercase">
+                  縮放 {((element as SpineElement2D).scale ?? 1).toFixed(2)}x
+                </label>
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="flex-1 relative h-4 flex items-center">
+                    <div className="absolute w-full h-1.5 bg-gray-600/80 rounded-full" />
+                    <div 
+                      className="absolute h-1.5 bg-purple-500/60 rounded-full" 
+                      style={{ width: `${(((element as SpineElement2D).scale ?? 1) - 0.1) / 2.9 * 100}%` }}
+                    />
+                    <input
+                      type="range"
+                      min={0.1}
+                      max={3}
+                      step={0.05}
+                      draggable={false}
+                      className="absolute w-full h-4 cursor-pointer appearance-none bg-transparent
+                        [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-purple-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg
+                        [&::-moz-range-thumb]:bg-purple-400 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full"
+                      value={(element as SpineElement2D).scale ?? 1}
+                      onMouseDown={(e) => e.stopPropagation()}
+                      onDragStart={(e) => e.preventDefault()}
+                      onChange={(e) => updateSpineElement({ scale: parseFloat(e.target.value) })}
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-1 mt-2">
+                  {[0.5, 0.75, 1.0, 1.5, 2.0].map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => updateSpineElement({ scale: s })}
+                      className={`flex-1 py-1 text-[10px] rounded transition-colors ${
+                        Math.abs(((element as SpineElement2D).scale ?? 1) - s) < 0.01
+                          ? 'bg-purple-500/30 text-purple-200 border border-purple-400/50'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {s}x
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 適應模式 */}
+              <div>
+                <label className="text-[10px] text-gray-400 uppercase">適應模式</label>
+                <div className="grid grid-cols-4 gap-1 mt-1">
+                  {([
+                    { mode: 'fill' as SpineFitMode, label: 'Fill' },
+                    { mode: 'contain' as SpineFitMode, label: 'Contain' },
+                    { mode: 'cover' as SpineFitMode, label: 'Cover' },
+                    { mode: 'none' as SpineFitMode, label: 'None' },
+                  ]).map(({ mode, label }) => (
+                    <button
+                      key={mode}
+                      onClick={() => updateSpineElement({ fitMode: mode })}
+                      className={`py-1 text-[10px] rounded transition-colors ${
+                        ((element as SpineElement2D).fitMode ?? 'fill') === mode
+                          ? 'bg-purple-500/30 text-purple-200 border border-purple-400/50'
+                          : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
         </div>
       )}
       </div>
@@ -613,6 +697,7 @@ const LayerCard: React.FC<{
   onUpdateLayerOpacity: (layerId: string, opacity: number) => void;
   onAddTextElement: (layerId: string) => void;
   onTriggerAddImage: (layerId: string) => void;
+  onTriggerAddSpine?: (layerId: string) => void;
   onDeleteLayer: (layerId: string) => void;
   onToggleExpand: (layerId: string) => void;
   children: React.ReactNode;
@@ -632,6 +717,7 @@ const LayerCard: React.FC<{
   onUpdateLayerOpacity,
   onAddTextElement,
   onTriggerAddImage,
+  onTriggerAddSpine,
   onDeleteLayer,
   onToggleExpand,
   children
@@ -703,24 +789,28 @@ const LayerCard: React.FC<{
       </div>
     </div>
 
-    <div className="grid grid-cols-3 gap-2 mt-3 text-xs">
-      <div className="flex flex-col gap-1">
-        <span className="text-gray-400">Priority</span>
+    {/* 屬性區塊 - 緊湊橫向佈局（阻止拖曳事件冒泡） */}
+    <div 
+      className="flex items-center gap-4 mt-3 text-xs"
+      onMouseDown={(event) => event.stopPropagation()}
+      onDragStart={(event) => event.preventDefault()}
+    >
+      {/* Priority */}
+      <div className="flex items-center gap-2">
+        <span className="text-gray-500">層級</span>
         <input
           type="number"
-          className="bg-black/40 rounded px-2 py-1 text-white"
+          className="w-12 bg-black/40 rounded px-2 py-1 text-white text-center"
           defaultValue={layer.priority}
           key={`priority-${layer.id}-${layer.priority}`}
           onBlur={(event) => {
             event.stopPropagation();
             const value = event.target.value.trim();
-            // 空值時恢復原值
             if (value === '') {
               event.target.value = String(layer.priority);
               return;
             }
             const nextValue = Number(value);
-            // 無效值或 0（保留給 3D 層）時恢復原值
             if (Number.isNaN(nextValue) || nextValue === 0) {
               event.target.value = String(layer.priority);
               return;
@@ -735,21 +825,37 @@ const LayerCard: React.FC<{
           onClick={(event) => event.stopPropagation()}
         />
       </div>
-      <div className="flex flex-col gap-1">
-        <span className="text-gray-400">Opacity {Math.round(layer.opacity * 100)}%</span>
-        <div className="flex items-center h-[26px]">
+
+      {/* 分隔線 */}
+      <div className="w-px h-4 bg-white/10" />
+
+      {/* Opacity */}
+      <div className="flex items-center gap-2 flex-1">
+        <span className="text-gray-500">透明</span>
+        <div className="flex-1 relative h-4 flex items-center">
+          {/* 底色軌道 */}
+          <div className="absolute w-full h-1.5 bg-gray-600/80 rounded-full" />
+          {/* 進度軌道 */}
+          <div 
+            className="absolute h-1.5 bg-blue-500/60 rounded-full" 
+            style={{ width: `${layer.opacity * 100}%` }}
+          />
+          {/* 滑桿 */}
           <input
             type="range"
             min={0}
             max={1}
             step={0.05}
-            className="w-full h-2 rounded-full cursor-pointer
-              [&::-webkit-slider-runnable-track]:bg-gray-600 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:h-2
-              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:mt-[-4px] [&::-webkit-slider-thumb]:shadow-md
-              [&::-moz-range-track]:bg-gray-600 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:h-2
-              [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full"
+            draggable={false}
+            className="absolute w-full h-4 cursor-pointer appearance-none bg-transparent
+              [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:bg-blue-400 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:cursor-pointer
+              [&::-moz-range-thumb]:bg-blue-400 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:cursor-pointer
+              [&::-webkit-slider-runnable-track]:bg-transparent
+              [&::-moz-range-track]:bg-transparent"
             value={layer.opacity}
             onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onDragStart={(event) => event.preventDefault()}
             onChange={(event) => {
               event.stopPropagation();
               const nextValue = Number(event.target.value);
@@ -760,28 +866,49 @@ const LayerCard: React.FC<{
             }}
           />
         </div>
+        <span className="text-gray-400 w-8 text-right">{Math.round(layer.opacity * 100)}%</span>
       </div>
-      <div className="flex items-end justify-end gap-2">
+
+      {/* 分隔線 */}
+      <div className="w-px h-4 bg-white/10" />
+
+      {/* 添加元素按鈕 - 圖標式 */}
+      <div className="flex items-center gap-1">
         <button
           type="button"
-          className="px-2 py-1 rounded bg-white/5 text-xs flex items-center gap-1"
+          className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
           onClick={(event) => {
             event.stopPropagation();
             onAddTextElement(layer.id);
           }}
+          title="添加文字"
         >
-          <Type size={14} /> 文字
+          <Type size={14} />
         </button>
         <button
           type="button"
-          className="px-2 py-1 rounded bg-white/5 text-xs flex items-center gap-1"
+          className="p-1.5 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
           onClick={(event) => {
             event.stopPropagation();
             onTriggerAddImage(layer.id);
           }}
+          title="添加圖片"
         >
-          <ImageIcon size={14} /> 圖片
+          <ImageIcon size={14} />
         </button>
+        {onTriggerAddSpine && (
+          <button
+            type="button"
+            className="p-1.5 rounded bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 transition-colors"
+            onClick={(event) => {
+              event.stopPropagation();
+              onTriggerAddSpine(layer.id);
+            }}
+            title="添加 Spine"
+          >
+            <Bone size={14} />
+          </button>
+        )}
       </div>
     </div>
 
@@ -806,6 +933,7 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
   onReorderLayer,
   onAddTextElement,
   onAddImageElement,
+  onAddSpineElement,
   onReorderElement,
   onUpdateElement,
   onRemoveElement
@@ -822,6 +950,8 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
 
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [pendingImageLayerId, setPendingImageLayerId] = useState<string | null>(null);
+  const [pendingSpineLayerId, setPendingSpineLayerId] = useState<string | null>(null);
+  const [showSpineUploader, setShowSpineUploader] = useState(false);
   const [showHint, setShowHint] = useState(false);
   const [expandedElementId, setExpandedElementId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -859,6 +989,24 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
     setPendingImageLayerId(layerId);
     fileInputRef.current?.click();
   };
+
+  const triggerSpineUpload = useCallback((layerId: string) => {
+    setPendingSpineLayerId(layerId);
+    setShowSpineUploader(true);
+  }, []);
+
+  const handleSpineUploadSuccess = useCallback((spineInstance: SpineInstance) => {
+    if (pendingSpineLayerId && onAddSpineElement) {
+      onAddSpineElement(pendingSpineLayerId, spineInstance);
+    }
+    setShowSpineUploader(false);
+    setPendingSpineLayerId(null);
+  }, [pendingSpineLayerId, onAddSpineElement]);
+
+  const handleSpineUploadClose = useCallback(() => {
+    setShowSpineUploader(false);
+    setPendingSpineLayerId(null);
+  }, []);
 
   const handleFileChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -947,6 +1095,7 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
             onUpdateLayerOpacity={onUpdateLayerOpacity}
             onAddTextElement={onAddTextElement}
             onTriggerAddImage={triggerImageUpload}
+            onTriggerAddSpine={onAddSpineElement ? triggerSpineUpload : undefined}
             onDeleteLayer={onDeleteLayer}
             onToggleExpand={onToggleExpand}
           >
@@ -1056,6 +1205,32 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
         className="hidden"
         onChange={handleFileChange}
       />
+
+      {/* Spine 上傳模態框 */}
+      {showSpineUploader && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="relative w-full max-w-md mx-4 bg-gray-900 rounded-2xl border border-white/10 shadow-2xl">
+            <div className="flex items-center justify-between p-4 border-b border-white/10">
+              <h3 className="text-lg font-medium text-white flex items-center gap-2">
+                <Bone size={20} className="text-purple-400" />
+                新增 Spine 動畫
+              </h3>
+              <button
+                onClick={handleSpineUploadClose}
+                className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-4">
+              <SpineFileUploader
+                onUploadSuccess={handleSpineUploadSuccess}
+                onUploadError={(err) => console.error('[LayerManagerPanel] Spine 載入失敗:', err)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

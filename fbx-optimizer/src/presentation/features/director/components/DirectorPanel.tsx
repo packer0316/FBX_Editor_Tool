@@ -2,8 +2,8 @@
  * DirectorPanel - 導演模式主面板
  */
 
-import React from 'react';
-import { X, Keyboard } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, Keyboard, Magnet, AlertCircle } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ActionSourcePanel } from './ActionSourcePanel';
 import { TimelineEditor } from './TimelineEditor';
@@ -11,6 +11,56 @@ import { PlaybackControls } from './PlaybackControls';
 import { useTimelinePlayback } from '../hooks/useTimelinePlayback';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { ActionSource } from '../../../../domain/entities/director/director.types';
+
+// 提示按鈕組件
+const HintButton: React.FC = () => {
+  const [showHint, setShowHint] = useState(false);
+  
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setShowHint(!showHint)}
+        className={`p-1.5 rounded-lg transition-colors ${
+          showHint
+            ? 'bg-orange-500/20 text-orange-400'
+            : 'hover:bg-white/10 text-gray-400 hover:text-white'
+        }`}
+        title="使用提示"
+      >
+        <AlertCircle size={16} />
+      </button>
+      
+      {/* 提示內容 */}
+      {showHint && (
+        <>
+          {/* 背景遮罩 */}
+          <div 
+            className="fixed inset-0 z-40"
+            onClick={() => setShowHint(false)}
+          />
+          {/* 提示框 */}
+          <div className="absolute right-0 top-full mt-2 w-72 bg-gray-800/95 backdrop-blur-lg border border-orange-500/30 rounded-lg shadow-xl p-4 z-50">
+            <div className="flex items-start gap-2">
+              <AlertCircle size={18} className="text-orange-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <div className="text-sm text-orange-400 font-medium mb-2">使用提示</div>
+                <p className="text-xs text-gray-300 leading-relaxed">
+                  若 Spine 兩個動作緊貼，可能造成播放發生錯誤。若有錯誤，請在動作之間保留 <span className="text-orange-400 font-semibold">1 空白幀</span>。
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowHint(false)}
+              className="mt-3 w-full py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-xs rounded transition-colors"
+            >
+              知道了
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+};
 
 interface DirectorPanelProps {
   /** 動作來源列表（從模型中收集） */
@@ -26,7 +76,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
   onUpdateModelAnimation,
   onResizeHandleMouseDown,
 }) => {
-  const { isDirectorMode, exitDirectorMode } = useDirectorStore();
+  const { isDirectorMode, exitDirectorMode, ui, toggleClipSnapping } = useDirectorStore();
 
   // 使用播放控制 Hook（透過 EventBus 發送事件，同時保持向後兼容 callback）
   const { activeClips } = useTimelinePlayback({
@@ -60,6 +110,22 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
           </span>
         </div>
         <div className="flex items-center gap-2">
+          {/* 片段吸附開關 */}
+          <button
+            onClick={toggleClipSnapping}
+            className={`p-1.5 rounded-lg transition-colors ${
+              ui.clipSnapping
+                ? 'bg-amber-500/20 text-amber-400'
+                : 'bg-white/5 text-gray-500 hover:bg-white/10 hover:text-gray-400'
+            }`}
+            title={ui.clipSnapping ? '關閉片段吸附' : '開啟片段吸附'}
+          >
+            <Magnet size={16} />
+          </button>
+          
+          {/* 提示按鈕 */}
+          <HintButton />
+          
           {/* 快捷鍵提示 */}
           <div className="group relative">
             <button

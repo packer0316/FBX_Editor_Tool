@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2015",
+    "module": "none",
+    "lib": ["ES2015", "DOM", "WebWorker"],
+    "outFile": "./spine-runtime.js",
+    "declaration": true,
+    "sourceMap": false,
+    "strict": false,
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "removeComments": true
+  },
+  "include": [
+    "core/src/**/*.ts",
+    "canvas/src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts"
+  ]
+}

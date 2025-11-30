@@ -3,6 +3,7 @@
  */
 
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
+import { Box, Bone } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import type { DirectorClip } from '../../../../domain/entities/director/director.types';
 import { snapToGrid, snapToClipEdges } from '../../../../utils/director/directorUtils';
@@ -35,8 +36,8 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     
     let isSnapped = false;
     
-    // 拖曳時應用吸附
-    if (isDragging) {
+    // 拖曳時應用吸附（只有開啟吸附功能時才生效）
+    if (isDragging && ui.clipSnapping) {
       const snapThreshold = 5; // 5 幀內吸附
       const snappedFrame = snapToClipEdges(frame, tracks, snapThreshold, clip.id);
       if (snappedFrame !== frame) {
@@ -49,7 +50,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     }
     
     return { displayFrame: frame, showSnapIndicator: isSnapped };
-  }, [isDragging, dragOffset, pixelsPerFrame, clip.startFrame, clip.id, tracks]);
+  }, [isDragging, dragOffset, pixelsPerFrame, clip.startFrame, clip.id, tracks, ui.clipSnapping]);
   
   const left = displayFrame * pixelsPerFrame;
 
@@ -88,12 +89,17 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     const handleMouseUp = () => {
       setIsDragging(false);
       
-      // 使用當前 displayFrame 作為最終位置（已經應用吸附）
+      // 計算最終位置
       const rawFrame = Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame));
-      const snapThreshold = 5;
-      let finalFrame = snapToClipEdges(rawFrame, tracks, snapThreshold, clip.id);
-      if (finalFrame === rawFrame) {
-        finalFrame = snapToGrid(rawFrame, 1);
+      let finalFrame = rawFrame;
+      
+      // 只有開啟吸附功能時才應用吸附
+      if (ui.clipSnapping) {
+        const snapThreshold = 5;
+        finalFrame = snapToClipEdges(rawFrame, tracks, snapThreshold, clip.id);
+        if (finalFrame === rawFrame) {
+          finalFrame = snapToGrid(rawFrame, 1);
+        }
       }
       
       // 只有位置改變才更新
@@ -115,7 +121,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks]);
+  }, [isDragging, dragOffset, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks, ui.clipSnapping]);
 
   return (
     <>
@@ -152,6 +158,13 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
           transition: isDragging ? 'none' : undefined,
         }}
       >
+      {/* 來源類型圖標 */}
+      {clip.sourceType === 'spine' ? (
+        <Bone size={12} className="flex-shrink-0 text-white/80 mr-1.5 pointer-events-none" />
+      ) : (
+        <Box size={12} className="flex-shrink-0 text-white/80 mr-1.5 pointer-events-none" />
+      )}
+      
       <span className="text-xs text-white font-medium truncate drop-shadow-sm pointer-events-none">
         {clip.sourceModelName} - {clip.sourceAnimationName}
       </span>

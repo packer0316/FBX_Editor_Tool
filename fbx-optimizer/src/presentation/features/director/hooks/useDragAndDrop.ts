@@ -9,7 +9,6 @@ import type { DraggingClipData } from '../../../../domain/entities/director/dire
 
 interface UseDragAndDropOptions {
   pixelsPerFrame: number;
-  enableSnap?: boolean;
   snapThreshold?: number;
 }
 
@@ -43,7 +42,7 @@ interface UseDragAndDropReturn {
 }
 
 export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropReturn {
-  const { pixelsPerFrame, enableSnap = true, snapThreshold = 5 } = options;
+  const { pixelsPerFrame, snapThreshold = 5 } = options;
   
   const {
     ui,
@@ -66,7 +65,8 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
     const x = clientX - rect.left + ui.scrollOffsetX;
     let frame = Math.max(0, Math.round(x / pixelsPerFrame));
     
-    if (enableSnap) {
+    // 使用 store 中的 clipSnapping 狀態
+    if (ui.clipSnapping) {
       // 先嘗試吸附到片段邊緣
       const snappedToEdge = snapToClipEdges(
         frame,
@@ -84,7 +84,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
     }
     
     return frame;
-  }, [pixelsPerFrame, enableSnap, snapThreshold, tracks, ui.draggingClipData?.clipId, ui.scrollOffsetX]);
+  }, [pixelsPerFrame, snapThreshold, tracks, ui.clipSnapping, ui.draggingClipData?.clipId, ui.scrollOffsetX]);
 
   // 動作來源拖曳開始
   const handleSourceDragStart = useCallback((
@@ -183,6 +183,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
         // 新增片段
         const result = addClip({
           trackId,
+          sourceType: data.sourceType ?? '3d-model',
           sourceModelId: data.sourceModelId,
           sourceModelName: data.sourceModelName,
           sourceAnimationId: data.sourceAnimationId,
@@ -190,6 +191,12 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
           sourceAnimationDuration: data.durationFrames,
           startFrame,
           color: data.color,
+          // Spine 特有屬性
+          ...(data.sourceType === 'spine' && {
+            spineInstanceId: data.spineInstanceId,
+            spineLayerId: data.spineLayerId,
+            spineElementId: data.spineElementId,
+          }),
         });
         console.log('[useDragAndDrop] addClip result:', result);
       } else if (data.type === 'existing' && data.clipId) {

@@ -11,8 +11,10 @@ import EffectTestPanel, { type EffectItem } from './presentation/features/effect
 import ModelManagerPanel from './presentation/features/model-manager/components/ModelManagerPanel';
 import { DirectorPanel } from './presentation/features/director';
 import { useIsDirectorMode, useDirectorStore } from './presentation/stores/directorStore';
+import { useSpineStore } from './presentation/stores/spineStore';
 import { useDirectorAudioTrigger } from './presentation/features/director/hooks/useDirectorAudioTrigger';
 import { useDirectorEffectTrigger } from './presentation/features/director/hooks/useDirectorEffectTrigger';
+import { useDirectorSpineTrigger } from './presentation/features/director/hooks/useDirectorSpineTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -23,7 +25,8 @@ import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
 import LeftToolbar from './presentation/features/scene-viewer/components/LeftToolbar';
 import type { Layer } from './domain/value-objects/Layer';
-import type { Element2D } from './domain/value-objects/Element2D';
+import type { Element2D, SpineElement2D } from './domain/value-objects/Element2D';
+import type { SpineInstance } from './domain/value-objects/SpineInstance';
 
 // Use Cases
 import { LoadModelUseCase } from './application/use-cases/LoadModelUseCase';
@@ -64,6 +67,13 @@ import { Layer2DRenderer } from './presentation/features/layer-composer/componen
 
 // Performance Monitor
 import { PerformanceMonitor, type RendererInfo } from './presentation/features/performance-monitor';
+
+// Spine Panel
+import { SpineInspectorPanel } from './presentation/features/spine-panel';
+import { isSpineElement } from './domain/value-objects/Element2D';
+
+// Toast 通知
+import { ToastContainer } from './presentation/components/Toast';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
@@ -153,40 +163,6 @@ function App() {
 
   // Theme
   const { themeMode, setThemeMode, currentTheme } = useTheme('dark');
-
-  // Director Mode: 收集所有模型的動作來源
-  const MODEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
-  const actionSources = useMemo<ActionSource[]>(() => {
-    return models.map((m, index) => {
-      // 收集所有 clips 並去重（避免 originalClip 和 masterClip 重複）
-      const allClips = [
-        m.originalClip,
-        m.masterClip,
-        ...m.createdClips,
-      ].filter((c): c is IdentifiableClip => c !== null);
-
-      // 用 clipId 去重
-      const seenIds = new Set<string>();
-      const uniqueClips = allClips.filter(c => {
-        const id = getClipId(c);
-        if (seenIds.has(id)) return false;
-        seenIds.add(id);
-        return true;
-      });
-
-      return {
-        modelId: m.id,
-        modelName: m.name || `Model ${index + 1}`,
-        modelColor: MODEL_COLORS[index % MODEL_COLORS.length],
-        clips: uniqueClips.map(c => ({
-          clipId: getClipId(c),
-          displayName: getClipDisplayName(c),
-          durationFrames: Math.round(c.duration * 30),
-          durationSeconds: c.duration,
-        })),
-      };
-    });
-  }, [models]);
 
   // Shader 功能狀態
   const [shaderGroups, setShaderGroups] = useState<ShaderGroup[]>([]);
@@ -283,6 +259,109 @@ function App() {
   const [is2DFrontEnabled, setIs2DFrontEnabled] = useState(true);
   const [is2DBackEnabled, setIs2DBackEnabled] = useState(true);
   const [is3DEnabled, setIs3DEnabled] = useState(true);
+
+  // Spine 實例管理（使用 Zustand Store）
+  const spineInstances = useSpineStore((state) => state.instances);
+  const addSpineInstance = useSpineStore((state) => state.addInstance);
+  const removeSpineInstance = useSpineStore((state) => state.removeInstance);
+  const cleanupAllSpineInstances = useSpineStore((state) => state.cleanupAll);
+
+  // Spine 資源清理（應用關閉時）
+  useEffect(() => {
+    return () => {
+      console.log('[App] 清理所有 Spine 資源...');
+      cleanupAllSpineInstances();
+    };
+  }, [cleanupAllSpineInstances]);
+
+  // Director Mode: Spine 動畫觸發
+  useDirectorSpineTrigger({
+    enabled: isDirectorMode,
+    layers,
+    onUpdateSpineElement: (layerId, elementId, updates) => {
+      setLayers(prev => prev.map(layer => {
+        if (layer.id !== layerId) return layer;
+        return {
+          ...layer,
+          children: layer.children.map(el => 
+            el.id === elementId ? { ...el, ...updates } : el
+          ),
+        };
+      }));
+    },
+  });
+
+  // Director Mode: 收集所有模型和 Spine 的動作來源
+  const MODEL_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#84CC16'];
+  const SPINE_COLORS = ['#9333EA', '#A855F7', '#C084FC', '#D8B4FE', '#7C3AED', '#8B5CF6'];
+  
+  const actionSources = useMemo<ActionSource[]>(() => {
+    // 3D 模型動作來源
+    const modelSources: ActionSource[] = models.map((m, index) => {
+      // 收集所有 clips 並去重（避免 originalClip 和 masterClip 重複）
+      const allClips = [
+        m.originalClip,
+        m.masterClip,
+        ...m.createdClips,
+      ].filter((c): c is IdentifiableClip => c !== null);
+
+      // 用 clipId 去重
+      const seenIds = new Set<string>();
+      const uniqueClips = allClips.filter(c => {
+        const id = getClipId(c);
+        if (seenIds.has(id)) return false;
+        seenIds.add(id);
+        return true;
+      });
+
+      return {
+        sourceType: '3d-model' as const,
+        modelId: m.id,
+        modelName: m.name || `Model ${index + 1}`,
+        modelColor: MODEL_COLORS[index % MODEL_COLORS.length],
+        clips: uniqueClips.map(c => ({
+          clipId: getClipId(c),
+          displayName: getClipDisplayName(c),
+          durationFrames: Math.round(c.duration * 30),
+          durationSeconds: c.duration,
+        })),
+      };
+    });
+
+    // Spine 動作來源
+    const spineSources: ActionSource[] = [];
+    let spineIndex = 0;
+    
+    layers.forEach(layer => {
+      layer.children.forEach(element => {
+        if (isSpineElement(element)) {
+          const spineInstance = spineInstances.get(element.spineInstanceId);
+          if (spineInstance) {
+            spineSources.push({
+              sourceType: 'spine' as const,
+              modelId: element.spineInstanceId,
+              modelName: spineInstance.name || element.name,
+              modelColor: SPINE_COLORS[spineIndex % SPINE_COLORS.length],
+              clips: spineInstance.skeletonInfo.animations.map(anim => ({
+                clipId: anim.name,
+                displayName: anim.name,
+                durationFrames: anim.frameCount,
+                durationSeconds: anim.duration,
+              })),
+              spineInfo: {
+                layerId: layer.id,
+                elementId: element.id,
+                instanceId: element.spineInstanceId,
+              },
+            });
+            spineIndex++;
+          }
+        }
+      });
+    });
+
+    return [...modelSources, ...spineSources];
+  }, [models, layers, spineInstances]);
 
   // Aspect Ratio state
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('free');
@@ -458,6 +537,9 @@ function App() {
 
       // 設為活動模型
       setActiveModelId(instance.id);
+      
+      // 互斥邏輯：選中 3D 模型時，取消 2D 元素選中
+      setActiveElementId(null);
 
       console.log('✅ 模型載入成功:', instance.name);
     } catch (error) {
@@ -1011,8 +1093,10 @@ function App() {
     if (newElementId) {
       setActiveLayerId(layerId);
       setActiveElementId(newElementId);
+      // 互斥邏輯：選中 2D 元素時，取消 3D 模型選中
+      setActiveModelId(null);
     }
-  }, []);
+  }, [setActiveModelId]);
 
   const handleAddImageElement = useCallback((layerId: string, dataUrl: string) => {
     let newElementId: string | null = null;
@@ -1030,18 +1114,93 @@ function App() {
     if (newElementId) {
       setActiveLayerId(layerId);
       setActiveElementId(newElementId);
+      // 互斥邏輯：選中 2D 元素時，取消 3D 模型選中
+      setActiveModelId(null);
     }
-  }, []);
+  }, [setActiveModelId]);
 
   const handleSelectElement = useCallback((layerId: string, elementId: string) => {
     setActiveLayerId(layerId);
     // 空字串表示取消選取
-    setActiveElementId(elementId || null);
-  }, []);
+    const newElementId = elementId || null;
+    setActiveElementId(newElementId);
+    
+    // 互斥邏輯：選中 2D 元素時，取消 3D 模型選中
+    if (newElementId) {
+      setActiveModelId(null);
+    }
+  }, [setActiveModelId]);
 
   const handleReorderElement = useCallback((layerId: string, fromIndex: number, toIndex: number) => {
     setLayers(prev => ReorderElement2DUseCase.execute(prev, { layerId, fromIndex, toIndex }));
   }, []);
+
+  /** 新增 Spine 元素到 2D Layer */
+  const handleAddSpineElement = useCallback((layerId: string, spineInstance: SpineInstance) => {
+    // 儲存 Spine 實例到 Store
+    addSpineInstance(spineInstance);
+
+    let newElementId: string | null = null;
+    setLayers(prev => {
+      const target = prev.find(layer => layer.id === layerId && layer.type === '2d');
+      if (!target) return prev;
+      
+      // 建立 Spine 元素
+      const now = Date.now();
+      const spineElement: SpineElement2D = {
+        id: `spine_element_${now}_${Math.random().toString(36).substr(2, 9)}`,
+        name: spineInstance.name,
+        type: 'spine',
+        visible: true,
+        locked: false,
+        opacity: 1,
+        zIndex: target.children.length,
+        position: { x: 50, y: 50, unit: 'percent' },
+        size: { 
+          width: 1920, 
+          height: 1080, 
+          unit: 'px' 
+        },
+        rotation: 0,
+        createdAt: now,
+        updatedAt: now,
+        // Spine 特有屬性
+        spineInstanceId: spineInstance.id,
+        currentAnimation: spineInstance.currentAnimation,
+        loop: true,
+        timeScale: 1.0,
+        currentSkin: spineInstance.currentSkin,
+        scale: 1.0,
+        fitMode: 'none',
+        flipX: false,
+        flipY: false,
+        isPlaying: false,
+        currentTime: 0,
+      };
+      
+      newElementId = spineElement.id;
+      
+      return prev.map(layer => {
+        if (layer.id === layerId) {
+          return {
+            ...layer,
+            children: [...layer.children, spineElement],
+            updatedAt: now,
+          };
+        }
+        return layer;
+      });
+    });
+    
+    if (newElementId) {
+      setActiveLayerId(layerId);
+      setActiveElementId(newElementId);
+      // 互斥邏輯：選中 2D 元素時，取消 3D 模型選中
+      setActiveModelId(null);
+    }
+    
+    console.log(`[App] 新增 Spine 元素: ${spineInstance.name}, 尺寸: ${Math.min(viewerSize.width, viewerSize.height)}px`);
+  }, [addSpineInstance, setActiveModelId, viewerSize.width, viewerSize.height]);
 
   /** 透過 layerId 和 elementId 更新元素（供 LayerManagerPanel 內嵌編輯使用） */
   const handleUpdateElementById = useCallback((layerId: string, elementId: string, updates: Partial<Element2D>) => {
@@ -1055,17 +1214,25 @@ function App() {
 
   /** 透過 layerId 和 elementId 移除元素（供 LayerManagerPanel 內嵌編輯使用） */
   const handleRemoveElementById = useCallback((layerId: string, elementId: string) => {
-    setLayers(prev => {
-      const layer = prev.find(l => l.id === layerId);
-      const element = layer?.children.find(e => e.id === elementId);
-      if (!layer || !element || element.locked) return prev;
-      return RemoveElement2DUseCase.execute(prev, { layerId, elementId });
-    });
+    // 先找到要移除的元素（用於清理 Spine）
+    const layer = layers.find(l => l.id === layerId);
+    const element = layer?.children.find(e => e.id === elementId);
+    
+    if (!layer || !element || element.locked) return;
+    
+    // 如果是 Spine 元素，清理 Spine 實例
+    if (isSpineElement(element) && element.spineInstanceId) {
+      removeSpineInstance(element.spineInstanceId);
+    }
+    
+    // 移除元素
+    setLayers(prev => RemoveElement2DUseCase.execute(prev, { layerId, elementId }));
+    
     // 如果移除的是當前選中的元素，清除選擇
     if (activeElementId === elementId) {
       setActiveElementId(null);
     }
-  }, [activeElementId]);
+  }, [layers, activeElementId, removeSpineInstance]);
 
   const handleToggle2DFront = useCallback(() => setIs2DFrontEnabled(prev => !prev), []);
   const handleToggle2DBack = useCallback(() => setIs2DBackEnabled(prev => !prev), []);
@@ -1283,7 +1450,7 @@ function App() {
                       isActiveLayer={layer.id === activeLayerId}
                       activeElementId={activeElementId}
                       onSelectElement={isPointerEditing ? handleSelectElement : undefined}
-                      onUpdateElement={isPointerEditing ? handleUpdateElementById : undefined}
+                      onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById : undefined}
                       pointerEnabled={isPointerEditing}
                     />
                   ))}
@@ -1366,7 +1533,7 @@ function App() {
                       isActiveLayer={layer.id === activeLayerId}
                       activeElementId={activeElementId}
                       onSelectElement={isPointerEditing ? handleSelectElement : undefined}
-                      onUpdateElement={isPointerEditing ? handleUpdateElementById : undefined}
+                      onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById : undefined}
                       pointerEnabled={isPointerEditing}
                     />
                   ))}
@@ -1390,7 +1557,7 @@ function App() {
 
           {/* 底部：模型檢測與動畫工具 */}
           <div
-            className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative`}
+            className={`${currentTheme.panelBg} border-t ${currentTheme.panelBorder} relative flex flex-col`}
             style={{ height: isDirectorMode ? `${directorPanelHeight}px` : `${panelHeight}px` }}
           >
             {/* Director Mode Panel */}
@@ -1409,44 +1576,69 @@ function App() {
                   <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
                 </div>
                 
-                <ModelInspector
-              model={model}
-              clip={optimizedClip}
-              currentTime={currentTime}
-              duration={duration}
-              isPlaying={isPlaying}
-              onPlayPause={handlePlayPause}
-              onSeek={handleSeek}
-              onCreateClip={handleCreateClip}
-              createdClips={createdClips}
-              onSelectClip={handleSelectClip}
-              onDeleteCreatedClip={handleDeleteCreatedClip}
-              playlist={playlist}
-              isPlaylistPlaying={isPlaylistPlaying}
-              currentPlaylistIndex={currentPlaylistIndex}
-              onAddToPlaylist={handleAddToPlaylist}
-              onRemoveFromPlaylist={handleRemoveFromPlaylist}
-              onReorderPlaylist={handleReorderPlaylist}
-              onPlayPlaylist={handlePlayPlaylist}
-              onPausePlaylist={handlePausePlaylist}
+                {/* 根據選中的元素類型顯示不同的面板 */}
+                {(() => {
+                  // 檢查是否選中了 Spine 元素
+                  const activeLayer = layers.find(l => l.id === activeLayerId);
+                  const activeElement = activeLayer?.children.find(e => e.id === activeElementId);
+                  
+                  if (activeElement && isSpineElement(activeElement)) {
+                    const spineInstance = spineInstances.get(activeElement.spineInstanceId);
+                    return (
+                      <div className="p-4 overflow-y-auto flex-1">
+                        <SpineInspectorPanel
+                          element={activeElement}
+                          spineInstance={spineInstance ?? null}
+                          onUpdateElement={(updates) => {
+                            handleUpdateElementById(activeLayerId, activeElement.id, updates);
+                          }}
+                        />
+                      </div>
+                    );
+                  }
 
-              isLoopEnabled={isLoopEnabled}
-              onToggleLoop={() => {
-                // 沒有模型時不執行任何操作
-                if (!model || !optimizedClip) {
-                  return;
-                }
-                const newLoopState = !isLoopEnabled;
-                setIsLoopEnabled(newLoopState);
-                // 同步更新 activeModel 的循環設置
-                if (activeModelId) {
-                  updateModel(activeModelId, { isLoopEnabled: newLoopState });
-                }
-              }}
-              audioTracks={audioTracks}
-              effects={effects}
-              theme={currentTheme}
-            />
+                  // 預設顯示 ModelInspector
+                  return (
+                    <ModelInspector
+                      model={model}
+                      clip={optimizedClip}
+                      currentTime={currentTime}
+                      duration={duration}
+                      isPlaying={isPlaying}
+                      onPlayPause={handlePlayPause}
+                      onSeek={handleSeek}
+                      onCreateClip={handleCreateClip}
+                      createdClips={createdClips}
+                      onSelectClip={handleSelectClip}
+                      onDeleteCreatedClip={handleDeleteCreatedClip}
+                      playlist={playlist}
+                      isPlaylistPlaying={isPlaylistPlaying}
+                      currentPlaylistIndex={currentPlaylistIndex}
+                      onAddToPlaylist={handleAddToPlaylist}
+                      onRemoveFromPlaylist={handleRemoveFromPlaylist}
+                      onReorderPlaylist={handleReorderPlaylist}
+                      onPlayPlaylist={handlePlayPlaylist}
+                      onPausePlaylist={handlePausePlaylist}
+
+                      isLoopEnabled={isLoopEnabled}
+                      onToggleLoop={() => {
+                        // 沒有模型時不執行任何操作
+                        if (!model || !optimizedClip) {
+                          return;
+                        }
+                        const newLoopState = !isLoopEnabled;
+                        setIsLoopEnabled(newLoopState);
+                        // 同步更新 activeModel 的循環設置
+                        if (activeModelId) {
+                          updateModel(activeModelId, { isLoopEnabled: newLoopState });
+                        }
+                      }}
+                      audioTracks={audioTracks}
+                      effects={effects}
+                      theme={currentTheme}
+                    />
+                  );
+                })()}
               </>
             )}
           </div>
@@ -1548,6 +1740,7 @@ function App() {
                   onReorderLayer={handleReorderLayer}
                   onAddTextElement={handleAddTextElement}
                   onAddImageElement={handleAddImageElement}
+                  onAddSpineElement={handleAddSpineElement}
                   onReorderElement={handleReorderElement}
                   onUpdateElement={handleUpdateElementById}
                   onRemoveElement={handleRemoveElementById}
@@ -1562,6 +1755,11 @@ function App() {
                 onSelectModel={(id) => {
                   // 支援取消選中（id 為 null）
                   setActiveModelId(id);
+                  
+                  // 互斥邏輯：選中 3D 模型時，取消 2D 元素選中
+                  if (id) {
+                    setActiveElementId(null);
+                  }
                 }}
                 onAddModel={handleFileUpload}
                 onRemoveModel={(id) => {
@@ -1651,6 +1849,9 @@ function App() {
           </div>
         </div>
       </div >
+      
+      {/* Toast 通知容器 */}
+      <ToastContainer />
     </div >
   );
 }

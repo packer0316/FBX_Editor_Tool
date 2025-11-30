@@ -261,6 +261,7 @@ function PreviewCanvas({
 
   return (
     <Canvas
+      dpr={2}
       camera={{
         position: initialCameraPosition(),
         fov: 50,

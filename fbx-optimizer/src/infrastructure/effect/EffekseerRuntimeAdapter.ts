@@ -42,9 +42,22 @@ export class EffekseerRuntimeAdapter {
      * @param webglContext - Three.js renderer.getContext() 返回的 WebGL Context
      * @throws {Error} 當 effekseer 未載入或 Runtime 初始化失敗時
      */
+    // 儲存當前 WebGL Context 引用，用於偵測 context 變更
+    private currentWebglContext: WebGLRenderingContext | null = null;
+
     public async initWithThreeContext(webglContext: WebGLRenderingContext): Promise<void> {
-        // 檢查是否已經完全初始化
-        if (this.isRuntimeInitialized && this.effekseerContext) {
+        // 檢查 WebGL Context 是否改變（例如 DPR 變更導致重新創建）
+        const contextChanged = this.currentWebglContext !== null && this.currentWebglContext !== webglContext;
+        
+        if (contextChanged) {
+            console.log('[EffekseerRuntimeAdapter] WebGL Context 已變更，重新建立 Effekseer Context...');
+            // 清理舊的 context 和已載入的特效
+            this.loadedEffects.clear();
+            this.effekseerContext = null;
+        }
+        
+        // 檢查是否已經完全初始化（且 context 未變更）
+        if (this.isRuntimeInitialized && this.effekseerContext && !contextChanged) {
             console.log('[EffekseerRuntimeAdapter] 已經初始化完成，直接復用');
             return;
         }
@@ -55,7 +68,8 @@ export class EffekseerRuntimeAdapter {
             );
         }
 
-        // WebGL Context 由 Three.js 管理，不需要儲存
+        // 儲存當前 WebGL Context 引用
+        this.currentWebglContext = webglContext;
 
         // 初始化 WebAssembly Runtime（只需一次，用於載入 effekseer.wasm）
         if (!this.isRuntimeInitialized) {
@@ -88,10 +102,11 @@ export class EffekseerRuntimeAdapter {
         // 使用 Three.js 的 WebGL Context（官方範例方式）
         context.init(webglContext);
         
-        // 設定快速渲染模式（跳過狀態擷取，提升性能）
-        context.setRestorationOfStatesFlag(false);
+        // 啟用狀態保存/恢復（避免 Three.js 操作後 WebGL 狀態失效）
+        // 注意：setRestorationOfStatesFlag(false) 會導致專案運行一段時間後特效消失
+        context.setRestorationOfStatesFlag(true);
         
-        console.log('[EffekseerRuntimeAdapter] WebGL 初始化完成（快速渲染模式）');
+        console.log('[EffekseerRuntimeAdapter] WebGL 初始化完成（啟用狀態恢復）');
         
         this.effekseerContext = context;
     }

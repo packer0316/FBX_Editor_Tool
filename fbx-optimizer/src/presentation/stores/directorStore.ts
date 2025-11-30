@@ -110,6 +110,7 @@ interface DirectorActions {
   selectClip: (clipId: string | null) => void;
   selectTrack: (trackId: string | null) => void;
   setDragging: (isDragging: boolean, data?: DraggingClipData | null) => void;
+  toggleClipSnapping: () => void;
   
   // 工具方法
   getClipById: (clipId: string) => DirectorClip | null;
@@ -146,6 +147,7 @@ const initialUIState: DirectorUIState = {
   selectedTrackId: null,
   isDragging: false,
   draggingClipData: null,
+  clipSnapping: true,  // 預設開啟片段吸附
 };
 
 const initialState: DirectorState = {
@@ -301,6 +303,7 @@ export const useDirectorStore = create<DirectorStore>()(
         const newClip: DirectorClip = {
           id: generateId(),
           trackId: params.trackId,
+          sourceType: params.sourceType ?? '3d-model',
           sourceModelId: params.sourceModelId,
           sourceModelName: params.sourceModelName,
           sourceAnimationId: params.sourceAnimationId,
@@ -313,6 +316,12 @@ export const useDirectorStore = create<DirectorStore>()(
           blendIn: 0,
           blendOut: 0,
           color: params.color ?? getNextColor(),
+          // Spine 特有屬性
+          ...(params.sourceType === 'spine' && {
+            spineInstanceId: params.spineInstanceId,
+            spineLayerId: params.spineLayerId,
+            spineElementId: params.spineElementId,
+          }),
         };
         
         // 自動擴展時間軸（留 10% 緩衝空間）
@@ -611,6 +620,16 @@ export const useDirectorStore = create<DirectorStore>()(
           }),
           undefined,
           'setDragging'
+        );
+      },
+      
+      toggleClipSnapping: () => {
+        set(
+          (state) => ({
+            ui: { ...state.ui, clipSnapping: !state.ui.clipSnapping },
+          }),
+          undefined,
+          'toggleClipSnapping'
         );
       },
       
