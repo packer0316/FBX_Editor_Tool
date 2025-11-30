@@ -471,8 +471,18 @@ function App() {
   // 追蹤是否正在同步，避免循環更新
   const isSyncingRef = useRef(false);
 
-  // 同步活動模型狀態到舊狀態（向後兼容）
+  // 追蹤上一次的 activeModelId，用於判斷是否真正切換了模型
+  const prevActiveModelIdForSyncRef = useRef<string | null>(null);
+  
+  // 同步活動模型狀態到舊狀態（只在切換模型時觸發，不在 activeModel 內容變化時觸發）
   useEffect(() => {
+    // 只在 activeModelId 真正改變時才同步（切換模型或取消選中）
+    if (prevActiveModelIdForSyncRef.current === activeModelId) {
+      return; // activeModelId 沒變，跳過
+    }
+    
+    prevActiveModelIdForSyncRef.current = activeModelId;
+    
     if (activeModel && !isSyncingRef.current) {
       isSyncingRef.current = true;
       setFile(activeModel.file);
@@ -521,7 +531,7 @@ function App() {
         isSyncingRef.current = false;
       }, 0);
     }
-  }, [activeModelId, activeModel]); // 同時監聽 activeModelId 和 activeModel，確保正確重置
+  }, [activeModelId, activeModel]); // 依賴保留 activeModel 以獲取最新值，但用 ref 防止重複同步
   
   // 當取消選中模型時，同步暫停狀態到模型實例
   const prevActiveModelIdRef = useRef<string | null>(null);
