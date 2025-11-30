@@ -27,6 +27,10 @@
 - **Web Audio API**：原生瀏覽器 API
 - **MP3 編碼**：lamejs 1.2.1（透過全域載入）
 
+### Spine 動畫
+- **Spine Runtime**：spine-ts 3.8（本地整合於 vendor/）
+- **渲染方式**：Canvas 2D API
+
 ### 開發工具
 - **Linter**：ESLint 9.39.1 + TypeScript ESLint
 - **CSS 處理**：PostCSS + Autoprefixer
@@ -185,6 +189,57 @@ updateModel(modelId, { currentTime: localTime })
 SceneViewer 各模型獨立播放對應動畫
 ```
 
+### 7. Spine 動畫載入與播放流程
+
+```
+用戶上傳 Spine 檔案（.skel + .atlas + 圖片）
+  ↓
+SpineFileUploader 解析檔案
+  ↓
+SpineRuntimeAdapter.load() 建立骨架
+  ↓
+SpineInstance 存入 spineStore (Zustand)
+  ↓
+handleAddSpineElement() 創建 SpineElement2D
+  ↓
+添加到 Layer.children
+  ↓
+Layer2DRenderer 渲染 SpineElement 組件
+  ↓
+SpineElement 內部：
+  - 初始化 SpineCanvasRenderer
+  - 啟動 requestAnimationFrame 動畫循環
+  - 調用 adapter.update() 推進動畫
+  - 調用 renderer.render() 渲染骨架
+```
+
+### 8. Director Mode 下的 Spine 同步流程
+
+```
+Director 時間軸播放
+  ↓
+useDirectorSpineTrigger 訂閱 directorStore
+  ↓
+根據 currentFrame 計算 Spine Clip 的 localTime
+  ↓
+調用 adapter.resume() / adapter.pause() / adapter.seek()
+  ↓
+調用 onUpdateSpineElement() 更新 element.isPlaying, element.currentTime
+  ↓
+layers state 更新 → SpineElement 重新渲染
+  ↓
+SpineElement 動畫循環（element.isPlaying === true 時）：
+  - adapter.update(deltaTime) 推進骨架動畫
+  - renderer.render() 渲染到 Canvas
+  - onUpdate({ currentTime }) 同步時間回父組件
+```
+
+**⚠️ 關鍵注意事項**：
+- `SpineElement` 的動畫循環依賴 `onUpdate` 回調同步時間
+- 若 `onUpdate` 為 undefined（如非 2D 模組時），時間無法同步
+- 可能導致 seek useEffect 被錯誤觸發，造成動畫「卡住」
+- **解決方案**：Director 模式下確保 `onUpdateElement` 始終可用
+
 ---
 
 ## 💼 關鍵商業邏輯
@@ -333,13 +388,18 @@ application/
 
 ```
 infrastructure/
-└── audio/
-    ├── WebAudioAdapter.ts             # Web Audio API 封裝
-    └── AudioGraphBuilder.ts           # 音訊效果圖形建立器
+├── audio/
+│   ├── WebAudioAdapter.ts             # Web Audio API 封裝
+│   └── AudioGraphBuilder.ts           # 音訊效果圖形建立器
+├── effect/
+│   └── EffekseerRuntimeAdapter.ts     # Effekseer Runtime 封裝
+└── spine/
+    ├── SpineRuntimeAdapter.ts         # Spine Runtime 3.8 封裝（單例模式）
+    └── SpineCanvasRenderer.ts         # Canvas 2D 骨架渲染器
 ```
 
 **規則**：
-- ✅ 封裝外部 API（Web Audio API）
+- ✅ 封裝外部 API（Web Audio API、Spine Runtime）
 - ✅ 可以替換實現（例如改用其他音訊庫）
 
 ### Presentation Layer（表現層）
@@ -359,10 +419,17 @@ presentation/
 │   ├── model-inspector/               # 模型檢查器
 │   │   └── components/
 │   │       └── ModelInspector.tsx
-│   └── audio-panel/                   # 音訊面板
+│   ├── audio-panel/                   # 音訊面板
+│   │   └── components/
+│   │       └── AudioPanel.tsx
+│   └── spine-panel/                   # Spine 面板
 │       └── components/
-│           └── AudioPanel.tsx
-└── hooks/
+│           ├── SpineInspectorPanel.tsx
+│           ├── SpineFileUploader.tsx
+│           ├── SpineAnimationTab.tsx
+│           ├── SpineSkinTab.tsx
+│           └── SpineSlotTab.tsx
+├── hooks/
     ├── useTheme.ts                    # 主題管理
     ├── usePanelResize.ts              # 面板大小調整
     ├── useFileDrop.ts                 # 檔案拖放
@@ -786,9 +853,61 @@ if (mat instanceof THREE.ShaderMaterial && mat.uniforms?.baseTexture) {
 ✅ **改善使用者體驗**：自動處理名稱衝突，減少困惑  
 ✅ **強化可維護性**：統一組件，減少重複程式碼
 
+### 第三階段：Spine 整合與 Director Mode 修復（2025年11月）
+
+#### 新增功能
+
+1. **Spine 動畫系統整合**
+   - Spine Runtime 3.8 本地整合（`vendor/spine-ts-3.8/`）
+   - `SpineRuntimeAdapter`：單例模式封裝 Runtime API
+   - `SpineCanvasRenderer`：Canvas 2D 渲染器
+   - `SpineElement`：2D 圖層中的骨架動畫組件
+   - `spineStore`：Zustand 狀態管理
+
+2. **Spine 面板功能**
+   - `SpineFileUploader`：支援 .skel + .atlas + 圖片上傳
+   - `SpineAnimationTab`：動畫選擇與播放控制
+   - `SpineSkinTab`：皮膚切換
+   - `SpineSlotTab`：插槽 Attachment 控制
+
+3. **Director Mode Spine 整合**
+   - `useDirectorSpineTrigger`：根據時間軸控制 Spine 播放
+   - Spine Clip 可拖放到時間軸
+   - 支援 seek、pause、resume 操作
+
+#### 問題修復
+
+**Director Mode 下 Spine 動畫卡住問題**
+
+- **問題描述**：在 Director 模式下播放 Spine 動畫，切換到非 2D 模組（3D、Audio 等）時，動畫會卡住
+- **根本原因**：`SpineElement` 的動畫循環依賴 `onUpdate` 回調同步時間。當切換到非 2D 模組時，`onUpdateElement` 變為 `undefined`，導致 `element.currentTime` 無法同步，觸發錯誤的 seek 操作使動畫「倒退」
+- **解決方案**：修改 `App.tsx` 中 `Layer2DRenderer` 的 `onUpdateElement` prop，在 Director 模式下始終保持可用
+  ```typescript
+  // 修改前
+  onUpdateElement={isPointerEditing ? handleUpdateElementById : undefined}
+  
+  // 修改後
+  onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById : undefined}
+  ```
+
+#### 受影響的檔案
+
+**新增**：
+- `src/infrastructure/spine/SpineRuntimeAdapter.ts`
+- `src/infrastructure/spine/SpineCanvasRenderer.ts`
+- `src/presentation/features/layer-composer/components/SpineElement.tsx`
+- `src/presentation/features/spine-panel/` 整個目錄
+- `src/presentation/features/director/hooks/useDirectorSpineTrigger.ts`
+- `src/presentation/stores/spineStore.ts`
+- `src/domain/value-objects/SpineInstance.ts`
+- `src/domain/value-objects/Element2D.ts`（新增 SpineElement2D 類型）
+
+**修改**：
+- `src/App.tsx`：整合 Spine 系統、修復 Director Mode 問題
+
 ---
 
-**最後更新**：2025.11.28  
+**最後更新**：2025.11.30  
 **維護者**：JR.H  
 **專案狀態**：生產就緒 ✅
 

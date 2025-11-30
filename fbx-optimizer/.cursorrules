@@ -13,17 +13,19 @@
 src/
 ├── domain/                    # 純業務邏輯（無外部依賴）
 │   ├── services/              # AnimationOptimizer, ModelLoaderService...
-│   └── value-objects/         # ModelInstance, ShaderFeature, AudioTrack, Layer...
+│   └── value-objects/         # ModelInstance, ShaderFeature, AudioTrack, Layer, SpineInstance...
 ├── application/use-cases/     # Use Cases（靜態 execute() 方法）
 ├── infrastructure/            # 外部 API 封裝
 │   ├── audio/                 # WebAudioAdapter, AudioGraphBuilder
-│   └── effect/                # EffekseerRuntimeAdapter
+│   ├── effect/                # EffekseerRuntimeAdapter
+│   └── spine/                 # SpineRuntimeAdapter, SpineCanvasRenderer
 ├── presentation/              # React UI
-│   ├── features/              # 功能模組（scene-viewer, audio-panel, director...）
+│   ├── features/              # 功能模組（scene-viewer, audio-panel, director, spine-panel...）
 │   ├── hooks/                 # 共用 Hooks
 │   ├── components/            # 共用組件（ProgressBar）
-│   └── stores/                # 狀態管理（directorStore）
+│   └── stores/                # 狀態管理（directorStore, spineStore）
 ├── utils/                     # 工具函數（array/, clip/, shader/...）
+├── vendor/                    # 第三方庫（spine-ts-3.8/）
 └── types/                     # 類型定義（effekseer.d.ts, shaderTypes.ts）
 ```
 
@@ -168,6 +170,23 @@ interface DirectorTrack {
 }
 ```
 
+### SpineElement2D（Spine 動畫元素）
+```typescript
+interface SpineElement2D extends Element2DBase {
+  type: 'spine';
+  spineInstanceId: string;    // SpineRuntimeAdapter 中的實例 ID
+  currentAnimation: string | null;
+  currentSkin: string | null;
+  loop: boolean;
+  timeScale: number;
+  isPlaying: boolean;
+  currentTime: number;
+  scale: number;
+  flipX: boolean;
+  flipY: boolean;
+}
+```
+
 ---
 
 ## 🚫 禁止事項
@@ -221,8 +240,49 @@ localTime = (globalFrame - clip.startFrame) / fps
 
 ---
 
+## 🦴 Spine 動畫系統速查
+
+### 核心組件
+- **SpineRuntimeAdapter**：單例模式封裝 Spine Runtime 3.8
+- **SpineCanvasRenderer**：Canvas 2D 渲染器
+- **SpineElement**：2D 圖層中的骨架動畫 React 組件
+- **spineStore**：Zustand 狀態管理
+
+### 動畫更新機制
+```typescript
+// SpineElement 的動畫循環（requestAnimationFrame）
+if (isLoaded && element.isPlaying) {
+  adapter.update(spineInstanceId, deltaTime);  // 推進動畫
+  renderer.render(spineInstanceId, options);    // 渲染骨架
+  onUpdate?.({ currentTime });                  // 同步時間回父組件
+}
+```
+
+### Director Mode 整合重點
+- `useDirectorSpineTrigger`：訂閱 directorStore 控制 Spine 播放
+- 調用 `adapter.resume()`、`adapter.pause()`、`adapter.seek()` 控制狀態
+- 透過 `onUpdateSpineElement()` 更新 layers state
+
+### ⚠️ Director Mode 下 Spine 注意事項
+
+**問題**：切換右側面板到非 2D 模組時，Spine 動畫可能卡住
+
+**原因**：
+1. `SpineElement` 依賴 `onUpdate` 回調同步 `currentTime`
+2. 非 2D 模組時 `onUpdateElement` 可能為 `undefined`
+3. 時間無法同步 → seek useEffect 被錯誤觸發 → 動畫「倒退」
+
+**解決方案**：確保 Director 模式下 `onUpdateElement` 始終可用
+```typescript
+// App.tsx 中的修復
+onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById : undefined}
+```
+
+---
+
 ## 📖 參考文檔
 
 - **架構詳解**：`PROJECT_ARCHITECTURE.md`
 - **技術上下文**：`PROJECT_CONTEXT.md`
 - **Director Mode 設計**：`docs/DIRECTOR_MODE_DESIGN.md`
+- **Spine 整合架構**：`docs/SPINE_INTEGRATION_ARCHITECTURE.md`

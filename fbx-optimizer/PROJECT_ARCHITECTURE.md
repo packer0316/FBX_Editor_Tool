@@ -54,6 +54,12 @@
 - 跨模型動畫同步播放
 - 全域時間軸控制
 
+### 8. Spine 動畫系統
+- Spine Runtime 3.8 整合
+- 2D 圖層中的骨架動畫渲染
+- 動畫、皮膚、插槽控制
+- Director Mode 時間軸同步
+
 ---
 
 ## 🏛️ 分層架構（DDD 啟發）
@@ -170,6 +176,12 @@ Presentation → Application → Domain ← Infrastructure
 |------|------|
 | `EffekseerRuntimeAdapter.ts` | Effekseer WebGL Runtime 封裝 |
 
+### Spine 模組
+| 檔案 | 說明 |
+|------|------|
+| `SpineRuntimeAdapter.ts` | Spine Runtime 3.8 封裝（單例模式） |
+| `SpineCanvasRenderer.ts` | Canvas 2D 骨架渲染器 |
+
 ---
 
 ## 📂 Presentation Layer 詳解
@@ -190,6 +202,12 @@ Presentation → Application → Domain ← Infrastructure
 | `layer-composer` | `LayerManagerPanel.tsx` | 2D 圖層管理 |
 | | `Layer2DRenderer.tsx` | 2D 圖層渲染器 |
 | | `Element2DEditorPanel.tsx` | 2D 元素編輯器 |
+| | `SpineElement.tsx` | Spine 骨架動畫元素 |
+| `spine-panel` | `SpineInspectorPanel.tsx` | Spine 檢查器面板 |
+| | `SpineFileUploader.tsx` | Spine 檔案上傳 |
+| | `SpineAnimationTab.tsx` | 動畫控制分頁 |
+| | `SpineSkinTab.tsx` | 皮膚切換分頁 |
+| | `SpineSlotTab.tsx` | 插槽控制分頁 |
 | `optimization-panel` | `OptimizationControls.tsx` | 動畫優化控制 |
 | `director` | `DirectorPanel.tsx` | Director Mode 主面板 |
 | | `ActionSourcePanel.tsx` | 動作來源面板 |
@@ -211,12 +229,14 @@ Presentation → Application → Domain ← Infrastructure
 | `useTimelinePlayback` | Director Mode 時間軸播放控制 |
 | `useDragAndDrop` | Director Mode 拖放邏輯 |
 | `useKeyboardShortcuts` | Director Mode 快捷鍵 |
+| `useDirectorSpineTrigger` | Director Mode Spine 動畫觸發 |
 
 ### Stores（狀態管理）
 
 | Store | 說明 |
 |------|------|
 | `directorStore` | Director Mode 全域狀態（Zustand） |
+| `spineStore` | Spine 實例管理（Zustand） |
 
 ---
 
@@ -319,6 +339,32 @@ interface Layer {
 - 使用 Three.js 的 WebGL Context
 - 在 `scene.onAfterRender` 中繪製特效
 - 每幀同步相機矩陣
+
+### 4. Spine 整合架構
+
+```
+Spine 檔案載入
+    ↓
+SpineFileUploader → SpineRuntimeAdapter.load()
+    ↓
+SpineInstance 存入 spineStore (Zustand)
+    ↓
+SpineElement2D 添加到 Layer
+    ↓
+Layer2DRenderer → SpineElement 組件
+    ↓
+SpineCanvasRenderer 渲染到 Canvas
+```
+
+**Director Mode 整合**：
+- `useDirectorSpineTrigger` 根據時間軸控制 Spine 播放
+- 調用 `adapter.resume()`、`adapter.pause()`、`adapter.seek()`
+- `SpineElement` 的動畫循環調用 `adapter.update()` 推進動畫
+
+**重要注意事項**：
+- Spine 動畫更新依賴 `SpineElement` 的 `requestAnimationFrame` 循環
+- 在 Director 模式下，需確保 `onUpdateElement` 可用以同步時間
+- 切換右側面板時需保持 Spine 元素的更新回調可用
 
 ---
 
