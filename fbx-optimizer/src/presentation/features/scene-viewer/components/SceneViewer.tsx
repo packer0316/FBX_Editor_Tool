@@ -18,6 +18,8 @@ export interface ModelRef {
     getDuration: () => number;
     /** 直接設置動畫時間（不觸發播放邏輯，用於 Director Mode） */
     setAnimationTime: (time: number) => void;
+    /** 動態切換動畫片段（用於 Director Mode） */
+    setClip: (newClip: THREE.AnimationClip) => void;
 }
 
 export interface RendererInfo {
@@ -505,6 +507,25 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     // 強制更新骨架
                     mixerRef.current.update(0);
                 }
+            },
+            setClip: (newClip: THREE.AnimationClip) => {
+                if (!mixerRef.current) return;
+                
+                // 停止當前動作
+                if (actionRef.current) {
+                    actionRef.current.stop();
+                }
+                
+                // 創建新的 action
+                const action = mixerRef.current.clipAction(newClip);
+                action.setLoop(loopRef.current ? THREE.LoopRepeat : THREE.LoopOnce, loopRef.current ? Infinity : 1);
+                action.clampWhenFinished = !loopRef.current;
+                action.reset();
+                action.play();
+                action.paused = true; // Director Mode 下保持暫停
+                
+                actionRef.current = action;
+                currentClipRef.current = newClip;
             },
         }));
 
@@ -1177,6 +1198,7 @@ type MultiModelProps = {
         id: string; // 模型 ID（用於 Director Mode 事件匹配）
         model: THREE.Group | null;
         clip: THREE.AnimationClip | null;
+        allClips?: THREE.AnimationClip[]; // 🔥 所有可用動畫片段（Director Mode 動態切換用）
         shaderGroups: ShaderGroup[];
         isShaderEnabled: boolean;
         position: [number, number, number];
@@ -1206,13 +1228,16 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
     ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false, onGroupRefMount }, ref) => {
         const { 
             id: modelId,
-            model, clip, shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+            model, clip, allClips = [], shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
             showWireframe = false,
             opacity = 1.0,
             isPlaying = false, currentTime, isLoopEnabled,
             isCameraOrbiting = false, cameraOrbitSpeed = 30,
             isModelRotating = false, modelRotationSpeed = 30
         } = modelInstance;
+        
+        // 🔥 Director Mode：追蹤當前動畫 ID
+        const currentAnimationIdRef = useRef<string | null>(null);
         
         // 使用模型自己的 loop 設置，如果有的話
         const modelLoop = isLoopEnabled !== undefined ? isLoopEnabled : loop;
@@ -1393,18 +1418,34 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             }
         }, [currentTime, isDirectorMode]);
 
-        // Director Mode：訂閱 clipUpdate 事件，直接設置動畫時間
+        // Director Mode：訂閱 clipUpdate 事件，動態切換動畫並設置時間
         useEffect(() => {
             if (!isDirectorMode) return;
 
             const unsubscribe = directorEventBus.onClipUpdate((event) => {
                 if (event.modelId === modelId && modelRef.current) {
+                    // 🔥 檢查是否需要切換動畫
+                    if (event.animationId !== currentAnimationIdRef.current) {
+                        // 找到對應的 clip
+                        const targetClip = allClips.find(c => {
+                            // 使用 customId 或 name 匹配
+                            const clipId = (c as any).customId || c.name;
+                            return clipId === event.animationId;
+                        });
+                        
+                        if (targetClip) {
+                            modelRef.current.setClip(targetClip);
+                            currentAnimationIdRef.current = event.animationId;
+                        }
+                    }
+                    
+                    // 設置動畫時間
                     modelRef.current.setAnimationTime(event.localTime);
                 }
             });
 
             return unsubscribe;
-        }, [isDirectorMode, modelId]);
+        }, [isDirectorMode, modelId, allClips]);
 
         useImperativeHandle(ref, () => ({
             play: () => modelRef.current?.play(),
@@ -1413,6 +1454,7 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
             setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
+            setClip: (newClip: THREE.AnimationClip) => modelRef.current?.setClip(newClip),
         }));
 
         if (!model) return null;

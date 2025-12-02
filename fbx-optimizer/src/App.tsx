@@ -114,6 +114,9 @@ function App() {
   const [isPlaying, setIsPlaying] = useState(true);
   const [createdClips, setCreatedClips] = useState<IdentifiableClip[]>([]);
   const [isLoopEnabled, setIsLoopEnabled] = useState(true);
+  
+  // 進度條即時更新 ref（繞過 React 渲染，實現 60fps 更新）
+  const progressTimeRef = useRef<number>(0);
 
   // 進入 Director Mode 時暫停原本的播放並禁用 LOOP
   const savedLoopStatesRef = useRef<Map<string, boolean>>(new Map());
@@ -830,9 +833,13 @@ function App() {
   }, [model, bones]);
 
   const handleTimeUpdate = useCallback((time: number) => {
-    // Throttle UI updates to ~30fps to prevent main thread blocking
     const now = performance.now();
-    if (now - lastUIUpdateRef.current > 32) {
+    
+    // 🔥 進度條：每幀都更新（透過 ref，不觸發 React 渲染）
+    progressTimeRef.current = time;
+    
+    // 🐢 其他 UI 狀態：節流更新（約 10fps，減少主線程負擔）
+    if (now - lastUIUpdateRef.current > 300) {
       setCurrentTime(time);
       lastUIUpdateRef.current = now;
 
@@ -1471,6 +1478,12 @@ function App() {
                         id: m.id,
                         model: m.model,
                         clip: m.optimizedClip || m.masterClip || m.originalClip,
+                        // 🔥 Director Mode：傳遞所有可用動畫片段（用於動態切換）
+                        allClips: [
+                          m.originalClip,
+                          m.masterClip,
+                          ...m.createdClips,
+                        ].filter((c): c is NonNullable<typeof c> => c !== null),
                         shaderGroups: m.shaderGroups,
                         isShaderEnabled: m.isShaderEnabled,
                         position: m.position,
@@ -1619,7 +1632,7 @@ function App() {
                       onReorderPlaylist={handleReorderPlaylist}
                       onPlayPlaylist={handlePlayPlaylist}
                       onPausePlaylist={handlePausePlaylist}
-
+                      progressTimeRef={progressTimeRef}
                       isLoopEnabled={isLoopEnabled}
                       onToggleLoop={() => {
                         // 沒有模型時不執行任何操作

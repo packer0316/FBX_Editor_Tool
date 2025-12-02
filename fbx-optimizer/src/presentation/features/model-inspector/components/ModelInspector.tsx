@@ -30,7 +30,8 @@ interface ModelInspectorProps {
     onPausePlaylist: () => void;
     onDeleteCreatedClip: (index: number) => void;
     isLoopEnabled: boolean;
-
+    /** 進度條即時更新 ref（繞過 React 渲染，實現 60fps 更新） */
+    progressTimeRef?: React.MutableRefObject<number>;
     onToggleLoop: () => void;
     audioTracks: AudioTrack[];
     effects: EffectItem[];
@@ -114,7 +115,7 @@ export default function ModelInspector({
     onPausePlaylist,
     onDeleteCreatedClip,
     isLoopEnabled,
-
+    progressTimeRef,
     onToggleLoop,
     audioTracks,
     effects,
@@ -149,10 +150,46 @@ export default function ModelInspector({
     // 用於節流 seek 操作
     const seekAnimationFrameRef = useRef<number | null>(null);
     const lastSeekTimeRef = useRef<number>(0);
+    
+    // 進度條即時更新 refs
+    const progressFillRef = useRef<HTMLDivElement>(null);
+    const progressThumbRef = useRef<HTMLDivElement>(null);
+    const frameDisplayRef = useRef<HTMLSpanElement>(null);
+
+    // 🔥 使用 requestAnimationFrame 實現 60fps 進度條更新（繞過 React 渲染）
+    useEffect(() => {
+        if (!progressTimeRef || duration <= 0 || isDraggingSlider) return;
+        
+        let rafId: number;
+        
+        const updateProgress = () => {
+            const time = progressTimeRef.current;
+            const progress = duration > 0 ? ((time % duration) / duration) * 100 : 0;
+            
+            // 直接操作 DOM，不觸發 React 渲染
+            if (progressFillRef.current) {
+                progressFillRef.current.style.width = `${progress}%`;
+            }
+            if (progressThumbRef.current) {
+                progressThumbRef.current.style.left = `${progress}%`;
+            }
+            if (frameDisplayRef.current) {
+                const frame = Math.floor((time % duration) * 30);
+                frameDisplayRef.current.textContent = `${frame} Frame`;
+            }
+            
+            rafId = requestAnimationFrame(updateProgress);
+        };
+        
+        rafId = requestAnimationFrame(updateProgress);
+        
+        return () => cancelAnimationFrame(rafId);
+    }, [progressTimeRef, duration, isDraggingSlider]);
 
     // Sync slider value with current time when not dragging
     useEffect(() => {
         if (!isDraggingSlider) {
+            // 🔥 無論是否有 progressTimeRef，都要同步 sliderValue（input range 需要）
             setSliderValue(duration > 0 ? currentTime % duration : 0);
         }
     }, [currentTime, duration, isDraggingSlider]);
@@ -319,6 +356,23 @@ export default function ModelInspector({
         const val = parseFloat(e.target.value);
         setSliderValue(val);
         
+        // 🔥 同步更新 progressTimeRef（確保拖動時數值一致）
+        if (progressTimeRef) {
+            progressTimeRef.current = val;
+        }
+        
+        // 🔥 拖動時即時更新 UI（因為 RAF 循環被暫停了）
+        if (progressFillRef.current && duration > 0) {
+            progressFillRef.current.style.width = `${(val / duration) * 100}%`;
+        }
+        if (progressThumbRef.current && duration > 0) {
+            progressThumbRef.current.style.left = `${(val / duration) * 100}%`;
+        }
+        if (frameDisplayRef.current && duration > 0) {
+            const frame = Math.floor((val % duration) * 30);
+            frameDisplayRef.current.textContent = `${frame} Frame`;
+        }
+        
         // 使用 requestAnimationFrame 節流 seek 操作
         if (seekAnimationFrameRef.current !== null) {
             cancelAnimationFrame(seekAnimationFrameRef.current);
@@ -347,6 +401,11 @@ export default function ModelInspector({
         // 確保執行最後一次 seek
         const finalValue = parseFloat((e.target as HTMLInputElement).value);
         onSeek(finalValue);
+        
+        // 🔥 確保 progressTimeRef 同步最終值（防止 RAF 循環用舊值覆蓋）
+        if (progressTimeRef) {
+            progressTimeRef.current = finalValue;
+        }
         
         setIsDraggingSlider(false);
         if (wasPlayingBeforeDrag && !isPlaying) {
@@ -734,7 +793,7 @@ export default function ModelInspector({
                     {/* Timeline Slider */}
                     <div className="flex-1 flex flex-col justify-center gap-1">
                         <div className="flex justify-between text-[10px] font-medium tracking-wider text-gray-400 uppercase">
-                            <span>{currentFrame} Frame</span>
+                            <span ref={frameDisplayRef}>{currentFrame} Frame</span>
                             <span>{totalFrames} Frame</span>
                         </div>
                         <div className="relative h-6 flex items-center group">
@@ -747,7 +806,8 @@ export default function ModelInspector({
                             </div>
                             {/* Progress Fill */}
                             <div
-                                className="absolute h-1.5 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full pointer-events-none transition-all duration-75 ease-out"
+                                ref={progressFillRef}
+                                className="absolute h-1.5 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full pointer-events-none"
                                 style={{ width: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%` }}
                             />
 
@@ -778,7 +838,8 @@ export default function ModelInspector({
 
                             {/* Custom Thumb (Visual Only) */}
                             <div
-                                className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] pointer-events-none transition-all duration-75 ease-out group-hover:scale-125"
+                                ref={progressThumbRef}
+                                className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] pointer-events-none group-hover:scale-125"
                                 style={{
                                     left: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%`,
                                     transform: 'translateX(-50%)'
