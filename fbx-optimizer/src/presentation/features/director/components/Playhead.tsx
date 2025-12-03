@@ -4,6 +4,7 @@
 
 import React, { useCallback, useRef, memo } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { directorEventBus } from '../../../../infrastructure/events';
 
 interface PlayheadProps {
   currentFrame: number;
@@ -35,8 +36,10 @@ export const Playhead: React.FC<PlayheadProps> = memo(({
       
       const rect = container.getBoundingClientRect();
       const x = moveEvent.clientX - rect.left + container.scrollLeft;
-      const frame = Math.round(x / pixelsPerFrame);
-      setCurrentFrame(Math.max(0, Math.min(frame, timeline.totalFrames)));
+      const frame = Math.max(0, Math.min(Math.round(x / pixelsPerFrame), timeline.totalFrames));
+      setCurrentFrame(frame);
+      // 發送 seek 事件，讓播放邏輯重置播放起始時間
+      directorEventBus.emitSeek({ frame });
     };
 
     const handleMouseUp = () => {

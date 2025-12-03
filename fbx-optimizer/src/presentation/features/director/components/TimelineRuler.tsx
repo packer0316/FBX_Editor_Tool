@@ -10,6 +10,7 @@
 
 import React, { useMemo, memo, useState, useCallback, useRef } from 'react';
 import { useDirectorStore, useLoopRegion } from '../../../stores/directorStore';
+import { directorEventBus } from '../../../../infrastructure/events';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
 
 interface TimelineRulerProps {
@@ -123,6 +124,8 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
     const rect = e.currentTarget.getBoundingClientRect();
     const frame = xToFrame(e.clientX, rect);
     setCurrentFrame(frame);
+    // 發送 seek 事件，讓播放邏輯重置播放起始時間
+    directorEventBus.emitSeek({ frame });
   };
 
   // 區間拖曳處理

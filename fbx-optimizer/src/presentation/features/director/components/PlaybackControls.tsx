@@ -5,6 +5,7 @@
 import React, { useCallback, memo } from 'react';
 import { Play, Pause, Square, Repeat, SkipBack, SkipForward, Brackets, X } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { directorEventBus } from '../../../../infrastructure/events';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
 
 export const PlaybackControls: React.FC = memo(() => {
@@ -37,26 +38,27 @@ export const PlaybackControls: React.FC = memo(() => {
 
   const handleSkipToStart = useCallback(() => {
     // 有區間且啟用時跳到入點，否則跳到開頭
-    if (timeline.loopRegion.enabled && timeline.loopRegion.inPoint !== null) {
-      setCurrentFrame(timeline.loopRegion.inPoint);
-    } else {
-      setCurrentFrame(0);
-    }
+    const frame = (timeline.loopRegion.enabled && timeline.loopRegion.inPoint !== null)
+      ? timeline.loopRegion.inPoint
+      : 0;
+    setCurrentFrame(frame);
+    directorEventBus.emitSeek({ frame });
   }, [setCurrentFrame, timeline.loopRegion]);
 
   const handleSkipToEnd = useCallback(() => {
     // 有區間且啟用時跳到出點，否則跳到結尾
-    if (timeline.loopRegion.enabled && timeline.loopRegion.outPoint !== null) {
-      setCurrentFrame(timeline.loopRegion.outPoint);
-    } else {
-      setCurrentFrame(timeline.totalFrames);
-    }
+    const frame = (timeline.loopRegion.enabled && timeline.loopRegion.outPoint !== null)
+      ? timeline.loopRegion.outPoint
+      : timeline.totalFrames;
+    setCurrentFrame(frame);
+    directorEventBus.emitSeek({ frame });
   }, [setCurrentFrame, timeline.totalFrames, timeline.loopRegion]);
 
   const handleFrameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
     if (!isNaN(value)) {
       setCurrentFrame(value);
+      directorEventBus.emitSeek({ frame: value });
     }
   }, [setCurrentFrame]);
 

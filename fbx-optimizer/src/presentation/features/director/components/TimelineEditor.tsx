@@ -5,6 +5,7 @@
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { Plus, ZoomIn, ZoomOut } from 'lucide-react';
 import { useDirectorStore, useLoopRegion } from '../../../stores/directorStore';
+import { directorEventBus } from '../../../../infrastructure/events';
 import { TimelineRuler } from './TimelineRuler';
 import { TrackRow } from './TrackRow';
 import { DEFAULT_PIXELS_PER_FRAME, MIN_ZOOM, MAX_ZOOM } from '../../../../domain/entities/director/director.types';
@@ -238,8 +239,10 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const x = moveEvent.clientX - rect.left + ui.scrollOffsetX;
-      const frame = Math.round(x / pixelsPerFrame);
-      setCurrentFrame(Math.max(0, Math.min(frame, timeline.totalFrames)));
+      const frame = Math.max(0, Math.min(Math.round(x / pixelsPerFrame), timeline.totalFrames));
+      setCurrentFrame(frame);
+      // 發送 seek 事件，讓播放邏輯重置播放起始時間
+      directorEventBus.emitSeek({ frame });
     };
 
     const handleMouseUp = () => {
