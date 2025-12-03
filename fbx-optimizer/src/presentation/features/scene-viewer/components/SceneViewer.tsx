@@ -661,7 +661,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 setTextureColorSpace(dissolveTex, 'linear'); // Dissolve noise → Linear
 
                 const normalMapTex = loadTexture(textureLoader, normalMapFeature?.params.texture);
-                setTextureColorSpace(normalMapTex, 'linear'); // Normal → Linear
+                // 根據 nonColor 設定決定使用 Linear 還是 sRGB（預設 true = Linear，與 Blender 相同）
+                const normalMapColorSpace = normalMapFeature?.params.nonColor !== false ? 'linear' : 'sRGB';
+                setTextureColorSpace(normalMapTex, normalMapColorSpace);
 
                 // Flash textures need callback for material update
                 const flashTex = loadTexture(

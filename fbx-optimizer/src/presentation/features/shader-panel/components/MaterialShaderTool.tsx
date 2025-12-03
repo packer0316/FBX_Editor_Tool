@@ -95,6 +95,7 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
             return {
                 texture: null,
                 strength: 1.0,
+                nonColor: true, // Non-Color 模式（與 Blender 相同）
             };
         case 'rim_light':
             return {
@@ -153,6 +154,7 @@ const getParamLabel = (paramName: string): string => {
         'color2': '顏色2',
         'color': '顏色',
         'rotateDelta': '旋轉角度',
+        'nonColor': 'Non-Color（線性）',
     };
 
     return labels[paramName] || paramName;
@@ -351,6 +353,26 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             );
         }
 
+        // Boolean 參數（Checkbox）- 優先檢測，避免 nonColor 被誤判為顏色參數
+        if (typeof value === 'boolean') {
+            const label = getParamLabel(paramName);
+            return (
+                <div key={paramName} className="space-y-1">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <input
+                            type="checkbox"
+                            checked={value}
+                            onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.checked)}
+                            className="w-4 h-4 bg-black/30 border-2 border-white/20 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+                        />
+                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
+                            {label}
+                        </span>
+                    </label>
+                </div>
+            );
+        }
+
         // 顏色參數
         if (paramName.includes('color') || paramName.includes('Color')) {
             const label = getParamLabel(paramName);
@@ -406,26 +428,6 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                         onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, parseFloat(e.target.value))}
                         className="w-full h-2 bg-black/30 rounded-lg appearance-none cursor-pointer slider-purple"
                     />
-                </div>
-            );
-        }
-
-        // Boolean 參數（Checkbox）
-        if (typeof value === 'boolean') {
-            const label = getParamLabel(paramName);
-            return (
-                <div key={paramName} className="space-y-1">
-                    <label className="flex items-center gap-2 cursor-pointer group">
-                        <input
-                            type="checkbox"
-                            checked={value}
-                            onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.checked)}
-                            className="w-4 h-4 bg-black/30 border-2 border-white/20 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
-                        />
-                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
-                            {label}
-                        </span>
-                    </label>
                 </div>
             );
         }
