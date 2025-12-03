@@ -56,13 +56,33 @@ export function useTimelinePlayback(
   const activeClipsRef = useRef<Map<string, ClipLocalTimeResult>>(new Map());
   const previousActiveClipIds = useRef<Set<string>>(new Set());
   const callbacksRef = useRef(callbacks);
+  const playStartTimeRef = useRef<number | null>(null); // 播放開始時的真實時間（毫秒）
+  const playStartFrameRef = useRef<number>(0); // 播放開始時的幀位置
   callbacksRef.current = callbacks;
 
   // 同步外部 currentFrame 變化（如 seek）
+  // 注意：不要在這裡重置 playStartTimeRef，因為 setCurrentFrame 會觸發這個 effect
+  // 只有在非播放狀態時才同步 frameRef（用於恢復播放時的起始位置）
   useEffect(() => {
-    frameRef.current = currentFrame;
-    lastIntFrameRef.current = Math.floor(currentFrame);
-  }, [currentFrame]);
+    if (!isPlaying) {
+      frameRef.current = currentFrame;
+      lastIntFrameRef.current = Math.floor(currentFrame);
+    }
+  }, [currentFrame, isPlaying]);
+
+  // 處理用戶手動 seek（拖動進度條）- 訂閱 seek 事件
+  useEffect(() => {
+    const unsubscribe = directorEventBus.onSeek(({ frame }) => {
+      frameRef.current = frame;
+      lastIntFrameRef.current = Math.floor(frame);
+      // 如果正在播放，重置播放開始時間
+      if (isPlaying && playStartTimeRef.current !== null) {
+        playStartTimeRef.current = performance.now();
+        playStartFrameRef.current = frame;
+      }
+    });
+    return unsubscribe;
+  }, [isPlaying]);
 
   // 計算當前幀的所有活躍片段
   const getActiveClipsAtCurrentFrame = useCallback((frame: number): ClipLocalTimeResult[] => {
@@ -148,14 +168,27 @@ export function useTimelinePlayback(
 
   // 訂閱 tick 事件（取代 requestAnimationFrame）
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying) {
+      // 停止播放時清除開始時間
+      playStartTimeRef.current = null;
+      return;
+    }
 
-    const unsubscribe = directorEventBus.onTick(({ delta }) => {
+    // 播放開始時記錄真實時間和起始幀
+    if (playStartTimeRef.current === null) {
+      playStartTimeRef.current = performance.now();
+      playStartFrameRef.current = frameRef.current;
+    }
+
+    const unsubscribe = directorEventBus.onTick(() => {
       const state = useDirectorStore.getState();
       const { fps: currentFps, totalFrames, isLooping, loopRegion } = state.timeline;
 
-      // 計算新幀
-      let newFrame = frameRef.current + delta * currentFps;
+      // 🔥 使用真實時間計算新幀（避免 delta 累積誤差）
+      // 這樣即使瀏覽器幀率不穩定，播放速度也會與真實時間同步
+      const elapsedMs = performance.now() - playStartTimeRef.current!;
+      const elapsedSeconds = elapsedMs / 1000;
+      let newFrame = playStartFrameRef.current + elapsedSeconds * currentFps;
 
       // 區間播放邏輯
       const hasValidLoopRegion = loopRegion.enabled && 
@@ -165,20 +198,25 @@ export function useTimelinePlayback(
       if (hasValidLoopRegion) {
         const inPoint = loopRegion.inPoint!;
         const outPoint = loopRegion.outPoint!;
+        const regionLength = outPoint - inPoint;
         
-        // 到達出點時跳回入點
+        // 到達出點時跳回入點（使用取模運算處理循環）
         if (newFrame >= outPoint) {
-          newFrame = inPoint + (newFrame - outPoint);
-          // 確保不會超過出點（處理極大的 delta）
-          if (newFrame >= outPoint) {
-            newFrame = inPoint;
-          }
+          // 重置起始時間和幀，從入點重新開始計時
+          const overshoot = newFrame - outPoint;
+          playStartTimeRef.current = performance.now();
+          playStartFrameRef.current = inPoint;
+          newFrame = inPoint + (overshoot % regionLength);
         }
       } else {
         // 原有的全範圍播放邏輯
         if (newFrame >= totalFrames) {
           if (isLooping) {
-            newFrame = newFrame % totalFrames;
+            // 重置起始時間和幀，從頭開始計時
+            const overshoot = newFrame - totalFrames;
+            playStartTimeRef.current = performance.now();
+            playStartFrameRef.current = 0;
+            newFrame = overshoot % totalFrames;
           } else {
             newFrame = totalFrames;
             state.pause();
@@ -189,15 +227,16 @@ export function useTimelinePlayback(
 
       frameRef.current = newFrame;
 
-      // 只在整數幀變化時更新 store（節流）
+      // 只在整數幀變化時更新 store（節流，減少UI重渲染）
       const frameInt = Math.floor(newFrame);
       if (frameInt !== lastIntFrameRef.current) {
         lastIntFrameRef.current = frameInt;
         state.setCurrentFrame(frameInt);
       }
 
-      // 更新活躍片段並發送事件
-      updateActiveClips(frameInt);
+      // 🔥 重要：使用浮點幀更新動畫，保持流暢度和精確度
+      // 這樣動畫會在每次 tick 時都得到精確的時間更新
+      updateActiveClips(newFrame);
     });
 
     return unsubscribe;

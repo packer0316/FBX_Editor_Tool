@@ -13,9 +13,9 @@ interface FrameEmitterProps {
 }
 
 export function FrameEmitter({ enabled }: FrameEmitterProps): null {
-  useFrame((_, delta) => {
+  useFrame(() => {
     if (enabled) {
-      directorEventBus.emitTick({ delta });
+      directorEventBus.emitTick({ delta: 0 }); // delta 不再使用，保留以向後兼容
     }
   });
   
