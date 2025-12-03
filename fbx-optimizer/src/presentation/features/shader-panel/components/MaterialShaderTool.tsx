@@ -83,6 +83,13 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 texture: null,
                 maskTexture: null,
                 progress: 0.5,
+                // RGB 通道遮罩功能
+                useMaskR: false,      // 使用 R 通道
+                useMaskG: false,      // 使用 G 通道
+                useMaskB: false,      // 使用 B 通道
+                textureR: null,       // R 通道專用 Matcap 貼圖
+                textureG: null,       // G 通道專用 Matcap 貼圖
+                textureB: null,       // B 通道專用 Matcap 貼圖
             };
         case 'matcap_add':
             return {
@@ -90,6 +97,13 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 maskTexture: null,
                 strength: 1.0,
                 color: '#ffffff',
+                // RGB 通道遮罩功能
+                useMaskR: false,
+                useMaskG: false,
+                useMaskB: false,
+                textureR: null,
+                textureG: null,
+                textureB: null,
             };
         case 'normal_map':
             return {
@@ -157,6 +171,12 @@ const getParamLabel = (paramName: string): string => {
         'rotateDelta': '旋轉角度',
         'nonColor': 'Non-Color（線性）',
         'useUV2': '使用第二層 UV',
+        'useMaskR': '使用 R 通道',
+        'useMaskG': '使用 G 通道',
+        'useMaskB': '使用 B 通道',
+        'textureR': 'R 通道 Matcap',
+        'textureG': 'G 通道 Matcap',
+        'textureB': 'B 通道 Matcap',
     };
 
     return labels[paramName] || paramName;

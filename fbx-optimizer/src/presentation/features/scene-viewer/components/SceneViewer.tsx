@@ -657,6 +657,22 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 const addMatcapMaskTex = loadTexture(textureLoader, addMatcapFeature?.params.maskTexture);
                 setTextureColorSpace(addMatcapMaskTex, 'linear'); // Mask → Linear
 
+                // Base Matcap RGB 通道貼圖
+                const baseMatcapTexR = loadTexture(textureLoader, baseMatcapFeature?.params.textureR);
+                setTextureColorSpace(baseMatcapTexR, 'sRGB');
+                const baseMatcapTexG = loadTexture(textureLoader, baseMatcapFeature?.params.textureG);
+                setTextureColorSpace(baseMatcapTexG, 'sRGB');
+                const baseMatcapTexB = loadTexture(textureLoader, baseMatcapFeature?.params.textureB);
+                setTextureColorSpace(baseMatcapTexB, 'sRGB');
+
+                // Additive Matcap RGB 通道貼圖
+                const addMatcapTexR = loadTexture(textureLoader, addMatcapFeature?.params.textureR);
+                setTextureColorSpace(addMatcapTexR, 'sRGB');
+                const addMatcapTexG = loadTexture(textureLoader, addMatcapFeature?.params.textureG);
+                setTextureColorSpace(addMatcapTexG, 'sRGB');
+                const addMatcapTexB = loadTexture(textureLoader, addMatcapFeature?.params.textureB);
+                setTextureColorSpace(addMatcapTexB, 'sRGB');
+
                 const dissolveTex = loadTexture(textureLoader, dissolveFeature?.params.texture);
                 setTextureColorSpace(dissolveTex, 'linear'); // Dissolve noise → Linear
 
@@ -693,7 +709,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 // 🔧 收集所有動態載入的貼圖以便後續清理
                 const dynamicTextures = [
                     baseMatcapTex, baseMatcapMaskTex,
+                    baseMatcapTexR, baseMatcapTexG, baseMatcapTexB,
                     addMatcapTex, addMatcapMaskTex,
+                    addMatcapTexR, addMatcapTexG, addMatcapTexB,
                     dissolveTex, normalMapTex,
                     flashTex, flashMaskTex
                 ].filter((tex): tex is THREE.Texture => tex !== null);
@@ -764,6 +782,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         matcapMaskTexture: { value: null },
                         matcapProgress: { value: 0 },
                         useMatcap: { value: 0.0 },
+                        // RGB 通道遮罩 Matcap
+                        matcapTextureR: { value: null },
+                        matcapTextureG: { value: null },
+                        matcapTextureB: { value: null },
+                        matcapUseMaskR: { value: 0.0 },
+                        matcapUseMaskG: { value: 0.0 },
+                        matcapUseMaskB: { value: 0.0 },
 
                         // Additive Matcap
                         matcapAddTexture: { value: null },
@@ -771,6 +796,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         matcapAddStrength: { value: 1.0 },
                         matcapAddColor: { value: new THREE.Color(0xffffff) },
                         useMatcapAdd: { value: 0.0 },
+                        // RGB 通道遮罩 Matcap Add
+                        matcapAddTextureR: { value: null },
+                        matcapAddTextureG: { value: null },
+                        matcapAddTextureB: { value: null },
+                        matcapAddUseMaskR: { value: 0.0 },
+                        matcapAddUseMaskG: { value: 0.0 },
+                        matcapAddUseMaskB: { value: 0.0 },
 
                         // Rim Light
                         rimColor: { value: new THREE.Color(0xffffff) },
@@ -854,6 +886,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform sampler2D matcapMaskTexture;
                                 uniform float matcapProgress;
                                 uniform float useMatcap;
+                                // RGB 通道遮罩 Matcap
+                                uniform sampler2D matcapTextureR;
+                                uniform sampler2D matcapTextureG;
+                                uniform sampler2D matcapTextureB;
+                                uniform float matcapUseMaskR;
+                                uniform float matcapUseMaskG;
+                                uniform float matcapUseMaskB;
                                 
                                 // Additive Matcap
                                 uniform sampler2D matcapAddTexture;
@@ -861,6 +900,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform float matcapAddStrength;
                                 uniform vec3 matcapAddColor;
                                 uniform float useMatcapAdd;
+                                // RGB 通道遮罩 Matcap Add
+                                uniform sampler2D matcapAddTextureR;
+                                uniform sampler2D matcapAddTextureG;
+                                uniform sampler2D matcapAddTextureB;
+                                uniform float matcapAddUseMaskR;
+                                uniform float matcapAddUseMaskG;
+                                uniform float matcapAddUseMaskB;
                                 
                                 // Rim Light
                                 uniform vec3 rimColor;
@@ -978,16 +1024,51 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                         matcapUv.x = viewNormal.x * 0.49 + 0.5;
                                         matcapUv.y = -viewNormal.y * 0.49 + 0.5;
                                         
-                                        vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
-                                        // matcapTexture 也設為 sRGB，sample 結果已是 Linear
-                                
-                                        // Apply mask if available
-                                        float matcapMask = 1.0;
-                                        #ifdef USE_MATCAP_MASK
-                                            matcapMask = texture2D(matcapMaskTexture, vUv).r;
-                                        #endif
-                                
-                                        finalColor = mix(finalColor, matcapCol, matcapProgress * matcapMask);
+                                        // 檢查是否使用 RGB 通道遮罩模式
+                                        float useRGBMask = matcapUseMaskR + matcapUseMaskG + matcapUseMaskB;
+                                        
+                                        if (useRGBMask > 0.5) {
+                                            // RGB 通道遮罩模式：根據遮罩的 R/G/B 通道分別使用不同的 Matcap
+                                            #ifdef USE_MATCAP_MASK
+                                                vec3 maskSample = texture2D(matcapMaskTexture, vUv).rgb;
+                                                vec3 matcapResult = vec3(0.0);
+                                                
+                                                // R 通道
+                                                if (matcapUseMaskR > 0.5 && maskSample.r > 0.01) {
+                                                    vec3 colR = texture2D(matcapTextureR, matcapUv).rgb;
+                                                    matcapResult += colR * maskSample.r;
+                                                }
+                                                // G 通道
+                                                if (matcapUseMaskG > 0.5 && maskSample.g > 0.01) {
+                                                    vec3 colG = texture2D(matcapTextureG, matcapUv).rgb;
+                                                    matcapResult += colG * maskSample.g;
+                                                }
+                                                // B 通道
+                                                if (matcapUseMaskB > 0.5 && maskSample.b > 0.01) {
+                                                    vec3 colB = texture2D(matcapTextureB, matcapUv).rgb;
+                                                    matcapResult += colB * maskSample.b;
+                                                }
+                                                
+                                                // 未被遮罩覆蓋的部分保持原色
+                                                float totalMask = 0.0;
+                                                if (matcapUseMaskR > 0.5) totalMask += maskSample.r;
+                                                if (matcapUseMaskG > 0.5) totalMask += maskSample.g;
+                                                if (matcapUseMaskB > 0.5) totalMask += maskSample.b;
+                                                totalMask = clamp(totalMask, 0.0, 1.0);
+                                                
+                                                finalColor = mix(finalColor, finalColor + matcapResult, matcapProgress * totalMask);
+                                            #endif
+                                        } else {
+                                            // 原有模式：使用單一 Matcap 貼圖
+                                            vec3 matcapCol = texture2D(matcapTexture, matcapUv).rgb;
+                                            
+                                            float matcapMask = 1.0;
+                                            #ifdef USE_MATCAP_MASK
+                                                matcapMask = texture2D(matcapMaskTexture, vUv).r;
+                                            #endif
+                                            
+                                            finalColor = mix(finalColor, matcapCol, matcapProgress * matcapMask);
+                                        }
                                     }
                                 
                                     // --- Additive Matcap (Add) ---
@@ -997,22 +1078,45 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                         matcapAddUv.x = viewNormal.x * 0.49 + 0.5;
                                         matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
                                 
-                                        vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
-                                        // matcapAddTexture 也設為 sRGB，sample 結果已是 Linear
-                                        matcapAddCol *= matcapAddColor; // Apply tint
-                                
-                                        // Apply mask if available
-                                        float matcapAddMask = 1.0;
-                                        #ifdef USE_MATCAP_ADD_MASK
-                                            matcapAddMask = texture2D(matcapAddMaskTexture, vUv).r;
-                                        #endif
-                                
-                                        // Additive blending logic
-                                        float dotNV = dot(viewDir, viewNormal);
-                                        dotNV = clamp(dotNV, 0.0, 1.0);
+                                        // 檢查是否使用 RGB 通道遮罩模式
+                                        float useAddRGBMask = matcapAddUseMaskR + matcapAddUseMaskG + matcapAddUseMaskB;
                                         
-                                        // Simple additive for now, controlled by strength and mask
-                                        finalColor += matcapAddCol * matcapAddStrength * matcapAddMask;
+                                        if (useAddRGBMask > 0.5) {
+                                            // RGB 通道遮罩模式
+                                            #ifdef USE_MATCAP_ADD_MASK
+                                                vec3 addMaskSample = texture2D(matcapAddMaskTexture, vUv).rgb;
+                                                vec3 matcapAddResult = vec3(0.0);
+                                                
+                                                // R 通道
+                                                if (matcapAddUseMaskR > 0.5 && addMaskSample.r > 0.01) {
+                                                    vec3 colR = texture2D(matcapAddTextureR, matcapAddUv).rgb;
+                                                    matcapAddResult += colR * addMaskSample.r * matcapAddColor;
+                                                }
+                                                // G 通道
+                                                if (matcapAddUseMaskG > 0.5 && addMaskSample.g > 0.01) {
+                                                    vec3 colG = texture2D(matcapAddTextureG, matcapAddUv).rgb;
+                                                    matcapAddResult += colG * addMaskSample.g * matcapAddColor;
+                                                }
+                                                // B 通道
+                                                if (matcapAddUseMaskB > 0.5 && addMaskSample.b > 0.01) {
+                                                    vec3 colB = texture2D(matcapAddTextureB, matcapAddUv).rgb;
+                                                    matcapAddResult += colB * addMaskSample.b * matcapAddColor;
+                                                }
+                                                
+                                                finalColor += matcapAddResult * matcapAddStrength;
+                                            #endif
+                                        } else {
+                                            // 原有模式
+                                            vec3 matcapAddCol = texture2D(matcapAddTexture, matcapAddUv).rgb;
+                                            matcapAddCol *= matcapAddColor;
+                                            
+                                            float matcapAddMask = 1.0;
+                                            #ifdef USE_MATCAP_ADD_MASK
+                                                matcapAddMask = texture2D(matcapAddMaskTexture, vUv).r;
+                                            #endif
+                                            
+                                            finalColor += matcapAddCol * matcapAddStrength * matcapAddMask;
+                                        }
                                     }
                                 
                                     // --- Rim Light ---
@@ -1114,24 +1218,81 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 }
 
                 // Base Matcap
-                if (baseMatcapFeature && baseMatcapTex) {
-                    shaderMat.uniforms.useMatcap.value = 1.0;
-                    shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
-                    if (baseMatcapMaskTex) shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
-                    shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
+                if (baseMatcapFeature) {
+                    const hasRGBMode = baseMatcapFeature.params.useMaskR || baseMatcapFeature.params.useMaskG || baseMatcapFeature.params.useMaskB;
+                    
+                    if (hasRGBMode && baseMatcapMaskTex) {
+                        // RGB 通道遮罩模式
+                        shaderMat.uniforms.useMatcap.value = 1.0;
+                        shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
+                        shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
+                        
+                        // RGB 通道設定
+                        shaderMat.uniforms.matcapUseMaskR.value = baseMatcapFeature.params.useMaskR ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapUseMaskG.value = baseMatcapFeature.params.useMaskG ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapUseMaskB.value = baseMatcapFeature.params.useMaskB ? 1.0 : 0.0;
+                        
+                        // RGB 通道貼圖
+                        if (baseMatcapTexR) shaderMat.uniforms.matcapTextureR.value = baseMatcapTexR;
+                        if (baseMatcapTexG) shaderMat.uniforms.matcapTextureG.value = baseMatcapTexG;
+                        if (baseMatcapTexB) shaderMat.uniforms.matcapTextureB.value = baseMatcapTexB;
+                    } else if (baseMatcapTex) {
+                        // 原有單一貼圖模式
+                        shaderMat.uniforms.useMatcap.value = 1.0;
+                        shaderMat.uniforms.matcapTexture.value = baseMatcapTex;
+                        if (baseMatcapMaskTex) shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
+                        shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
+                        shaderMat.uniforms.matcapUseMaskR.value = 0.0;
+                        shaderMat.uniforms.matcapUseMaskG.value = 0.0;
+                        shaderMat.uniforms.matcapUseMaskB.value = 0.0;
+                    } else {
+                        shaderMat.uniforms.useMatcap.value = 0.0;
+                    }
                 } else {
                     shaderMat.uniforms.useMatcap.value = 0.0;
+                    shaderMat.uniforms.matcapUseMaskR.value = 0.0;
+                    shaderMat.uniforms.matcapUseMaskG.value = 0.0;
+                    shaderMat.uniforms.matcapUseMaskB.value = 0.0;
                 }
 
                 // Additive Matcap
-                if (addMatcapFeature && addMatcapTex) {
-                    shaderMat.uniforms.useMatcapAdd.value = 1.0;
-                    shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
-                    if (addMatcapMaskTex) shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
-                    shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
-                    shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                if (addMatcapFeature) {
+                    const hasAddRGBMode = addMatcapFeature.params.useMaskR || addMatcapFeature.params.useMaskG || addMatcapFeature.params.useMaskB;
+                    
+                    if (hasAddRGBMode && addMatcapMaskTex) {
+                        // RGB 通道遮罩模式
+                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
+                        shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
+                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
+                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                        
+                        // RGB 通道設定
+                        shaderMat.uniforms.matcapAddUseMaskR.value = addMatcapFeature.params.useMaskR ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskG.value = addMatcapFeature.params.useMaskG ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskB.value = addMatcapFeature.params.useMaskB ? 1.0 : 0.0;
+                        
+                        // RGB 通道貼圖
+                        if (addMatcapTexR) shaderMat.uniforms.matcapAddTextureR.value = addMatcapTexR;
+                        if (addMatcapTexG) shaderMat.uniforms.matcapAddTextureG.value = addMatcapTexG;
+                        if (addMatcapTexB) shaderMat.uniforms.matcapAddTextureB.value = addMatcapTexB;
+                    } else if (addMatcapTex) {
+                        // 原有單一貼圖模式
+                        shaderMat.uniforms.useMatcapAdd.value = 1.0;
+                        shaderMat.uniforms.matcapAddTexture.value = addMatcapTex;
+                        if (addMatcapMaskTex) shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
+                        shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
+                        shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
+                        shaderMat.uniforms.matcapAddUseMaskR.value = 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskG.value = 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskB.value = 0.0;
+                    } else {
+                        shaderMat.uniforms.useMatcapAdd.value = 0.0;
+                    }
                 } else {
                     shaderMat.uniforms.useMatcapAdd.value = 0.0;
+                    shaderMat.uniforms.matcapAddUseMaskR.value = 0.0;
+                    shaderMat.uniforms.matcapAddUseMaskG.value = 0.0;
+                    shaderMat.uniforms.matcapAddUseMaskB.value = 0.0;
                 }
 
                 // Rim Light
