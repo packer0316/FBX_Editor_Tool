@@ -613,11 +613,16 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 const shaderFeatures = meshGroup.features.filter((f: ShaderFeature) => f.enabled !== false);
 
                 // Separate Base Matcap and Additive Matcap
+                // 支援主貼圖模式或 RGB 通道模式（任一有貼圖即可）
                 const baseMatcapFeature = shaderFeatures.find(
-                    (f: ShaderFeature) => f.type === 'matcap' && f.params.texture
+                    (f: ShaderFeature) => f.type === 'matcap' && (
+                        f.params.texture || f.params.textureR || f.params.textureG || f.params.textureB
+                    )
                 );
                 const addMatcapFeature = shaderFeatures.find(
-                    (f: ShaderFeature) => f.type === 'matcap_add' && f.params.texture
+                    (f: ShaderFeature) => f.type === 'matcap_add' && (
+                        f.params.texture || f.params.textureR || f.params.textureG || f.params.textureB
+                    )
                 );
 
                 const unlitFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'unlit');
@@ -1220,17 +1225,19 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 // Base Matcap
                 if (baseMatcapFeature) {
                     const hasRGBMode = baseMatcapFeature.params.useMaskR || baseMatcapFeature.params.useMaskG || baseMatcapFeature.params.useMaskB;
+                    // 檢查是否有任一 RGB 通道貼圖
+                    const hasAnyRGBTexture = baseMatcapTexR || baseMatcapTexG || baseMatcapTexB;
                     
-                    if (hasRGBMode && baseMatcapMaskTex) {
-                        // RGB 通道遮罩模式
+                    if (hasRGBMode && baseMatcapMaskTex && hasAnyRGBTexture) {
+                        // RGB 通道遮罩模式：需要遮罩貼圖 + 至少一個通道貼圖
                         shaderMat.uniforms.useMatcap.value = 1.0;
                         shaderMat.uniforms.matcapMaskTexture.value = baseMatcapMaskTex;
                         shaderMat.uniforms.matcapProgress.value = baseMatcapFeature.params.progress ?? 0.5;
                         
-                        // RGB 通道設定
-                        shaderMat.uniforms.matcapUseMaskR.value = baseMatcapFeature.params.useMaskR ? 1.0 : 0.0;
-                        shaderMat.uniforms.matcapUseMaskG.value = baseMatcapFeature.params.useMaskG ? 1.0 : 0.0;
-                        shaderMat.uniforms.matcapUseMaskB.value = baseMatcapFeature.params.useMaskB ? 1.0 : 0.0;
+                        // RGB 通道設定（只有當有對應貼圖時才啟用）
+                        shaderMat.uniforms.matcapUseMaskR.value = (baseMatcapFeature.params.useMaskR && baseMatcapTexR) ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapUseMaskG.value = (baseMatcapFeature.params.useMaskG && baseMatcapTexG) ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapUseMaskB.value = (baseMatcapFeature.params.useMaskB && baseMatcapTexB) ? 1.0 : 0.0;
                         
                         // RGB 通道貼圖
                         if (baseMatcapTexR) shaderMat.uniforms.matcapTextureR.value = baseMatcapTexR;
@@ -1258,18 +1265,20 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 // Additive Matcap
                 if (addMatcapFeature) {
                     const hasAddRGBMode = addMatcapFeature.params.useMaskR || addMatcapFeature.params.useMaskG || addMatcapFeature.params.useMaskB;
+                    // 檢查是否有任一 RGB 通道貼圖
+                    const hasAnyAddRGBTexture = addMatcapTexR || addMatcapTexG || addMatcapTexB;
                     
-                    if (hasAddRGBMode && addMatcapMaskTex) {
-                        // RGB 通道遮罩模式
+                    if (hasAddRGBMode && addMatcapMaskTex && hasAnyAddRGBTexture) {
+                        // RGB 通道遮罩模式：需要遮罩貼圖 + 至少一個通道貼圖
                         shaderMat.uniforms.useMatcapAdd.value = 1.0;
                         shaderMat.uniforms.matcapAddMaskTexture.value = addMatcapMaskTex;
                         shaderMat.uniforms.matcapAddStrength.value = addMatcapFeature.params.strength ?? 1.0;
                         shaderMat.uniforms.matcapAddColor.value = new THREE.Color(addMatcapFeature.params.color || '#ffffff');
                         
-                        // RGB 通道設定
-                        shaderMat.uniforms.matcapAddUseMaskR.value = addMatcapFeature.params.useMaskR ? 1.0 : 0.0;
-                        shaderMat.uniforms.matcapAddUseMaskG.value = addMatcapFeature.params.useMaskG ? 1.0 : 0.0;
-                        shaderMat.uniforms.matcapAddUseMaskB.value = addMatcapFeature.params.useMaskB ? 1.0 : 0.0;
+                        // RGB 通道設定（只有當有對應貼圖時才啟用）
+                        shaderMat.uniforms.matcapAddUseMaskR.value = (addMatcapFeature.params.useMaskR && addMatcapTexR) ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskG.value = (addMatcapFeature.params.useMaskG && addMatcapTexG) ? 1.0 : 0.0;
+                        shaderMat.uniforms.matcapAddUseMaskB.value = (addMatcapFeature.params.useMaskB && addMatcapTexB) ? 1.0 : 0.0;
                         
                         // RGB 通道貼圖
                         if (addMatcapTexR) shaderMat.uniforms.matcapAddTextureR.value = addMatcapTexR;

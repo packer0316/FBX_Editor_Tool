@@ -83,7 +83,8 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 texture: null,
                 maskTexture: null,
                 progress: 0.5,
-                // RGB 通道遮罩功能
+                // RGB 通道遮罩功能（可折疊）
+                rgbExpanded: false,   // RGB 區塊展開狀態
                 useMaskR: false,      // 使用 R 通道
                 useMaskG: false,      // 使用 G 通道
                 useMaskB: false,      // 使用 B 通道
@@ -97,7 +98,8 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 maskTexture: null,
                 strength: 1.0,
                 color: '#ffffff',
-                // RGB 通道遮罩功能
+                // RGB 通道遮罩功能（可折疊）
+                rgbExpanded: false,
                 useMaskR: false,
                 useMaskG: false,
                 useMaskB: false,
@@ -629,8 +631,40 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                         {feature.expanded && (
                                             <div className="p-3 space-y-2">
                                                 <p className="text-xs text-gray-400 mb-2">{feature.description}</p>
-                                                {Object.entries(feature.params).map(([paramName, value]) =>
-                                                    renderParamControl(group.id, feature, paramName, value)
+                                                {/* 渲染非 RGB 相關參數 */}
+                                                {Object.entries(feature.params)
+                                                    .filter(([paramName]) => !['rgbExpanded', 'useMaskR', 'useMaskG', 'useMaskB', 'textureR', 'textureG', 'textureB'].includes(paramName))
+                                                    .map(([paramName, value]) =>
+                                                        renderParamControl(group.id, feature, paramName, value)
+                                                    )}
+                                                
+                                                {/* Matcap RGB 通道折疊區塊 */}
+                                                {(feature.type === 'matcap' || feature.type === 'matcap_add') && (
+                                                    <div className="mt-3 border border-white/10 rounded-lg overflow-hidden">
+                                                        <button
+                                                            onClick={() => updateFeatureParam(group.id, feature.id, 'rgbExpanded', !feature.params.rgbExpanded)}
+                                                            className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 flex items-center justify-between text-xs text-gray-300 transition-colors"
+                                                        >
+                                                            <span className="flex items-center gap-2">
+                                                                <span>🎨</span>
+                                                                <span>RGB 通道遮罩設定</span>
+                                                            </span>
+                                                            {feature.params.rgbExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                        </button>
+                                                        {feature.params.rgbExpanded && (
+                                                            <div className="p-3 space-y-2 bg-black/20">
+                                                                {/* RGB 通道勾選 */}
+                                                                {renderParamControl(group.id, feature, 'useMaskR', feature.params.useMaskR)}
+                                                                {feature.params.useMaskR && renderParamControl(group.id, feature, 'textureR', feature.params.textureR)}
+                                                                
+                                                                {renderParamControl(group.id, feature, 'useMaskG', feature.params.useMaskG)}
+                                                                {feature.params.useMaskG && renderParamControl(group.id, feature, 'textureG', feature.params.textureG)}
+                                                                
+                                                                {renderParamControl(group.id, feature, 'useMaskB', feature.params.useMaskB)}
+                                                                {feature.params.useMaskB && renderParamControl(group.id, feature, 'textureB', feature.params.textureB)}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         )}
