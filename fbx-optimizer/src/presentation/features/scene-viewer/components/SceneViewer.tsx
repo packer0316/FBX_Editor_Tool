@@ -734,6 +734,20 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 const currentWireframe = child.material instanceof THREE.Material ? (child.material as any).wireframe || false : false;
                 const currentSide = child.material instanceof THREE.Material ? (child.material as any).side || THREE.FrontSide : THREE.FrontSide;
                 
+                // 檢查 geometry 是否有 uv2 屬性
+                const geometry = (child as THREE.Mesh).geometry as THREE.BufferGeometry;
+                const hasUV2 = geometry?.attributes?.uv2 !== undefined;
+                
+                // FBX 的第二層 UV 可能命名為 uv1（FBXLoader 的命名慣例）
+                // 如果沒有 uv2 但有 uv1，則複製 uv1 到 uv2
+                if (!hasUV2 && geometry?.attributes?.uv1) {
+                    geometry.setAttribute('uv2', geometry.attributes.uv1);
+                }
+                // 如果完全沒有第二層 UV，則複製 uv 到 uv2 作為 fallback
+                else if (!hasUV2 && geometry?.attributes?.uv) {
+                    geometry.setAttribute('uv2', geometry.attributes.uv.clone());
+                }
+                
                 shaderMat = new THREE.ShaderMaterial({
                     uniforms: {
                         // Base
@@ -790,17 +804,24 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         normalMap: { value: null },
                         normalScale: { value: new THREE.Vector2(1, 1) },
                         useNormalMap: { value: 0.0 },
+                        normalMapUseUV2: { value: 0.0 },  // 使用第二層 UV
                     },
                     vertexShader: `
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
+                                varying vec2 vUv2;
                                 varying vec3 vViewPosition;
+                                
+                                // 第二層 UV - Three.js 會自動綁定 uv2 attribute（如果模型有的話）
+                                attribute vec2 uv2;
                                 
                                 #include <common>
                                 #include <skinning_pars_vertex>
                                 
                                 void main() {
                                     vUv = uv;
+                                    // 傳遞第二層 UV（如果模型沒有 uv2，會是 vec2(0,0)）
+                                    vUv2 = uv2;
                                     
                                     #include <skinbase_vertex>
                                     #include <begin_vertex>
@@ -873,9 +894,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform sampler2D normalMap;
                                 uniform vec2 normalScale;
                                 uniform float useNormalMap;
+                                uniform float normalMapUseUV2;
                                 
                                 varying vec3 vNormal;
                                 varying vec2 vUv;
+                                varying vec2 vUv2;
                                 varying vec3 vViewPosition;
                                 
                                 // Function to perturb normal based on normal map
@@ -943,7 +966,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     // --- Normal Map ---
                                     // 只在非 Unlit 模式下使用 Normal Map
                                     if (useNormalMap > 0.5 && useUnlit < 0.5) {
-                                        viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, vUv, normalScale );
+                                        // 根據 normalMapUseUV2 選擇 UV 層
+                                        vec2 normalUv = normalMapUseUV2 > 0.5 ? vUv2 : vUv;
+                                        viewNormal = perturbNormal2Arb( -vViewPosition, viewNormal, normalUv, normalScale );
                                     }
                                 
                                     // --- Base Matcap (Mix) ---
@@ -1162,8 +1187,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         normalMapFeature.params.strength ?? 1.0,
                         normalMapFeature.params.strength ?? 1.0
                     );
+                    // 使用第二層 UV
+                    shaderMat.uniforms.normalMapUseUV2.value = normalMapFeature.params.useUV2 ? 1.0 : 0.0;
                 } else {
                     shaderMat.uniforms.useNormalMap.value = 0.0;
+                    shaderMat.uniforms.normalMapUseUV2.value = 0.0;
                 }
 
                 materialsRef.current.push(shaderMat);
