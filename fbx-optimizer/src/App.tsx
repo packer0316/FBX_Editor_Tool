@@ -530,6 +530,8 @@ function App() {
               params: {
                 texture: null,
                 strength: 1.0,
+                nonColor: true,   // Non-Color 模式（與 Blender 相同）
+                useUV2: false,    // 使用第二層 UV
               },
             },
           ],
