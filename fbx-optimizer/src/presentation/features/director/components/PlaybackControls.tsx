@@ -3,7 +3,7 @@
  */
 
 import React, { useCallback, memo } from 'react';
-import { Play, Pause, Square, Repeat, SkipBack, SkipForward } from 'lucide-react';
+import { Play, Pause, Square, Repeat, SkipBack, SkipForward, Brackets, X } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
 
@@ -17,6 +17,10 @@ export const PlaybackControls: React.FC = memo(() => {
     setCurrentFrame,
     setFps,
     setTotalFrames,
+    setInPoint,
+    setOutPoint,
+    clearLoopRegion,
+    toggleLoopRegion,
   } = useDirectorStore();
 
   const handlePlayPause = useCallback(() => {
@@ -32,12 +36,22 @@ export const PlaybackControls: React.FC = memo(() => {
   }, [stop]);
 
   const handleSkipToStart = useCallback(() => {
-    setCurrentFrame(0);
-  }, [setCurrentFrame]);
+    // 有區間且啟用時跳到入點，否則跳到開頭
+    if (timeline.loopRegion.enabled && timeline.loopRegion.inPoint !== null) {
+      setCurrentFrame(timeline.loopRegion.inPoint);
+    } else {
+      setCurrentFrame(0);
+    }
+  }, [setCurrentFrame, timeline.loopRegion]);
 
   const handleSkipToEnd = useCallback(() => {
-    setCurrentFrame(timeline.totalFrames);
-  }, [setCurrentFrame, timeline.totalFrames]);
+    // 有區間且啟用時跳到出點，否則跳到結尾
+    if (timeline.loopRegion.enabled && timeline.loopRegion.outPoint !== null) {
+      setCurrentFrame(timeline.loopRegion.outPoint);
+    } else {
+      setCurrentFrame(timeline.totalFrames);
+    }
+  }, [setCurrentFrame, timeline.totalFrames, timeline.loopRegion]);
 
   const handleFrameChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = parseInt(e.target.value, 10);
@@ -59,6 +73,26 @@ export const PlaybackControls: React.FC = memo(() => {
       setTotalFrames(value);
     }
   }, [setTotalFrames]);
+
+  // 區間播放控制
+  const handleSetInPoint = useCallback(() => {
+    setInPoint(timeline.currentFrame);
+  }, [setInPoint, timeline.currentFrame]);
+
+  const handleSetOutPoint = useCallback(() => {
+    setOutPoint(timeline.currentFrame);
+  }, [setOutPoint, timeline.currentFrame]);
+
+  const handleClearLoopRegion = useCallback(() => {
+    clearLoopRegion();
+  }, [clearLoopRegion]);
+
+  const handleToggleLoopRegion = useCallback(() => {
+    toggleLoopRegion();
+  }, [toggleLoopRegion]);
+
+  // 判斷是否有有效區間
+  const hasValidLoopRegion = timeline.loopRegion.inPoint !== null && timeline.loopRegion.outPoint !== null;
 
   return (
     <div className="h-10 flex items-center justify-between px-4 border-t border-white/10 bg-gray-800/50">
@@ -113,6 +147,58 @@ export const PlaybackControls: React.FC = memo(() => {
         >
           <Repeat size={16} />
         </button>
+
+        <div className="w-px h-5 bg-white/10 mx-2" />
+
+        {/* 區間播放控制 */}
+        <button
+          onClick={handleSetInPoint}
+          className={`px-1.5 py-1 rounded text-xs font-mono transition-colors ${
+            timeline.loopRegion.inPoint !== null
+              ? 'bg-cyan-500/20 text-cyan-400'
+              : 'hover:bg-white/10 text-gray-400 hover:text-white'
+          }`}
+          title="設定入點 (I)"
+        >
+          I
+        </button>
+        
+        <button
+          onClick={handleSetOutPoint}
+          className={`px-1.5 py-1 rounded text-xs font-mono transition-colors ${
+            timeline.loopRegion.outPoint !== null
+              ? 'bg-cyan-500/20 text-cyan-400'
+              : 'hover:bg-white/10 text-gray-400 hover:text-white'
+          }`}
+          title="設定出點 (O)"
+        >
+          O
+        </button>
+
+        <button
+          onClick={handleToggleLoopRegion}
+          disabled={!hasValidLoopRegion}
+          className={`p-1.5 rounded transition-colors ${
+            timeline.loopRegion.enabled && hasValidLoopRegion
+              ? 'bg-cyan-500/20 text-cyan-400'
+              : hasValidLoopRegion
+              ? 'hover:bg-white/10 text-gray-400 hover:text-white'
+              : 'text-gray-600 cursor-not-allowed'
+          }`}
+          title={timeline.loopRegion.enabled ? '關閉區間播放' : '開啟區間播放'}
+        >
+          <Brackets size={16} />
+        </button>
+
+        {(timeline.loopRegion.inPoint !== null || timeline.loopRegion.outPoint !== null) && (
+          <button
+            onClick={handleClearLoopRegion}
+            className="p-1.5 rounded hover:bg-red-500/20 text-gray-400 hover:text-red-400 transition-colors"
+            title="清除區間 (Alt+X)"
+          >
+            <X size={14} />
+          </button>
+        )}
       </div>
 
       {/* 中間：時間顯示 */}
@@ -124,6 +210,17 @@ export const PlaybackControls: React.FC = memo(() => {
         <span className="text-gray-500">
           {formatFrameTime(timeline.totalFrames, timeline.fps, true)}
         </span>
+        
+        {/* 區間顯示 */}
+        {hasValidLoopRegion && (
+          <span className={`text-xs px-2 py-0.5 rounded ${
+            timeline.loopRegion.enabled 
+              ? 'bg-cyan-500/20 text-cyan-400' 
+              : 'bg-gray-700 text-gray-500'
+          }`}>
+            [{timeline.loopRegion.inPoint} - {timeline.loopRegion.outPoint}]
+          </span>
+        )}
       </div>
 
       {/* 右側：設定 */}

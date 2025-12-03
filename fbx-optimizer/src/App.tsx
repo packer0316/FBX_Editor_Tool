@@ -235,6 +235,9 @@ function App() {
   // Recording state
   const [isRecording, setIsRecording] = useState(false);
 
+  // UI 顯示/隱藏狀態
+  const [isUIHidden, setIsUIHidden] = useState(false);
+
   // Performance Monitor: 定期獲取 renderer info
   useEffect(() => {
     if (!showPerformanceMonitor) {
@@ -1273,8 +1276,8 @@ function App() {
       )}
 
       <div className="flex-1 flex overflow-hidden relative">
-        {/* Left Toolbar (Floating Glass) */}
-        <LeftToolbar
+        {/* Left Toolbar (Floating Glass) - 可隱藏 */}
+        {!isUIHidden && <LeftToolbar
           currentTheme={currentTheme}
           showGrid={showGrid}
           setShowGrid={setShowGrid}
@@ -1315,7 +1318,7 @@ function App() {
           setCameraMoveSpeed={setCameraMoveSpeed}
           showPerformanceMonitor={showPerformanceMonitor}
           setShowPerformanceMonitor={setShowPerformanceMonitor}
-        />
+        />}
 
         {/* 左側：3D 預覽區 */}
         <div className="flex-1 relative flex flex-col">
@@ -1419,6 +1422,8 @@ function App() {
                 setCustomHeight(height);
               }}
               theme={currentTheme}
+              isUIHidden={isUIHidden}
+              onToggleUIVisibility={() => setIsUIHidden(!isUIHidden)}
             />
             <div
               ref={aspectRatioContainerRef}
@@ -1428,14 +1433,17 @@ function App() {
                 style={getAspectRatioStyle()}
                 className="relative z-[10]"
               >
-                <PreviewModeToggle
-                  show2DFront={is2DFrontEnabled}
-                  show2DBack={is2DBackEnabled}
-                  show3D={is3DEnabled}
-                  onToggle2DFront={handleToggle2DFront}
-                  onToggle2DBack={handleToggle2DBack}
-                  onToggle3D={handleToggle3D}
-                />
+                {/* 2D/3D 切換按鈕 - 可隱藏 */}
+                {!isUIHidden && (
+                  <PreviewModeToggle
+                    show2DFront={is2DFrontEnabled}
+                    show2DBack={is2DBackEnabled}
+                    show3D={is3DEnabled}
+                    onToggle2DFront={handleToggle2DFront}
+                    onToggle2DBack={handleToggle2DBack}
+                    onToggle3D={handleToggle3D}
+                  />
+                )}
                 <div
                   ref={previewContainerRef}
                   className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/80"
@@ -1577,6 +1585,7 @@ function App() {
             {isDirectorMode ? (
               <DirectorPanel 
                 actionSources={actionSources}
+                models={models}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
               />
             ) : (

@@ -131,7 +131,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({ actio
                       {clip.displayName}
                     </span>
                     <span className="text-xs text-gray-500 font-mono">
-                      {formatFrameTime(clip.durationFrames, 30, false)}
+                      {formatFrameTime(clip.durationFrames, 30, true)}
                     </span>
                   </div>
                 ))}

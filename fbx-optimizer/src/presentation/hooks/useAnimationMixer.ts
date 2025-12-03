@@ -182,7 +182,7 @@ export function useAnimationMixer(
       // 設置時間
       action.time = time;
       
-      // 同步到 model.userData（供 ModelPreview 使用）
+      // 同步到 model.userData
       if (model) {
         model.userData.animationTime = time;
       }

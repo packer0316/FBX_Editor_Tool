@@ -180,6 +180,14 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
       console.log('[useDragAndDrop] Parsed data:', data, 'startFrame:', startFrame);
       
       if (data.type === 'new') {
+        // 檢查該軌道是否有片段，如果有就自動貼合到最後一個片段後面
+        let finalStartFrame = startFrame;
+        if (track.clips.length > 0) {
+          // 找出軌道上最後一個片段的結束位置
+          const lastEndFrame = Math.max(...track.clips.map(c => c.endFrame + 1));
+          finalStartFrame = lastEndFrame;
+        }
+        
         // 新增片段
         const result = addClip({
           trackId,
@@ -189,7 +197,7 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
           sourceAnimationId: data.sourceAnimationId,
           sourceAnimationName: data.sourceAnimationName,
           sourceAnimationDuration: data.durationFrames,
-          startFrame,
+          startFrame: finalStartFrame,
           color: data.color,
           // Spine 特有屬性
           ...(data.sourceType === 'spine' && {

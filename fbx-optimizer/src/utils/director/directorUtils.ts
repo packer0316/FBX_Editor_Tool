@@ -202,25 +202,38 @@ export function snapToClipEdges(
 /**
  * 將幀數格式化為時間字串
  * 
+ * 格式規則：
+ * - 小於 60 秒：`S.ff` 或 `SS.ff`（如 `3.00`, `45.50`）
+ * - 大於等於 60 秒：`M:SS.ff`（如 `1:03.00`, `2:30.50`）
+ * - 大於等於 60 分鐘：`H:MM:SS.ff`（如 `1:02:30.50`）
+ * 
  * @param frame - 幀數
  * @param fps - 幀率
- * @param showFrames - 是否顯示幀數
+ * @param showDecimals - 是否顯示小數點（精確到 0.01 秒）
  */
 export function formatFrameTime(
   frame: number,
   fps: number = DEFAULT_FPS,
-  showFrames: boolean = true
+  showDecimals: boolean = true
 ): string {
   const totalSeconds = frame / fps;
-  const minutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
   const seconds = Math.floor(totalSeconds % 60);
-  const frames = frame % fps;
+  const decimals = Math.round((totalSeconds % 1) * 100); // 取兩位小數
   
-  if (showFrames) {
-    return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}:${frames.toString().padStart(2, '0')}`;
+  const decimalStr = showDecimals ? `.${decimals.toString().padStart(2, '0')}` : '';
+  
+  if (hours > 0) {
+    // H:MM:SS.ff
+    return `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}${decimalStr}`;
+  } else if (minutes > 0) {
+    // M:SS.ff
+    return `${minutes}:${seconds.toString().padStart(2, '0')}${decimalStr}`;
+  } else {
+    // S.ff 或 SS.ff
+    return `${seconds}${decimalStr}`;
   }
-  
-  return `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
 }
 
 /**

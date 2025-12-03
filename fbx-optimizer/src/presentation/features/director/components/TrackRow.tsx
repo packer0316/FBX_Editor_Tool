@@ -6,11 +6,12 @@
 
 import React, { memo, useCallback, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, Lock, Unlock, Volume2, VolumeX, Edit3, Copy, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, Lock, Unlock, Eye, EyeOff, Edit3, Copy, ArrowUp, ArrowDown } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ClipBlock } from './ClipBlock';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
 import type { DirectorTrack } from '../../../../domain/entities/director/director.types';
+import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 
 interface ContextMenuState {
   visible: boolean;
@@ -25,6 +26,8 @@ interface TrackRowProps {
   isHeaderOnly?: boolean;
   scrollOffsetX?: number;     // TODO-7: 用於虛擬化渲染
   containerWidth?: number;    // TODO-7: 用於虛擬化渲染
+  /** 模型實例列表（用於查詢音效/特效綁定） */
+  models?: ModelInstance[];
 }
 
 export const TrackRow: React.FC<TrackRowProps> = memo(({
@@ -34,6 +37,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   isHeaderOnly = false,
   scrollOffsetX,
   containerWidth,
+  models = [],
 }) => {
   const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui } = useDirectorStore();
   
@@ -188,10 +192,10 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
           {/* 控制按鈕 */}
           <button
             onClick={handleToggleMute}
-            className={`p-1 rounded hover:bg-white/10 ${track.isMuted ? 'text-red-400' : 'text-gray-500'}`}
-            title={track.isMuted ? '取消靜音' : '靜音'}
+            className={`p-1 rounded hover:bg-white/10 ${track.isMuted ? 'text-gray-600' : 'text-gray-500'}`}
+            title={track.isMuted ? '顯示軌道' : '隱藏軌道'}
           >
-            {track.isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+            {track.isMuted ? <EyeOff size={12} /> : <Eye size={12} />}
           </button>
           
           <button
@@ -264,8 +268,8 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
                 onClick={handleToggleMute}
                 className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2"
               >
-                {track.isMuted ? <Volume2 size={12} /> : <VolumeX size={12} />}
-                <span>{track.isMuted ? '取消靜音' : '靜音'}</span>
+                {track.isMuted ? <Eye size={12} /> : <EyeOff size={12} />}
+                <span>{track.isMuted ? '顯示軌道' : '隱藏軌道'}</span>
               </button>
               <button
                 onClick={handleToggleLock}
@@ -314,6 +318,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
             clip={clip}
             pixelsPerFrame={pixelsPerFrame}
             isLocked={track.isLocked}
+            models={models}
           />
         ))}
       </div>
@@ -355,8 +360,8 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
               onClick={() => { handleToggleMute(); closeContextMenu(); }}
               className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2"
             >
-              {track.isMuted ? <Volume2 size={12} /> : <VolumeX size={12} />}
-              <span>{track.isMuted ? '取消靜音' : '靜音'}</span>
+              {track.isMuted ? <Eye size={12} /> : <EyeOff size={12} />}
+              <span>{track.isMuted ? '顯示軌道' : '隱藏軌道'}</span>
             </button>
             <button
               onClick={() => { handleToggleLock(); closeContextMenu(); }}

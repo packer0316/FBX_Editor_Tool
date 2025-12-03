@@ -280,6 +280,9 @@ onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById 
 
 ---
 
+架構型的文件檔案 放在 archi_docs/ 目錄下 
+臨時文件檔案 放在 temp_docs/ 目錄下 
+
 ## 📖 參考文檔
 
 - **架構詳解**：`PROJECT_ARCHITECTURE.md`

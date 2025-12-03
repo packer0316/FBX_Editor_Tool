@@ -120,6 +120,20 @@ export interface DirectorTrack {
 }
 
 /**
+ * 區間播放狀態（Loop Region / In-Out Points）
+ */
+export interface LoopRegion {
+  /** 入點幀數（null 表示未設定） */
+  inPoint: number | null;
+  
+  /** 出點幀數（null 表示未設定） */
+  outPoint: number | null;
+  
+  /** 是否啟用區間播放 */
+  enabled: boolean;
+}
+
+/**
  * 時間軸狀態
  */
 export interface TimelineState {
@@ -137,6 +151,9 @@ export interface TimelineState {
   
   /** 是否循環播放 */
   isLooping: boolean;
+  
+  /** 區間播放設定 */
+  loopRegion: LoopRegion;
 }
 
 /**

@@ -225,21 +225,30 @@ describe('snapToGrid', () => {
 // ============================================================================
 
 describe('formatFrameTime', () => {
-  it('應該格式化為 MM:SS:FF', () => {
-    expect(formatFrameTime(0, 30, true)).toBe('00:00:00');
-    expect(formatFrameTime(30, 30, true)).toBe('00:01:00');
-    expect(formatFrameTime(90, 30, true)).toBe('00:03:00');
-    expect(formatFrameTime(45, 30, true)).toBe('00:01:15');
+  it('應該格式化小於 60 秒為 S.ff', () => {
+    expect(formatFrameTime(0, 30, true)).toBe('0.00');
+    expect(formatFrameTime(30, 30, true)).toBe('1.00');   // 1 秒
+    expect(formatFrameTime(90, 30, true)).toBe('3.00');   // 3 秒
+    expect(formatFrameTime(45, 30, true)).toBe('1.50');   // 1.5 秒
+    expect(formatFrameTime(15, 30, true)).toBe('0.50');   // 0.5 秒
   });
 
-  it('應該格式化為 MM:SS（不顯示幀）', () => {
-    expect(formatFrameTime(30, 30, false)).toBe('00:01');
-    expect(formatFrameTime(90, 30, false)).toBe('00:03');
+  it('應該格式化 60 秒以上為 M:SS.ff', () => {
+    expect(formatFrameTime(1800, 30, true)).toBe('1:00.00'); // 60 秒
+    expect(formatFrameTime(1830, 30, true)).toBe('1:01.00'); // 61 秒
+    expect(formatFrameTime(3600, 30, true)).toBe('2:00.00'); // 120 秒
+    expect(formatFrameTime(2745, 30, true)).toBe('1:31.50'); // 91.5 秒
   });
 
-  it('應該處理分鐘', () => {
-    expect(formatFrameTime(1800, 30, true)).toBe('01:00:00'); // 60 秒
-    expect(formatFrameTime(3600, 30, true)).toBe('02:00:00'); // 120 秒
+  it('應該格式化 60 分鐘以上為 H:MM:SS.ff', () => {
+    expect(formatFrameTime(108000, 30, true)).toBe('1:00:00.00'); // 3600 秒 = 1 小時
+    expect(formatFrameTime(111600, 30, true)).toBe('1:02:00.00'); // 3720 秒
+  });
+
+  it('應該支援不顯示小數', () => {
+    expect(formatFrameTime(30, 30, false)).toBe('1');
+    expect(formatFrameTime(1800, 30, false)).toBe('1:00');
+    expect(formatFrameTime(108000, 30, false)).toBe('1:00:00');
   });
 });
 

@@ -102,6 +102,12 @@ interface DirectorActions {
   setFps: (fps: number) => void;
   setTotalFrames: (frames: number) => void;
   
+  // 區間播放控制
+  setInPoint: (frame: number | null) => void;
+  setOutPoint: (frame: number | null) => void;
+  clearLoopRegion: () => void;
+  toggleLoopRegion: () => void;
+  
   // UI 控制
   setZoom: (zoom: number) => void;
   setScrollOffset: (x: number, y: number) => void;
@@ -137,6 +143,11 @@ const initialTimelineState: TimelineState = {
   currentFrame: 0,
   isPlaying: false,
   isLooping: false,
+  loopRegion: {
+    inPoint: null,
+    outPoint: null,
+    enabled: false,
+  },
 };
 
 const initialUIState: DirectorUIState = {
@@ -464,9 +475,24 @@ export const useDirectorStore = create<DirectorStore>()(
       // ========================================
       
       play: () => {
+        const { timeline } = get();
+        const { loopRegion, currentFrame } = timeline;
+        
+        // 如果有有效區間且播放頭在區間外，跳到入點
+        let newFrame = currentFrame;
+        if (loopRegion.enabled && loopRegion.inPoint !== null && loopRegion.outPoint !== null) {
+          if (currentFrame < loopRegion.inPoint || currentFrame >= loopRegion.outPoint) {
+            newFrame = loopRegion.inPoint;
+          }
+        }
+        
         set(
           (state) => ({
-            timeline: { ...state.timeline, isPlaying: true },
+            timeline: { 
+              ...state.timeline, 
+              isPlaying: true,
+              currentFrame: newFrame,
+            },
           }),
           undefined,
           'play'
@@ -484,9 +510,17 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       stop: () => {
+        const { timeline } = get();
+        const { loopRegion } = timeline;
+        
+        // 有區間且啟用時跳到入點，否則跳到開頭
+        const targetFrame = (loopRegion.enabled && loopRegion.inPoint !== null) 
+          ? loopRegion.inPoint 
+          : 0;
+        
         set(
           (state) => ({
-            timeline: { ...state.timeline, isPlaying: false, currentFrame: 0 },
+            timeline: { ...state.timeline, isPlaying: false, currentFrame: targetFrame },
           }),
           undefined,
           'stop'
@@ -541,6 +575,131 @@ export const useDirectorStore = create<DirectorStore>()(
           }),
           undefined,
           'setTotalFrames'
+        );
+      },
+      
+      // ========================================
+      // 區間播放控制
+      // ========================================
+      
+      setInPoint: (frame: number | null) => {
+        const { timeline } = get();
+        let inPoint = frame;
+        
+        // 邊界處理
+        if (inPoint !== null) {
+          inPoint = Math.max(0, Math.min(inPoint, timeline.totalFrames));
+          // 如果 inPoint > outPoint，交換
+          if (timeline.loopRegion.outPoint !== null && inPoint > timeline.loopRegion.outPoint) {
+            set(
+              (state) => ({
+                timeline: {
+                  ...state.timeline,
+                  loopRegion: {
+                    ...state.timeline.loopRegion,
+                    inPoint: state.timeline.loopRegion.outPoint,
+                    outPoint: inPoint,
+                    enabled: true,
+                  },
+                },
+              }),
+              undefined,
+              'setInPoint'
+            );
+            return;
+          }
+        }
+        
+        set(
+          (state) => ({
+            timeline: {
+              ...state.timeline,
+              loopRegion: {
+                ...state.timeline.loopRegion,
+                inPoint,
+                enabled: inPoint !== null || state.timeline.loopRegion.outPoint !== null,
+              },
+            },
+          }),
+          undefined,
+          'setInPoint'
+        );
+      },
+      
+      setOutPoint: (frame: number | null) => {
+        const { timeline } = get();
+        let outPoint = frame;
+        
+        // 邊界處理
+        if (outPoint !== null) {
+          outPoint = Math.max(0, Math.min(outPoint, timeline.totalFrames));
+          // 如果 outPoint < inPoint，交換
+          if (timeline.loopRegion.inPoint !== null && outPoint < timeline.loopRegion.inPoint) {
+            set(
+              (state) => ({
+                timeline: {
+                  ...state.timeline,
+                  loopRegion: {
+                    ...state.timeline.loopRegion,
+                    inPoint: outPoint,
+                    outPoint: state.timeline.loopRegion.inPoint,
+                    enabled: true,
+                  },
+                },
+              }),
+              undefined,
+              'setOutPoint'
+            );
+            return;
+          }
+        }
+        
+        set(
+          (state) => ({
+            timeline: {
+              ...state.timeline,
+              loopRegion: {
+                ...state.timeline.loopRegion,
+                outPoint,
+                enabled: state.timeline.loopRegion.inPoint !== null || outPoint !== null,
+              },
+            },
+          }),
+          undefined,
+          'setOutPoint'
+        );
+      },
+      
+      clearLoopRegion: () => {
+        set(
+          (state) => ({
+            timeline: {
+              ...state.timeline,
+              loopRegion: {
+                inPoint: null,
+                outPoint: null,
+                enabled: false,
+              },
+            },
+          }),
+          undefined,
+          'clearLoopRegion'
+        );
+      },
+      
+      toggleLoopRegion: () => {
+        set(
+          (state) => ({
+            timeline: {
+              ...state.timeline,
+              loopRegion: {
+                ...state.timeline.loopRegion,
+                enabled: !state.timeline.loopRegion.enabled,
+              },
+            },
+          }),
+          undefined,
+          'toggleLoopRegion'
         );
       },
       
@@ -724,4 +883,5 @@ export const useTracks = () => useDirectorStore((state) => state.tracks);
 export const useDirectorUI = () => useDirectorStore((state) => state.ui);
 export const useCurrentFrame = () => useDirectorStore((state) => state.timeline.currentFrame);
 export const useIsPlaying = () => useDirectorStore((state) => state.timeline.isPlaying);
+export const useLoopRegion = () => useDirectorStore((state) => state.timeline.loopRegion);
 

@@ -152,19 +152,38 @@ export function useTimelinePlayback(
 
     const unsubscribe = directorEventBus.onTick(({ delta }) => {
       const state = useDirectorStore.getState();
-      const { fps: currentFps, totalFrames, isLooping } = state.timeline;
+      const { fps: currentFps, totalFrames, isLooping, loopRegion } = state.timeline;
 
       // 計算新幀
       let newFrame = frameRef.current + delta * currentFps;
 
-      // 處理循環/結束
-      if (newFrame >= totalFrames) {
-        if (isLooping) {
-          newFrame = newFrame % totalFrames;
-        } else {
-          newFrame = totalFrames;
-          state.pause();
-          return;
+      // 區間播放邏輯
+      const hasValidLoopRegion = loopRegion.enabled && 
+        loopRegion.inPoint !== null && 
+        loopRegion.outPoint !== null;
+
+      if (hasValidLoopRegion) {
+        const inPoint = loopRegion.inPoint!;
+        const outPoint = loopRegion.outPoint!;
+        
+        // 到達出點時跳回入點
+        if (newFrame >= outPoint) {
+          newFrame = inPoint + (newFrame - outPoint);
+          // 確保不會超過出點（處理極大的 delta）
+          if (newFrame >= outPoint) {
+            newFrame = inPoint;
+          }
+        }
+      } else {
+        // 原有的全範圍播放邏輯
+        if (newFrame >= totalFrames) {
+          if (isLooping) {
+            newFrame = newFrame % totalFrames;
+          } else {
+            newFrame = totalFrames;
+            state.pause();
+            return;
+          }
         }
       }
 

@@ -55,15 +55,6 @@ export const Playhead: React.FC<PlayheadProps> = memo(({
       className="absolute top-0 z-20 pointer-events-none"
       style={{ left: position, height }}
     >
-      {/* 播放頭頂部手柄 */}
-      <div
-        className="absolute -top-0 left-1/2 -translate-x-1/2 w-3 h-4 bg-red-500 cursor-ew-resize pointer-events-auto"
-        style={{
-          clipPath: 'polygon(0 0, 100% 0, 100% 60%, 50% 100%, 0 60%)',
-        }}
-        onMouseDown={handleMouseDown}
-      />
-      
       {/* 播放頭線條 */}
       <div className="absolute left-1/2 -translate-x-1/2 w-px h-full bg-red-500" />
     </div>

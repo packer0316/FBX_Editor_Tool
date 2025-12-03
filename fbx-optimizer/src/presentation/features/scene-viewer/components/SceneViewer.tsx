@@ -466,7 +466,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     // 設置動畫時間
                     actionRef.current.time = time;
                     
-                    // 同步時間到 model.userData 供 ModelPreview 使用
+                    // 同步時間到 model.userData
                     if (model) {
                         model.userData.animationTime = time;
                     }
@@ -541,7 +541,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     // console.log('SceneViewer: sending time', actionRef.current.time);
                     onTimeUpdateRef.current(actionRef.current.time);
                     
-                    // 將當前動畫時間存到 model.userData 中，供 ModelPreview 同步使用
+                    // 將當前動畫時間存到 model.userData 中
                     if (model) {
                         model.userData.animationTime = actionRef.current.time;
                     }

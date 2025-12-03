@@ -4,11 +4,11 @@
 
 import React, { useRef, useCallback, useEffect, useState } from 'react';
 import { Plus, ZoomIn, ZoomOut } from 'lucide-react';
-import { useDirectorStore } from '../../../stores/directorStore';
+import { useDirectorStore, useLoopRegion } from '../../../stores/directorStore';
 import { TimelineRuler } from './TimelineRuler';
 import { TrackRow } from './TrackRow';
-import { Playhead } from './Playhead';
 import { DEFAULT_PIXELS_PER_FRAME, MIN_ZOOM, MAX_ZOOM } from '../../../../domain/entities/director/director.types';
+import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 
 const DEFAULT_HEADER_WIDTH = 140; // 預設 Track 標題區寬度
 const MIN_HEADER_WIDTH = 80;
@@ -18,9 +18,15 @@ const MAX_HEADER_WIDTH = 300;
 const ZOOM_SENSITIVITY = 0.002;  // 滾輪縮放靈敏度
 const ZOOM_BUTTON_FACTOR = 1.25; // 按鈕縮放倍率（放大/縮小 25%）
 
-export const TimelineEditor: React.FC = () => {
+interface TimelineEditorProps {
+  /** 模型實例列表（用於查詢音效/特效綁定） */
+  models?: ModelInstance[];
+}
+
+export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll } = useDirectorStore();
+  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame } = useDirectorStore();
+  const loopRegion = useLoopRegion();
   
   // 軌道名稱欄位寬度狀態
   const [headerWidth, setHeaderWidth] = useState(DEFAULT_HEADER_WIDTH);
@@ -218,8 +224,63 @@ export const TimelineEditor: React.FC = () => {
     addTrack();
   };
 
+  // 播放頭位置（相對於時間軸區域左邊界）
+  const playheadPosition = timeline.currentFrame * pixelsPerFrame - ui.scrollOffsetX + headerWidth;
+  const isPlayheadVisible = playheadPosition >= headerWidth && playheadPosition <= headerWidth + containerWidth;
+
+  // 播放頭拖曳處理
+  const handlePlayheadDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const x = moveEvent.clientX - rect.left + ui.scrollOffsetX;
+      const frame = Math.round(x / pixelsPerFrame);
+      setCurrentFrame(Math.max(0, Math.min(frame, timeline.totalFrames)));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [pixelsPerFrame, setCurrentFrame, timeline.totalFrames, ui.scrollOffsetX]);
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden bg-gray-900/50">
+    <div className="flex-1 flex flex-col overflow-hidden bg-gray-900/50 relative">
+      {/* 全局播放頭（跨越時間刻度尺和軌道區域） */}
+      {isPlayheadVisible && (
+        <div
+          className="absolute top-0 bottom-0 z-30 pointer-events-none"
+          style={{ left: playheadPosition }}
+        >
+          {/* 頭部手柄 */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 w-4 cursor-ew-resize pointer-events-auto group"
+            style={{ top: 0, height: 24 }}
+            onMouseDown={handlePlayheadDrag}
+          >
+            {/* 倒三角形頭部 */}
+            <div 
+              className="w-full h-full bg-red-500/80 group-hover:bg-red-500 transition-colors"
+              style={{
+                clipPath: 'polygon(0 0, 100% 0, 100% 65%, 50% 100%, 0 65%)',
+              }}
+            />
+          </div>
+          {/* 垂直線條 */}
+          <div 
+            className="absolute left-1/2 -translate-x-1/2 w-px bg-red-500"
+            style={{ top: 24, bottom: 0 }}
+          />
+        </div>
+      )}
+
       {/* 頂部：時間刻度尺 */}
       <div className="flex h-6 border-b border-white/10">
         {/* 左側：縮放控制 */}
@@ -322,6 +383,21 @@ export const TimelineEditor: React.FC = () => {
               transition: isZooming ? 'none' : 'width 0.15s ease-out',
             }}
           >
+            {/* 區間播放背景區域 */}
+            {loopRegion.inPoint !== null && loopRegion.outPoint !== null && (
+              <div
+                className={`absolute top-0 bottom-0 pointer-events-none ${
+                  loopRegion.enabled 
+                    ? 'bg-cyan-500/10' 
+                    : 'bg-gray-500/5'
+                }`}
+                style={{
+                  left: loopRegion.inPoint * pixelsPerFrame,
+                  width: (loopRegion.outPoint - loopRegion.inPoint) * pixelsPerFrame,
+                }}
+              />
+            )}
+            
             {tracks.length === 0 ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <span className="text-gray-500 text-sm">拖曳動作到此處</span>
@@ -337,17 +413,12 @@ export const TimelineEditor: React.FC = () => {
                     isHeaderOnly={false}
                     scrollOffsetX={ui.scrollOffsetX}
                     containerWidth={containerWidth}
+                    models={models}
                   />
                 ))}
               </div>
             )}
 
-            {/* 播放頭 */}
-            <Playhead
-              currentFrame={timeline.currentFrame}
-              pixelsPerFrame={pixelsPerFrame}
-              height={Math.max(tracks.length * 48, 100)}
-            />
           </div>
         </div>
       </div>

@@ -11,6 +11,7 @@ import { PlaybackControls } from './PlaybackControls';
 import { useTimelinePlayback } from '../hooks/useTimelinePlayback';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
 import type { ActionSource } from '../../../../domain/entities/director/director.types';
+import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 
 // 提示按鈕組件
 const HintButton: React.FC = () => {
@@ -65,6 +66,8 @@ const HintButton: React.FC = () => {
 interface DirectorPanelProps {
   /** 動作來源列表（從模型中收集） */
   actionSources: ActionSource[];
+  /** 模型實例列表（用於查詢音效/特效綁定） */
+  models?: ModelInstance[];
   /** 更新模型動畫的回調（向後兼容，建議改用 EventBus 訂閱） */
   onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number, localFrame: number) => void;
   /** 調整高度把手的 mouseDown 處理 */
@@ -73,6 +76,7 @@ interface DirectorPanelProps {
 
 export const DirectorPanel: React.FC<DirectorPanelProps> = ({ 
   actionSources,
+  models = [],
   onUpdateModelAnimation,
   onResizeHandleMouseDown,
 }) => {
@@ -163,7 +167,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
         <ActionSourcePanel actionSources={actionSources} />
 
         {/* 右側：時間軸編輯器 */}
-        <TimelineEditor />
+        <TimelineEditor models={models} />
       </div>
 
       {/* 底部：播放控制列 */}

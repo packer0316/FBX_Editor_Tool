@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { RotateCcw, Camera, Video, Square, Monitor, X, Clapperboard } from 'lucide-react';
+import { RotateCcw, Camera, Video, Square, Monitor, X, Clapperboard, Eye, EyeOff } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { type ThemeStyle } from '../../../hooks/useTheme';
 
-export type AspectRatio = '16:9' | '16:10' | '21:9' | '32:9' | 'custom' | 'free';
+export type AspectRatio = '16:9' | '16:10' | '21:9' | '32:9' | '2.5:1' | 'custom' | 'free';
 
 interface SceneToolbarProps {
     onResetCamera: () => void;
@@ -17,6 +17,10 @@ interface SceneToolbarProps {
     customHeight?: number;
     onCustomSizeChange?: (width: number, height: number) => void;
     theme: ThemeStyle;
+    /** UI 是否隱藏 */
+    isUIHidden?: boolean;
+    /** 切換 UI 顯示/隱藏 */
+    onToggleUIVisibility?: () => void;
 }
 
 const SceneToolbar: React.FC<SceneToolbarProps> = ({
@@ -30,7 +34,9 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     customWidth = 1920,
     customHeight = 1080,
     onCustomSizeChange,
-    theme
+    theme,
+    isUIHidden = false,
+    onToggleUIVisibility
 }) => {
     const [showAspectMenu, setShowAspectMenu] = useState(false);
     const { isDirectorMode, toggleDirectorMode } = useDirectorStore();
@@ -56,6 +62,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     // 基於 1080p 高度計算各比例的像素尺寸
     const aspectRatioOptions: { value: AspectRatio; label: string; pixels?: string }[] = [
         { value: 'free', label: '自由比例' },
+        { value: '2.5:1', label: '2.5:1', pixels: '1600 × 640' },
         { value: '16:9', label: '16:9', pixels: '1920 × 1080' },
         { value: '16:10', label: '16:10', pixels: '1728 × 1080' },
         { value: '21:9', label: '21:9', pixels: '2560 × 1080' },
@@ -99,7 +106,11 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
     };
 
     return (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-[350]">
+        <div 
+            className={`absolute top-6 left-1/2 -translate-x-1/2 flex gap-2 z-[350] transition-all duration-300 ${
+                isUIHidden ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+            }`}
+        >
             <div className={`glass rounded-full px-2 py-1.5 flex items-center gap-1 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}>
                 <button
                     onClick={onResetCamera}
@@ -195,6 +206,31 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                         </div>
                     )}
                 </div>
+
+                {/* 分隔線 */}
+                <div className="w-px h-5 bg-white/10 mx-1"></div>
+
+                {/* UI 顯示/隱藏按鈕 */}
+                {onToggleUIVisibility && (
+                    <button
+                        onClick={onToggleUIVisibility}
+                        className={`p-2.5 rounded-full transition-all duration-300 group relative ${
+                            isUIHidden
+                                ? 'text-gray-500 bg-gray-500/20'
+                                : `${theme.button} hover:scale-110`
+                        }`}
+                        title={isUIHidden ? '顯示介面' : '隱藏介面'}
+                    >
+                        {isUIHidden ? <EyeOff size={18} /> : <Eye size={18} />}
+                        <span className="sr-only">{isUIHidden ? '顯示介面' : '隱藏介面'}</span>
+
+                        {/* Tooltip */}
+                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                            {isUIHidden ? '顯示介面' : '隱藏介面'}
+                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                        </div>
+                    </button>
+                )}
 
                 {/* 分隔線 */}
                 <div className="w-px h-5 bg-white/10 mx-1"></div>

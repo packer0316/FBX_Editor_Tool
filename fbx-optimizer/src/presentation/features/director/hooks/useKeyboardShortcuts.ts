@@ -25,9 +25,12 @@ interface UseKeyboardShortcutsOptions {
  * - Home: 跳到開頭
  * - End: 跳到結尾
  * - ESC: 關閉 Director Mode
- * - +/=: 放大時間軸 (TODO-10)
- * - -: 縮小時間軸 (TODO-10)
- * - Ctrl+0: 重設縮放為 100% (TODO-10)
+ * - +/=: 放大時間軸
+ * - -: 縮小時間軸
+ * - Ctrl+0: 重設縮放為 100%
+ * - I: 設定入點（In Point）
+ * - O: 設定出點（Out Point）
+ * - Alt+X: 清除區間
  */
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
   const { enabled = true } = options;
@@ -42,6 +45,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     setZoom,
     removeClip,
     exitDirectorMode,
+    setInPoint,
+    setOutPoint,
+    clearLoopRegion,
   } = useDirectorStore();
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -90,12 +96,22 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       case 'Home':
         e.preventDefault();
-        setCurrentFrame(0);
+        // 有區間且啟用時跳到入點，否則跳到開頭
+        if (timeline.loopRegion.enabled && timeline.loopRegion.inPoint !== null) {
+          setCurrentFrame(timeline.loopRegion.inPoint);
+        } else {
+          setCurrentFrame(0);
+        }
         break;
 
       case 'End':
         e.preventDefault();
-        setCurrentFrame(timeline.totalFrames);
+        // 有區間且啟用時跳到出點，否則跳到結尾
+        if (timeline.loopRegion.enabled && timeline.loopRegion.outPoint !== null) {
+          setCurrentFrame(timeline.loopRegion.outPoint);
+        } else {
+          setCurrentFrame(timeline.totalFrames);
+        }
         break;
 
       case 'Escape':
@@ -123,10 +139,32 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         }
         break;
 
+      // 區間播放快捷鍵
+      case 'i':
+      case 'I':
+        e.preventDefault();
+        setInPoint(timeline.currentFrame);
+        break;
+
+      case 'o':
+      case 'O':
+        e.preventDefault();
+        setOutPoint(timeline.currentFrame);
+        break;
+
+      case 'x':
+      case 'X':
+        // Alt+X: 清除區間
+        if (e.altKey) {
+          e.preventDefault();
+          clearLoopRegion();
+        }
+        break;
+
       default:
         break;
     }
-  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode]);
+  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode, setInPoint, setOutPoint, clearLoopRegion]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -145,6 +183,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       { key: 'Shift + ←/→', description: '移動 10 幀' },
       { key: 'Home', description: '跳到開頭' },
       { key: 'End', description: '跳到結尾' },
+      { key: 'I', description: '設定入點' },
+      { key: 'O', description: '設定出點' },
+      { key: 'Alt + X', description: '清除區間' },
       { key: 'ESC', description: '關閉導演模式' },
     ],
   };

@@ -3,7 +3,6 @@ import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRigh
 import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
-import ModelPreview from './ModelPreview';
 import TextureManagerModal from './TextureManagerModal';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
@@ -296,39 +295,20 @@ export default function ModelCard({
       {/* Transform 控制面板（展開時顯示） */}
       {isExpanded && (
         <div className="px-3 pb-3 pt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-          {/* 3D 預覽 */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-gray-400">
-                模型預覽 <span className="text-gray-500">{modelInstance.file?.name || modelInstance.name}</span>
-              </label>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowTextureManager(true);
-                }}
-                className="p-1.5 rounded transition-all bg-green-500/30 text-green-300 hover:bg-green-500/50 hover:text-white flex items-center gap-1"
-                title="管理貼圖"
-              >
-                <Image className="w-3 h-3" />
-                <span className="text-[10px]">貼圖</span>
-              </button>
-            </div>
-            <ModelPreview
-              model={modelInstance.model}
-              position={modelInstance.position}
-              rotation={modelInstance.rotation}
-              scale={modelInstance.scale}
-              visible={modelInstance.visible}
-              shaderGroups={modelInstance.shaderGroups}
-              isShaderEnabled={modelInstance.isShaderEnabled}
-              toneMappingExposure={toneMappingExposure}
-              environmentIntensity={environmentIntensity}
-              hdriUrl={hdriUrl}
-            />
+          {/* 貼圖管理按鈕 */}
+          <div className="flex justify-start">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowTextureManager(true);
+              }}
+              className="p-1.5 rounded transition-all bg-green-500/30 text-green-300 hover:bg-green-500/50 hover:text-white flex items-center gap-1"
+              title="管理貼圖"
+            >
+              <Image className="w-3 h-3" />
+              <span className="text-[10px]">貼圖管理</span>
+            </button>
           </div>
-
-
 
           {/* Position */}
           <div className="space-y-1">
