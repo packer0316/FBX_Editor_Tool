@@ -290,7 +290,7 @@ function App() {
         return {
           ...layer,
           children: layer.children.map(el => 
-            el.id === elementId ? { ...el, ...updates } : el
+            el.id === elementId ? { ...el, ...updates } as typeof el : el
           ),
         };
       }));

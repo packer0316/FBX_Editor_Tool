@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight } from 'lucide-react';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight, Download } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { updateShaderGroupById, updateShaderGroupFeatureParam } from '../../../../utils/shader/shaderGroupUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
+import { downloadShaderFile } from '../../../../utils/shader/cocos-export';
 
 interface MaterialShaderToolProps {
     fileName: string | null;
@@ -91,6 +92,9 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 textureR: null,       // R 通道專用 Matcap 貼圖
                 textureG: null,       // G 通道專用 Matcap 貼圖
                 textureB: null,       // B 通道專用 Matcap 貼圖
+                strengthR: 1.0,       // R 通道強度
+                strengthG: 1.0,       // G 通道強度
+                strengthB: 1.0,       // B 通道強度
             };
         case 'matcap_add':
             return {
@@ -106,6 +110,9 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
                 textureR: null,
                 textureG: null,
                 textureB: null,
+                strengthR: 1.0,       // R 通道強度
+                strengthG: 1.0,       // G 通道強度
+                strengthB: 1.0,       // B 通道強度
             };
         case 'normal_map':
             return {
@@ -179,6 +186,9 @@ const getParamLabel = (paramName: string): string => {
         'textureR': 'R 通道 Matcap',
         'textureG': 'G 通道 Matcap',
         'textureB': 'B 通道 Matcap',
+        'strengthR': '強度',
+        'strengthG': '強度',
+        'strengthB': '強度',
     };
 
     return labels[paramName] || paramName;
@@ -427,6 +437,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
             if (paramName === 'power') { min = 0.1; max = 10; step = 0.1; }
             else if (paramName === 'intensity' || paramName === 'strength') { min = 0; max = 5; step = 0.1; }
+            else if (paramName === 'strengthR' || paramName === 'strengthG' || paramName === 'strengthB') { min = 0; max = 2; step = 0.1; }
             else if (paramName === 'speed') { min = 0; max = 5; step = 0.1; }
             else if (paramName === 'width') { min = 0.1; max = 1.0; step = 0.05; }
             else if (paramName === 'threshold') { min = 0; max = 1; step = 0.01; }
@@ -533,6 +544,21 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                         >
                                             <Edit2 size={14} />
                                         </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                try {
+                                                    downloadShaderFile(group, group.name);
+                                                } catch (err) {
+                                                    console.error('匯出失敗:', err);
+                                                    alert('匯出失敗：' + (err instanceof Error ? err.message : '未知錯誤'));
+                                                }
+                                            }}
+                                            className="text-gray-500 hover:text-green-400 transition-colors"
+                                            title="匯出 Cocos Creator Shader (.effect)"
+                                        >
+                                            <Download size={14} />
+                                        </button>
                                     </div>
                                 )}
                                 <span className="text-xs text-gray-400">({group.selectedMeshes.length} meshes)</span>
@@ -631,41 +657,80 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                         {feature.expanded && (
                                             <div className="p-3 space-y-2">
                                                 <p className="text-xs text-gray-400 mb-2">{feature.description}</p>
-                                                {/* 渲染非 RGB 相關參數 */}
-                                                {Object.entries(feature.params)
-                                                    .filter(([paramName]) => !['rgbExpanded', 'useMaskR', 'useMaskG', 'useMaskB', 'textureR', 'textureG', 'textureB'].includes(paramName))
-                                                    .map(([paramName, value]) =>
-                                                        renderParamControl(group.id, feature, paramName, value)
-                                                    )}
-                                                
-                                                {/* Matcap RGB 通道折疊區塊 */}
-                                                {(feature.type === 'matcap' || feature.type === 'matcap_add') && (
-                                                    <div className="mt-3 border border-white/10 rounded-lg overflow-hidden">
-                                                        <button
-                                                            onClick={() => updateFeatureParam(group.id, feature.id, 'rgbExpanded', !feature.params.rgbExpanded)}
-                                                            className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 flex items-center justify-between text-xs text-gray-300 transition-colors"
-                                                        >
-                                                            <span className="flex items-center gap-2">
-                                                                <span>🎨</span>
-                                                                <span>RGB 通道遮罩設定</span>
-                                                            </span>
-                                                            {feature.params.rgbExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                                                        </button>
-                                                        {feature.params.rgbExpanded && (
-                                                            <div className="p-3 space-y-2 bg-black/20">
-                                                                {/* RGB 通道勾選 */}
-                                                                {renderParamControl(group.id, feature, 'useMaskR', feature.params.useMaskR)}
-                                                                {feature.params.useMaskR && renderParamControl(group.id, feature, 'textureR', feature.params.textureR)}
-                                                                
-                                                                {renderParamControl(group.id, feature, 'useMaskG', feature.params.useMaskG)}
-                                                                {feature.params.useMaskG && renderParamControl(group.id, feature, 'textureG', feature.params.textureG)}
-                                                                
-                                                                {renderParamControl(group.id, feature, 'useMaskB', feature.params.useMaskB)}
-                                                                {feature.params.useMaskB && renderParamControl(group.id, feature, 'textureB', feature.params.textureB)}
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                )}
+                                                {/* 檢查是否啟用了 RGB 模式 */}
+                                                {(() => {
+                                                    const isRGBMode = (feature.type === 'matcap' || feature.type === 'matcap_add') && 
+                                                        (feature.params.useMaskR || feature.params.useMaskG || feature.params.useMaskB);
+                                                    
+                                                    return (
+                                                        <>
+                                                            {/* 渲染非 RGB 相關參數 */}
+                                                            {Object.entries(feature.params)
+                                                                .filter(([paramName]) => !['rgbExpanded', 'useMaskR', 'useMaskG', 'useMaskB', 'textureR', 'textureG', 'textureB', 'strengthR', 'strengthG', 'strengthB'].includes(paramName))
+                                                                .map(([paramName, value]) => {
+                                                                    // 當 RGB 模式啟用時，禁用主貼圖和混合程度/強度
+                                                                    const isDisabled = isRGBMode && (paramName === 'texture' || paramName === 'progress' || paramName === 'strength');
+                                                                    return (
+                                                                        <div key={paramName} className={isDisabled ? 'opacity-40 pointer-events-none' : ''}>
+                                                                            {renderParamControl(group.id, feature, paramName, value)}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                            
+                                                            {/* Matcap RGB 通道折疊區塊 */}
+                                                            {(feature.type === 'matcap' || feature.type === 'matcap_add') && (
+                                                                <div className="mt-3 border border-white/10 rounded-lg overflow-hidden">
+                                                                    <button
+                                                                        onClick={() => updateFeatureParam(group.id, feature.id, 'rgbExpanded', !feature.params.rgbExpanded)}
+                                                                        className="w-full px-3 py-2 bg-white/5 hover:bg-white/10 flex items-center justify-between text-xs text-gray-300 transition-colors"
+                                                                    >
+                                                                        <span className="flex items-center gap-2">
+                                                                            <span>🎨</span>
+                                                                            <span>RGB 通道遮罩設定</span>
+                                                                        </span>
+                                                                        {feature.params.rgbExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                                                                    </button>
+                                                                    {feature.params.rgbExpanded && (
+                                                                        <div className="p-3 space-y-3 bg-black/20">
+                                                                            {/* R 通道 */}
+                                                                            <div className="space-y-2">
+                                                                                {renderParamControl(group.id, feature, 'useMaskR', feature.params.useMaskR)}
+                                                                                {feature.params.useMaskR && (
+                                                                                    <div className="pl-4 space-y-2 border-l-2 border-red-500/30">
+                                                                                        {renderParamControl(group.id, feature, 'textureR', feature.params.textureR)}
+                                                                                        {renderParamControl(group.id, feature, 'strengthR', feature.params.strengthR)}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            
+                                                                            {/* G 通道 */}
+                                                                            <div className="space-y-2">
+                                                                                {renderParamControl(group.id, feature, 'useMaskG', feature.params.useMaskG)}
+                                                                                {feature.params.useMaskG && (
+                                                                                    <div className="pl-4 space-y-2 border-l-2 border-green-500/30">
+                                                                                        {renderParamControl(group.id, feature, 'textureG', feature.params.textureG)}
+                                                                                        {renderParamControl(group.id, feature, 'strengthG', feature.params.strengthG)}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                            
+                                                                            {/* B 通道 */}
+                                                                            <div className="space-y-2">
+                                                                                {renderParamControl(group.id, feature, 'useMaskB', feature.params.useMaskB)}
+                                                                                {feature.params.useMaskB && (
+                                                                                    <div className="pl-4 space-y-2 border-l-2 border-blue-500/30">
+                                                                                        {renderParamControl(group.id, feature, 'textureB', feature.params.textureB)}
+                                                                                        {renderParamControl(group.id, feature, 'strengthB', feature.params.strengthB)}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                        </>
+                                                    );
+                                                })()}
                                             </div>
                                         )}
                                     </div>

@@ -8,12 +8,13 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { directorEventBus, type ClipUpdateEvent } from '../../../../infrastructure/events';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
+import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
 import type { EffectItem } from '../../../features/effect-panel/components/EffectTestPanel';
 
 interface ModelWithEffect {
   id: string;
   model: THREE.Group | null;
-  bones: THREE.Bone[];
+  bones: THREE.Object3D[];
   effects: EffectItem[];
 }
 
@@ -110,7 +111,7 @@ export function useDirectorEffectTrigger({
             }
 
             // 播放特效
-            PlayEffectUseCase.execute({
+            const handle = PlayEffectUseCase.execute({
               id: effect.id,
               x, y, z,
               rx: rx * Math.PI / 180,
@@ -121,12 +122,37 @@ export function useDirectorEffectTrigger({
               sz: effect.scale[2],
               speed: effect.speed,
             });
+
+            // 如果有綁定骨骼，註冊到 Registry 以持續跟隨
+            if (handle && effect.boundBoneUuid && model.model) {
+              const boundBone = model.bones.find(b => b.uuid === effect.boundBoneUuid);
+              if (boundBone) {
+                // 使用 trigger.id 作為 key，確保同一個 trigger 只有一個播放實例
+                EffectHandleRegistry.registerWithTrigger(
+                  effect.id,
+                  trigger.id,
+                  handle,
+                  boundBone,
+                  effect.position,
+                  effect.rotation,
+                  trigger.duration
+                );
+              }
+            }
           }
         });
       });
     });
 
-    return unsubscribe;
+    // 訂閱 tick 事件，每幀更新跟隨中的特效
+    const unsubscribeTick = directorEventBus.onTick(() => {
+      EffectHandleRegistry.updateAll();
+    });
+
+    return () => {
+      unsubscribe();
+      unsubscribeTick();
+    };
   }, [enabled]);
 }
 

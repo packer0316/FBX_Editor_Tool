@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
+import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
 import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
@@ -302,9 +303,10 @@ const EffectCard = ({
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
-    const [newTriggerState, setNewTriggerState] = useState<{ clipId: string, frame: string }>({ clipId: '', frame: '' });
+    const [newTriggerState, setNewTriggerState] = useState<{ clipId: string, frame: string, duration: string }>({ clipId: '', frame: '', duration: '' });
     const [editingTriggerId, setEditingTriggerId] = useState<string | null>(null);
     const [editingFrame, setEditingFrame] = useState<string>('');
+    const [editingDuration, setEditingDuration] = useState<string>('');
     const [hasActiveEffect, setHasActiveEffect] = useState(false); // 追蹤特效是否存在
 
     // 追蹤當前播放的 Handle，以便即時更新參數
@@ -683,21 +685,35 @@ const EffectCard = ({
         const selectedClip = createdClips.find(clip => getClipId(clip) === newTriggerState.clipId);
         if (!selectedClip) return;
 
+        // 解析 duration（可選）
+        let duration: number | undefined;
+        if (newTriggerState.duration) {
+            const parsedDuration = parseFloat(newTriggerState.duration);
+            if (!isNaN(parsedDuration) && parsedDuration > 0) {
+                duration = Math.round(parsedDuration * 100) / 100; // 限制小數點後兩位
+            }
+        }
+
         const newTrigger: EffectTrigger = {
             id: crypto.randomUUID(),
             clipId: newTriggerState.clipId,
             clipName: getClipDisplayName(selectedClip),
-            frame: frame
+            frame: frame,
+            duration: duration
         };
 
         onUpdate(item.id, {
             triggers: [...item.triggers, newTrigger]
         });
 
-        setNewTriggerState({ clipId: '', frame: '' });
+        setNewTriggerState({ clipId: '', frame: '', duration: '' });
     };
 
     const removeTrigger = (triggerId: string) => {
+        // 停止所有該特效的播放實例
+        EffectHandleRegistry.stopAllByEffectId(item.id);
+        
+        // 從觸發列表中移除該 trigger
         onUpdate(item.id, {
             triggers: item.triggers.filter(t => t.id !== triggerId)
         });
@@ -707,6 +723,7 @@ const EffectCard = ({
     const startEditTrigger = (trigger: EffectTrigger) => {
         setEditingTriggerId(trigger.id);
         setEditingFrame(trigger.frame.toString());
+        setEditingDuration(trigger.duration !== undefined ? trigger.duration.toString() : '');
     };
 
     // 儲存編輯的觸發器
@@ -717,17 +734,28 @@ const EffectCard = ({
         if (isNaN(frame) || frame < 0) {
             setEditingTriggerId(null);
             setEditingFrame('');
+            setEditingDuration('');
             return;
+        }
+
+        // 解析 duration（可選）
+        let duration: number | undefined;
+        if (editingDuration) {
+            const parsedDuration = parseFloat(editingDuration);
+            if (!isNaN(parsedDuration) && parsedDuration > 0) {
+                duration = Math.round(parsedDuration * 100) / 100; // 限制小數點後兩位
+            }
         }
 
         onUpdate(item.id, {
             triggers: item.triggers.map(t =>
-                t.id === editingTriggerId ? { ...t, frame } : t
+                t.id === editingTriggerId ? { ...t, frame, duration } : t
             )
         });
 
         setEditingTriggerId(null);
         setEditingFrame('');
+        setEditingDuration('');
     };
 
     // 取消編輯
@@ -991,18 +1019,36 @@ const EffectCard = ({
                                                             className="w-16 bg-gray-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs focus:outline-none"
                                                             style={{ color: item.color }}
                                                         />
-                                                        <span className="text-gray-500">Frame</span>
+                                                        <span className="text-gray-500">F</span>
+                                                        <input
+                                                            type="number"
+                                                            value={editingDuration}
+                                                            onChange={(e) => setEditingDuration(e.target.value)}
+                                                            onKeyDown={handleEditKeyDown}
+                                                            onBlur={saveEditTrigger}
+                                                            placeholder="秒"
+                                                            min={0}
+                                                            step={0.01}
+                                                            className="w-14 bg-gray-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs focus:outline-none text-orange-400"
+                                                        />
+                                                        <span className="text-gray-500 text-[10px]">s</span>
                                                     </div>
                                                 ) : (
                                                     // 顯示模式（可點擊編輯）
                                                     <div
                                                         className="flex items-center gap-2 text-xs flex-1"
                                                         onClick={() => startEditTrigger(trigger)}
-                                                        title="點擊編輯幀數"
+                                                        title="點擊編輯"
                                                     >
                                                         <span className="text-blue-400">{displayName}</span>
                                                         <span className="text-gray-500">@</span>
-                                                        <span className="hover:underline" style={{ color: item.color }}>{trigger.frame} Frame</span>
+                                                        <span className="hover:underline" style={{ color: item.color }}>{trigger.frame}F</span>
+                                                        {trigger.duration !== undefined && (
+                                                            <>
+                                                                <span className="text-gray-600">|</span>
+                                                                <span className="text-orange-400 hover:underline">{trigger.duration}s</span>
+                                                            </>
+                                                        )}
                                                     </div>
                                                 )}
                                                 <button
@@ -1043,6 +1089,16 @@ const EffectCard = ({
                                         placeholder="Frame"
                                         value={newTriggerState.frame}
                                         onChange={(val) => setNewTriggerState(prev => ({ ...prev, frame: val }))}
+                                        className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
+                                    />
+                                </div>
+                                <div className="w-20">
+                                    <label className="text-[10px] text-gray-500 block mb-1">持續(秒)</label>
+                                    <NumberInput
+                                        placeholder="秒"
+                                        value={newTriggerState.duration}
+                                        onChange={(val) => setNewTriggerState(prev => ({ ...prev, duration: val }))}
+                                        step={0.01}
                                         className="w-full bg-gray-800 rounded border border-gray-700 focus-within:border-blue-500"
                                     />
                                 </div>

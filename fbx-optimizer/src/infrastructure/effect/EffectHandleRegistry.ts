@@ -1,0 +1,253 @@
+/**
+ * EffectHandleRegistry - 追蹤正在播放且綁定到骨骼的特效
+ * 
+ * 負責管理特效 Handle 的生命週期，並在每幀更新綁定骨骼的特效位置
+ */
+
+import * as THREE from 'three';
+
+interface TrackedEffect {
+    handle: effekseer.EffekseerHandle;
+    bone: THREE.Object3D;
+    offset: [number, number, number];      // 位置偏移
+    rotationOffset: [number, number, number]; // 旋轉偏移 (degrees)
+    timerId?: number; // duration 計時器 ID（如果有設定 duration）
+}
+
+class EffectHandleRegistryClass {
+    private trackedEffects: Map<string, TrackedEffect> = new Map();
+
+    /**
+     * 註冊一個需要跟隨骨骼的特效（通用方法）
+     * 
+     * @param key - 唯一識別碼
+     * @param handle - Effekseer Handle
+     * @param bone - 要跟隨的骨骼
+     * @param offset - 位置偏移
+     * @param rotationOffset - 旋轉偏移 (degrees)
+     */
+    register(
+        key: string,
+        handle: effekseer.EffekseerHandle,
+        bone: THREE.Object3D,
+        offset: [number, number, number] = [0, 0, 0],
+        rotationOffset: [number, number, number] = [0, 0, 0]
+    ): void {
+        this.trackedEffects.set(key, {
+            handle,
+            bone,
+            offset,
+            rotationOffset
+        });
+        console.log(`[EffectHandleRegistry] 註冊跟隨特效: ${key}, 骨骼: ${bone.name}`);
+    }
+
+    /**
+     * 註冊一個由 Trigger 觸發的特效
+     * 如果該 Trigger 已有播放中的實例，會先停止舊的再註冊新的
+     * 
+     * @param effectId - 特效 ID
+     * @param triggerId - 觸發器 ID
+     * @param handle - Effekseer Handle
+     * @param bone - 要跟隨的骨骼
+     * @param offset - 位置偏移
+     * @param rotationOffset - 旋轉偏移 (degrees)
+     * @param duration - 播放持續時間（秒），不設定則播放到特效自然結束
+     */
+    registerWithTrigger(
+        effectId: string,
+        triggerId: string,
+        handle: effekseer.EffekseerHandle,
+        bone: THREE.Object3D,
+        offset: [number, number, number] = [0, 0, 0],
+        rotationOffset: [number, number, number] = [0, 0, 0],
+        duration?: number
+    ): void {
+        const key = `${effectId}-${triggerId}`;
+        
+        // 如果該 trigger 已有播放中的實例，先停止它（包含計時器）
+        if (this.trackedEffects.has(key)) {
+            const oldEffect = this.trackedEffects.get(key);
+            if (oldEffect) {
+                if (oldEffect.timerId !== undefined) {
+                    clearTimeout(oldEffect.timerId);
+                }
+                if (oldEffect.handle.exists) {
+                    oldEffect.handle.stop();
+                }
+                console.log(`[EffectHandleRegistry] 停止舊的 Trigger 實例: ${key}`);
+            }
+            this.trackedEffects.delete(key);
+        }
+
+        // 設定 duration 計時器（如果有指定）
+        let timerId: number | undefined;
+        if (duration !== undefined && duration > 0) {
+            timerId = window.setTimeout(() => {
+                const effect = this.trackedEffects.get(key);
+                if (effect && effect.handle.exists) {
+                    effect.handle.stop();
+                    console.log(`[EffectHandleRegistry] Duration 到期，停止特效: ${key} (${duration}秒)`);
+                }
+                this.trackedEffects.delete(key);
+            }, duration * 1000);
+        }
+
+        // 註冊新的實例
+        this.trackedEffects.set(key, {
+            handle,
+            bone,
+            offset,
+            rotationOffset,
+            timerId
+        });
+        console.log(`[EffectHandleRegistry] 註冊 Trigger 特效: ${key}, 骨骼: ${bone.name}${duration ? `, duration: ${duration}秒` : ''}`);
+    }
+
+    /**
+     * 移除追蹤的特效
+     */
+    unregister(key: string): void {
+        if (this.trackedEffects.has(key)) {
+            const effect = this.trackedEffects.get(key);
+            if (effect?.timerId !== undefined) {
+                clearTimeout(effect.timerId);
+            }
+            this.trackedEffects.delete(key);
+            console.log(`[EffectHandleRegistry] 移除跟隨特效: ${key}`);
+        }
+    }
+
+    /**
+     * 更新所有追蹤中的特效位置和旋轉
+     * 應該在每幀呼叫
+     */
+    updateAll(): void {
+        const keysToRemove: string[] = [];
+
+        this.trackedEffects.forEach((tracked, key) => {
+            // 檢查 handle 是否還存在
+            if (!tracked.handle.exists) {
+                keysToRemove.push(key);
+                return;
+            }
+
+            // 獲取骨骼的世界位置
+            const boneWorldPos = new THREE.Vector3();
+            tracked.bone.getWorldPosition(boneWorldPos);
+
+            // 計算最終位置 = 骨骼位置 + 偏移量
+            const x = boneWorldPos.x + tracked.offset[0];
+            const y = boneWorldPos.y + tracked.offset[1];
+            const z = boneWorldPos.z + tracked.offset[2];
+
+            // 更新位置
+            tracked.handle.setLocation(x, y, z);
+
+            // 獲取骨骼的世界旋轉
+            const boneWorldQuat = new THREE.Quaternion();
+            tracked.bone.getWorldQuaternion(boneWorldQuat);
+            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
+
+            // 計算最終旋轉 = 骨骼旋轉 + 偏移量
+            const rx = (boneEuler.x * 180 / Math.PI) + tracked.rotationOffset[0];
+            const ry = (boneEuler.y * 180 / Math.PI) + tracked.rotationOffset[1];
+            const rz = (boneEuler.z * 180 / Math.PI) + tracked.rotationOffset[2];
+
+            // 更新旋轉 (轉換為弧度)
+            tracked.handle.setRotation(
+                rx * Math.PI / 180,
+                ry * Math.PI / 180,
+                rz * Math.PI / 180
+            );
+        });
+
+        // 清理已結束的特效
+        keysToRemove.forEach(key => {
+            this.trackedEffects.delete(key);
+            console.log(`[EffectHandleRegistry] 自動清理已結束特效: ${key}`);
+        });
+    }
+
+    /**
+     * 停止並移除所有指定 effectId 的播放實例
+     * 用於刪除 trigger 或刪除整個特效時
+     * 
+     * @param effectId - 特效 ID
+     */
+    stopAllByEffectId(effectId: string): void {
+        const keysToRemove: string[] = [];
+        
+        this.trackedEffects.forEach((tracked, key) => {
+            // 檢查 key 是否以 effectId 開頭
+            if (key.startsWith(`${effectId}-`)) {
+                // 清理計時器
+                if (tracked.timerId !== undefined) {
+                    clearTimeout(tracked.timerId);
+                }
+                // 停止特效
+                if (tracked.handle.exists) {
+                    tracked.handle.stop();
+                }
+                keysToRemove.push(key);
+            }
+        });
+
+        keysToRemove.forEach(key => {
+            this.trackedEffects.delete(key);
+        });
+
+        if (keysToRemove.length > 0) {
+            console.log(`[EffectHandleRegistry] 停止 ${effectId} 的所有實例 (${keysToRemove.length} 個)`);
+        }
+    }
+
+    /**
+     * 停止並移除特定 Trigger 的播放實例
+     * 
+     * @param effectId - 特效 ID
+     * @param triggerId - 觸發器 ID
+     */
+    stopByTrigger(effectId: string, triggerId: string): void {
+        const key = `${effectId}-${triggerId}`;
+        const tracked = this.trackedEffects.get(key);
+        
+        if (tracked) {
+            // 清理計時器
+            if (tracked.timerId !== undefined) {
+                clearTimeout(tracked.timerId);
+            }
+            // 停止特效
+            if (tracked.handle.exists) {
+                tracked.handle.stop();
+            }
+            this.trackedEffects.delete(key);
+            console.log(`[EffectHandleRegistry] 停止 Trigger 實例: ${key}`);
+        }
+    }
+
+    /**
+     * 清空所有追蹤的特效
+     */
+    clear(): void {
+        // 停止所有播放中的特效
+        this.trackedEffects.forEach((tracked) => {
+            if (tracked.handle.exists) {
+                tracked.handle.stop();
+            }
+        });
+        this.trackedEffects.clear();
+        console.log('[EffectHandleRegistry] 清空所有追蹤特效');
+    }
+
+    /**
+     * 獲取當前追蹤的特效數量
+     */
+    get count(): number {
+        return this.trackedEffects.size;
+    }
+}
+
+// 全域單例
+export const EffectHandleRegistry = new EffectHandleRegistryClass();
+

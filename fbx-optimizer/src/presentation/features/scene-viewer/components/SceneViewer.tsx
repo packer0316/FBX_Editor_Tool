@@ -794,6 +794,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         matcapUseMaskR: { value: 0.0 },
                         matcapUseMaskG: { value: 0.0 },
                         matcapUseMaskB: { value: 0.0 },
+                        matcapStrengthR: { value: 1.0 },
+                        matcapStrengthG: { value: 1.0 },
+                        matcapStrengthB: { value: 1.0 },
 
                         // Additive Matcap
                         matcapAddTexture: { value: null },
@@ -808,6 +811,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         matcapAddUseMaskR: { value: 0.0 },
                         matcapAddUseMaskG: { value: 0.0 },
                         matcapAddUseMaskB: { value: 0.0 },
+                        matcapAddStrengthR: { value: 1.0 },
+                        matcapAddStrengthG: { value: 1.0 },
+                        matcapAddStrengthB: { value: 1.0 },
 
                         // Rim Light
                         rimColor: { value: new THREE.Color(0xffffff) },
@@ -898,6 +904,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform float matcapUseMaskR;
                                 uniform float matcapUseMaskG;
                                 uniform float matcapUseMaskB;
+                                uniform float matcapStrengthR;
+                                uniform float matcapStrengthG;
+                                uniform float matcapStrengthB;
                                 
                                 // Additive Matcap
                                 uniform sampler2D matcapAddTexture;
@@ -912,6 +921,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                 uniform float matcapAddUseMaskR;
                                 uniform float matcapAddUseMaskG;
                                 uniform float matcapAddUseMaskB;
+                                uniform float matcapAddStrengthR;
+                                uniform float matcapAddStrengthG;
+                                uniform float matcapAddStrengthB;
                                 
                                 // Rim Light
                                 uniform vec3 rimColor;
@@ -1038,30 +1050,30 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                                 vec3 maskSample = texture2D(matcapMaskTexture, vUv).rgb;
                                                 vec3 matcapResult = vec3(0.0);
                                                 
-                                                // R 通道
+                                                // R 通道（使用各自的強度）
                                                 if (matcapUseMaskR > 0.5 && maskSample.r > 0.01) {
                                                     vec3 colR = texture2D(matcapTextureR, matcapUv).rgb;
-                                                    matcapResult += colR * maskSample.r;
+                                                    matcapResult += colR * maskSample.r * matcapStrengthR;
                                                 }
-                                                // G 通道
+                                                // G 通道（使用各自的強度）
                                                 if (matcapUseMaskG > 0.5 && maskSample.g > 0.01) {
                                                     vec3 colG = texture2D(matcapTextureG, matcapUv).rgb;
-                                                    matcapResult += colG * maskSample.g;
+                                                    matcapResult += colG * maskSample.g * matcapStrengthG;
                                                 }
-                                                // B 通道
+                                                // B 通道（使用各自的強度）
                                                 if (matcapUseMaskB > 0.5 && maskSample.b > 0.01) {
                                                     vec3 colB = texture2D(matcapTextureB, matcapUv).rgb;
-                                                    matcapResult += colB * maskSample.b;
+                                                    matcapResult += colB * maskSample.b * matcapStrengthB;
                                                 }
                                                 
-                                                // 未被遮罩覆蓋的部分保持原色
-                                                float totalMask = 0.0;
-                                                if (matcapUseMaskR > 0.5) totalMask += maskSample.r;
-                                                if (matcapUseMaskG > 0.5) totalMask += maskSample.g;
-                                                if (matcapUseMaskB > 0.5) totalMask += maskSample.b;
-                                                totalMask = clamp(totalMask, 0.0, 1.0);
+                                                // 計算有效遮罩（考慮 strength 的影響）
+                                                float effectiveMask = 0.0;
+                                                if (matcapUseMaskR > 0.5) effectiveMask += maskSample.r * matcapStrengthR;
+                                                if (matcapUseMaskG > 0.5) effectiveMask += maskSample.g * matcapStrengthG;
+                                                if (matcapUseMaskB > 0.5) effectiveMask += maskSample.b * matcapStrengthB;
+                                                effectiveMask = clamp(effectiveMask, 0.0, 1.0);
                                                 
-                                                finalColor = mix(finalColor, finalColor + matcapResult, matcapProgress * totalMask);
+                                                finalColor = finalColor * (1.0 - effectiveMask) + matcapResult;
                                             #endif
                                         } else {
                                             // 原有模式：使用單一 Matcap 貼圖
@@ -1092,23 +1104,23 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                                 vec3 addMaskSample = texture2D(matcapAddMaskTexture, vUv).rgb;
                                                 vec3 matcapAddResult = vec3(0.0);
                                                 
-                                                // R 通道
+                                                // R 通道（使用各自的強度）
                                                 if (matcapAddUseMaskR > 0.5 && addMaskSample.r > 0.01) {
                                                     vec3 colR = texture2D(matcapAddTextureR, matcapAddUv).rgb;
-                                                    matcapAddResult += colR * addMaskSample.r * matcapAddColor;
+                                                    matcapAddResult += colR * addMaskSample.r * matcapAddColor * matcapAddStrengthR;
                                                 }
-                                                // G 通道
+                                                // G 通道（使用各自的強度）
                                                 if (matcapAddUseMaskG > 0.5 && addMaskSample.g > 0.01) {
                                                     vec3 colG = texture2D(matcapAddTextureG, matcapAddUv).rgb;
-                                                    matcapAddResult += colG * addMaskSample.g * matcapAddColor;
+                                                    matcapAddResult += colG * addMaskSample.g * matcapAddColor * matcapAddStrengthG;
                                                 }
-                                                // B 通道
+                                                // B 通道（使用各自的強度）
                                                 if (matcapAddUseMaskB > 0.5 && addMaskSample.b > 0.01) {
                                                     vec3 colB = texture2D(matcapAddTextureB, matcapAddUv).rgb;
-                                                    matcapAddResult += colB * addMaskSample.b * matcapAddColor;
+                                                    matcapAddResult += colB * addMaskSample.b * matcapAddColor * matcapAddStrengthB;
                                                 }
                                                 
-                                                finalColor += matcapAddResult * matcapAddStrength;
+                                                finalColor += matcapAddResult;
                                             #endif
                                         } else {
                                             // 原有模式
@@ -1239,6 +1251,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         shaderMat.uniforms.matcapUseMaskG.value = (baseMatcapFeature.params.useMaskG && baseMatcapTexG) ? 1.0 : 0.0;
                         shaderMat.uniforms.matcapUseMaskB.value = (baseMatcapFeature.params.useMaskB && baseMatcapTexB) ? 1.0 : 0.0;
                         
+                        // RGB 通道強度
+                        shaderMat.uniforms.matcapStrengthR.value = baseMatcapFeature.params.strengthR ?? 1.0;
+                        shaderMat.uniforms.matcapStrengthG.value = baseMatcapFeature.params.strengthG ?? 1.0;
+                        shaderMat.uniforms.matcapStrengthB.value = baseMatcapFeature.params.strengthB ?? 1.0;
+                        
                         // RGB 通道貼圖
                         if (baseMatcapTexR) shaderMat.uniforms.matcapTextureR.value = baseMatcapTexR;
                         if (baseMatcapTexG) shaderMat.uniforms.matcapTextureG.value = baseMatcapTexG;
@@ -1279,6 +1296,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                         shaderMat.uniforms.matcapAddUseMaskR.value = (addMatcapFeature.params.useMaskR && addMatcapTexR) ? 1.0 : 0.0;
                         shaderMat.uniforms.matcapAddUseMaskG.value = (addMatcapFeature.params.useMaskG && addMatcapTexG) ? 1.0 : 0.0;
                         shaderMat.uniforms.matcapAddUseMaskB.value = (addMatcapFeature.params.useMaskB && addMatcapTexB) ? 1.0 : 0.0;
+                        
+                        // RGB 通道強度
+                        shaderMat.uniforms.matcapAddStrengthR.value = addMatcapFeature.params.strengthR ?? 1.0;
+                        shaderMat.uniforms.matcapAddStrengthG.value = addMatcapFeature.params.strengthG ?? 1.0;
+                        shaderMat.uniforms.matcapAddStrengthB.value = addMatcapFeature.params.strengthB ?? 1.0;
                         
                         // RGB 通道貼圖
                         if (addMatcapTexR) shaderMat.uniforms.matcapAddTextureR.value = addMatcapTexR;

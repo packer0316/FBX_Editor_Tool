@@ -3,5 +3,6 @@ export interface EffectTrigger {
   clipId: string;     // 使用 customId 確保唯一匹配（取代原 clipUuid）
   clipName: string;   // 片段名稱（僅供顯示）
   frame: number;      // 觸發的幀數
+  duration?: number;  // 播放持續時間（秒），不設定則播放到特效自然結束
 }
 

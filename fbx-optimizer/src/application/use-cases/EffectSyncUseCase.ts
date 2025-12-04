@@ -1,6 +1,7 @@
 import type { EffectItem } from '../../presentation/features/effect-panel/components/EffectTestPanel';
 import { PlayEffectUseCase } from './PlayEffectUseCase';
 import { getClipId, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
+import { EffectHandleRegistry } from '../../infrastructure/effect/EffectHandleRegistry';
 import * as THREE from 'three';
 
 /**
@@ -35,6 +36,9 @@ export class EffectSyncUseCase {
     clip: IdentifiableClip | null,
     effects: EffectItem[]
   ): void {
+    // 不論是否在播放，都要更新跟隨骨骼的特效位置
+    EffectHandleRegistry.updateAll();
+
     if (!isPlaying || !clip) {
       return;
     }
@@ -148,6 +152,23 @@ export class EffectSyncUseCase {
               console.error(`[Effect Trigger] ✗✗✗ FAILED to play effect: ${effect.name} (id: ${effect.id})`);
             } else {
               console.log(`[Effect Trigger] ✓✓✓ Successfully started playing effect: ${effect.name}`);
+              
+              // 如果有綁定骨骼，註冊到 Registry 以持續跟隨
+              if (effect.boundBoneUuid && model) {
+                const boundBone = bones.find(b => b.uuid === effect.boundBoneUuid);
+                if (boundBone) {
+                  // 使用 trigger.id 作為 key，確保同一個 trigger 只有一個播放實例
+                  EffectHandleRegistry.registerWithTrigger(
+                    effect.id,
+                    trigger.id,
+                    handle,
+                    boundBone,
+                    effect.position,
+                    effect.rotation,
+                    trigger.duration
+                  );
+                }
+              }
             }
           }
         } else {
