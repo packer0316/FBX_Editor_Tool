@@ -200,13 +200,20 @@ export function useTimelinePlayback(
         const outPoint = loopRegion.outPoint!;
         const regionLength = outPoint - inPoint;
         
-        // 到達出點時跳回入點（使用取模運算處理循環）
+        // 到達出點時，根據循環設置決定行為
         if (newFrame >= outPoint) {
-          // 重置起始時間和幀，從入點重新開始計時
-          const overshoot = newFrame - outPoint;
-          playStartTimeRef.current = performance.now();
-          playStartFrameRef.current = inPoint;
-          newFrame = inPoint + (overshoot % regionLength);
+          if (isLooping) {
+            // 循環模式：跳回入點
+            const overshoot = newFrame - outPoint;
+            playStartTimeRef.current = performance.now();
+            playStartFrameRef.current = inPoint;
+            newFrame = inPoint + (overshoot % regionLength);
+          } else {
+            // 非循環模式：停止在出點
+            newFrame = outPoint;
+            state.pause();
+            return;
+          }
         }
       } else {
         // 原有的全範圍播放邏輯

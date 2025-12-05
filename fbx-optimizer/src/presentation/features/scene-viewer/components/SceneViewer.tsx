@@ -1854,6 +1854,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             getCurrentTime: () => modelRef.current?.getCurrentTime() ?? 0,
             getDuration: () => modelRef.current?.getDuration() ?? 0,
             setAnimationTime: (time: number) => modelRef.current?.setAnimationTime(time),
+            setClip: (newClip: THREE.AnimationClip) => modelRef.current?.setClip(newClip),
             resetCamera: () => {
                 console.log('resetCamera called', orbitControlsRef.current);
                 if (orbitControlsRef.current) {
