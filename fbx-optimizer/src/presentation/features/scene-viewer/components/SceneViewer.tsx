@@ -1863,31 +1863,54 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
             takeScreenshot: () => {
                 if (glRef.current) {
                     try {
-                        // 獲取 canvas 元素
-                        const canvas = glRef.current.domElement;
+                        const gl = glRef.current;
+                        const canvas = gl.domElement;
                         
                         console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
                         
-                        // 使用 canvas.toDataURL 生成圖片
-                        const dataURL = canvas.toDataURL('image/png', 1.0);
+                        // 儲存當前背景色設定
+                        const currentClearAlpha = gl.getClearAlpha();
+                        const currentClearColor = gl.getClearColor(new THREE.Color());
                         
-                        console.log('DataURL length:', dataURL.length);
+                        // 臨時設定為透明背景
+                        gl.setClearAlpha(0);
+                        gl.setClearColor(new THREE.Color(0x000000), 0);
                         
-                        // 驗證截圖不是空白的
-                        if (dataURL === 'data:,' || dataURL.length < 100) {
-                            throw new Error('Canvas appears to be empty');
-                        }
-                        
-                        // 創建下載連結
-                        const link = document.createElement('a');
-                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                        link.download = `screenshot_${timestamp}.png`;
-                        link.href = dataURL;
-                        document.body.appendChild(link);
-                        link.click();
-                        document.body.removeChild(link);
-                        
-                        console.log('Screenshot saved successfully:', link.download);
+                        // 等待下一幀渲染完成（透明背景）
+                        requestAnimationFrame(() => {
+                            try {
+                                // 使用 canvas.toDataURL 生成圖片（透明背景）
+                                const dataURL = canvas.toDataURL('image/png', 1.0);
+                                
+                                // 立即恢復原始背景色設定
+                                gl.setClearAlpha(currentClearAlpha);
+                                gl.setClearColor(currentClearColor, currentClearAlpha);
+                                
+                                console.log('DataURL length:', dataURL.length);
+                                
+                                // 驗證截圖不是空白的
+                                if (dataURL === 'data:,' || dataURL.length < 100) {
+                                    throw new Error('Canvas appears to be empty');
+                                }
+                                
+                                // 創建下載連結
+                                const link = document.createElement('a');
+                                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                                link.download = `screenshot_${timestamp}.png`;
+                                link.href = dataURL;
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                                
+                                console.log('Screenshot saved successfully:', link.download);
+                            } catch (error) {
+                                // 確保恢復背景設定
+                                gl.setClearAlpha(currentClearAlpha);
+                                gl.setClearColor(currentClearColor, currentClearAlpha);
+                                console.error('Failed to take screenshot:', error);
+                                alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+                            }
+                        });
                     } catch (error) {
                         console.error('Failed to take screenshot:', error);
                         alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
@@ -1912,9 +1935,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                 try {
                     const canvas = glRef.current.domElement;
                     
-                    // 從 canvas 獲取視頻流（使用 0 FPS 表示手動捕獲模式）
-                    // 這樣可以確保在 Effekseer 渲染完成後才捕獲畫面
-                    const stream = canvas.captureStream(0); // 0 FPS = 手動捕獲
+                    // 從 canvas 獲取視頻流（使用 60 FPS 自動捕獲）
+                    const stream = canvas.captureStream(60); // 60 FPS
                     captureStreamRef.current = stream;
                     
                     // 設置 MediaRecorder

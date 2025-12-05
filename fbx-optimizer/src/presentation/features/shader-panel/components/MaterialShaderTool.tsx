@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight, Download } from 'lucide-react';
+import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight, Download, Upload, Package } from 'lucide-react';
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { updateShaderGroupById, updateShaderGroupFeatureParam } from '../../../../utils/shader/shaderGroupUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 import { downloadShaderFile } from '../../../../utils/shader/cocos-export';
+import { ExportShaderConfigUseCase } from '../../../../application/use-cases/ExportShaderConfigUseCase';
+import { ImportShaderConfigUseCase } from '../../../../application/use-cases/ImportShaderConfigUseCase';
 
 interface MaterialShaderToolProps {
     fileName: string | null;
@@ -479,18 +481,69 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                     <h2 className={`${theme.text} font-semibold`}>Material Shader 工具</h2>
                 </div>
 
-                <label className="flex items-center gap-2 cursor-pointer">
-                    <div className="relative">
-                        <input
-                            type="checkbox"
-                            className="sr-only peer"
-                            checked={isShaderEnabled}
-                            onChange={(e) => onToggleShaderEnabled(e.target.checked)}
-                        />
-                        <div className="w-11 h-6 bg-black/30 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
-                    </div>
-                    {/* <span className="text-xs text-gray-400">{isShaderEnabled ? '開啟' : '關閉'}</span> */}
-                </label>
+                <div className="flex items-center gap-2">
+                    {/* 匯出/匯入按鈕 */}
+                    <button
+                        onClick={async () => {
+                            try {
+                                await ExportShaderConfigUseCase.execute(shaderGroups);
+                                alert('✅ Shader 配置已匯出');
+                            } catch (error) {
+                                console.error('匯出失敗:', error);
+                                alert('❌ 匯出失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
+                            }
+                        }}
+                        className="px-2 py-1 bg-blue-600/80 hover:bg-blue-500 text-white rounded text-xs flex items-center gap-1 transition-colors"
+                        title="匯出 Shader 配置（ZIP）"
+                    >
+                        <Package size={14} />
+                        <span>匯出</span>
+                    </button>
+
+                    <input
+                        type="file"
+                        accept=".zip"
+                        className="hidden"
+                        id="import-shader-config"
+                        onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            
+                            try {
+                                const importedGroups = await ImportShaderConfigUseCase.execute(file);
+                                onGroupsChange(importedGroups);
+                                alert('✅ Shader 配置已匯入');
+                            } catch (error) {
+                                console.error('匯入失敗:', error);
+                                alert('❌ 匯入失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
+                            }
+                            
+                            // 清空 input 以允許重複選擇同一檔案
+                            e.target.value = '';
+                        }}
+                    />
+                    <label
+                        htmlFor="import-shader-config"
+                        className="px-2 py-1 bg-green-600/80 hover:bg-green-500 text-white rounded text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                        title="匯入 Shader 配置（ZIP）"
+                    >
+                        <Upload size={14} />
+                        <span>匯入</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 cursor-pointer">
+                        <div className="relative">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={isShaderEnabled}
+                                onChange={(e) => onToggleShaderEnabled(e.target.checked)}
+                            />
+                            <div className="w-11 h-6 bg-black/30 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
+                        </div>
+                        {/* <span className="text-xs text-gray-400">{isShaderEnabled ? '開啟' : '關閉'}</span> */}
+                    </label>
+                </div>
             </div>
 
             {/* Groups List */}

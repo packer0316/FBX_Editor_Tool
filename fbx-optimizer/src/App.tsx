@@ -1344,44 +1344,91 @@ function App() {
                 }
 
                 try {
-                  // 使用 html2canvas 截取整個預覽區（包含 3D canvas 和 2D 圖層）
-                  const canvas = await html2canvas(previewContainerRef.current, {
-                    useCORS: true,
-                    allowTaint: true,
-                    backgroundColor: null,
-                    scale: 2, // 2x 解析度提升品質
-                    logging: false,
-                    // 確保 WebGL canvas 被正確捕獲，並隱藏編輯輔助 UI
-                    onclone: (_clonedDoc, element) => {
-                      // 找到原始的 WebGL canvas 並複製其內容
-                      const originalCanvas = previewContainerRef.current?.querySelector('canvas');
-                      const clonedCanvas = element.querySelector('canvas');
-                      if (originalCanvas && clonedCanvas) {
-                        const ctx = clonedCanvas.getContext('2d');
-                        if (ctx) {
-                          clonedCanvas.width = originalCanvas.width;
-                          clonedCanvas.height = originalCanvas.height;
-                          ctx.drawImage(originalCanvas, 0, 0);
+                  // 檢查是否有 2D layers
+                  const layerContainers = previewContainerRef.current.querySelectorAll('[data-layer-id]');
+                  const has2DLayers = Array.from(layerContainers).some(container => 
+                    container.querySelector('[data-element-id]')
+                  );
+
+                  // 如果沒有 2D layers，直接使用 SceneViewer 的截圖（透明背景）
+                  if (!has2DLayers && sceneViewerRef.current) {
+                    sceneViewerRef.current.takeScreenshot();
+                    return;
+                  }
+
+                  // 有 2D layers，需要合成
+                  const webglCanvas = previewContainerRef.current.querySelector('canvas') as HTMLCanvasElement;
+                  if (!webglCanvas) {
+                    throw new Error('WebGL canvas not found');
+                  }
+
+                  // 獲取預覽容器的實際內容尺寸（不包含 border）
+                  const containerRect = previewContainerRef.current.getBoundingClientRect();
+                  const width = webglCanvas.width;
+                  const height = webglCanvas.height;
+
+                  console.log('Canvas dimensions:', width, 'x', height);
+
+                  // 創建離屏 canvas 用於合成（透明背景）
+                  const offscreenCanvas = document.createElement('canvas');
+                  offscreenCanvas.width = width;
+                  offscreenCanvas.height = height;
+                  const ctx = offscreenCanvas.getContext('2d', { alpha: true });
+                  
+                  if (!ctx) {
+                    throw new Error('Failed to get 2d context');
+                  }
+
+                  // 清空為透明
+                  ctx.clearRect(0, 0, width, height);
+
+                  // 1. 繪製 WebGL canvas（3D 內容）
+                  ctx.drawImage(webglCanvas, 0, 0, width, height);
+
+                  // 2. 繪製 2D layers（前景和背景）
+                  if (layerContainers.length > 0) {
+                    // 使用 html2canvas 捕獲 2D layers
+                    const layers2DCanvas = await html2canvas(previewContainerRef.current, {
+                      useCORS: true,
+                      allowTaint: true,
+                      backgroundColor: null, // 透明背景
+                      scale: 1, // 使用 1:1 比例（因為我們已經有正確的尺寸）
+                      logging: false,
+                      width: containerRect.width,
+                      height: containerRect.height,
+                      onclone: (_clonedDoc, element) => {
+                        // 隱藏 WebGL canvas（我們已經手動繪製了）
+                        const clonedWebglCanvas = element.querySelector('canvas');
+                        if (clonedWebglCanvas) {
+                          (clonedWebglCanvas as HTMLCanvasElement).style.display = 'none';
+                        }
+
+                        // 隱藏編輯輔助 UI（選取框、XY 軸指示器）
+                        element.querySelectorAll('[style*="outline"]').forEach((el) => {
+                          (el as HTMLElement).style.outline = 'none';
+                        });
+                        
+                        // 隱藏 XY 軸指示器（SVG）
+                        element.querySelectorAll('svg').forEach((svg) => {
+                          if (svg.querySelector('circle') && svg.querySelector('line')) {
+                            (svg as SVGElement).style.display = 'none';
+                          }
+                        });
+
+                        // 隱藏 Performance Monitor
+                        const perfMonitor = element.querySelector('[class*="PerformanceMonitor"]');
+                        if (perfMonitor) {
+                          (perfMonitor as HTMLElement).style.display = 'none';
                         }
                       }
+                    });
 
-                      // 隱藏編輯輔助 UI（選取框、XY 軸指示器）
-                      // 移除虛線選取框
-                      element.querySelectorAll('[style*="outline"]').forEach((el) => {
-                        (el as HTMLElement).style.outline = 'none';
-                      });
-                      // 隱藏 XY 軸指示器（SVG）
-                      element.querySelectorAll('svg').forEach((svg) => {
-                        // 檢查是否是 XY 軸指示器（包含特定的圓點和軸線）
-                        if (svg.querySelector('circle') && svg.querySelector('line')) {
-                          (svg as SVGElement).style.display = 'none';
-                        }
-                      });
-                    }
-                  });
+                    // 將 2D layers 繪製到離屏 canvas（縮放到正確尺寸）
+                    ctx.drawImage(layers2DCanvas, 0, 0, containerRect.width, containerRect.height, 0, 0, width, height);
+                  }
 
                   // 創建下載連結
-                  const dataURL = canvas.toDataURL('image/png', 1.0);
+                  const dataURL = offscreenCanvas.toDataURL('image/png', 1.0);
                   const link = document.createElement('a');
                   const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
                   link.download = `screenshot_${timestamp}.png`;

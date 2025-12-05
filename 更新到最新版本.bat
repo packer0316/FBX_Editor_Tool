@@ -35,7 +35,76 @@ if errorlevel 1 (
 echo ✓ Git 倉庫檢查完成
 echo.
 
-echo [2/3] 正在從 GitHub 拉取最新代碼...
+echo [2/5] 正在檢查本地修改...
+echo.
+
+:: 檢查是否有未提交的修改
+git status --porcelain >nul 2>&1
+if errorlevel 1 (
+    echo ❌ Git 狀態檢查失敗
+    cd ..
+    pause
+    exit /b 1
+)
+
+:: 檢查是否有修改的檔案
+for /f %%i in ('git status --porcelain ^| find /c /v ""') do set CHANGES=%%i
+
+if %CHANGES% GTR 0 (
+    echo ⚠️  偵測到本地有未提交的修改：
+    echo.
+    git status --short
+    echo.
+    echo ══════════════════════════════════════
+    echo   警告：即將還原所有本地修改！
+    echo ══════════════════════════════════════
+    echo.
+    echo 請選擇：
+    echo   [1] 繼續更新（將丟失所有本地修改）
+    echo   [2] 取消更新（保留本地修改）
+    echo.
+    choice /C 12 /N /M "請輸入選擇 (1 或 2): "
+    
+    if errorlevel 2 (
+        echo.
+        echo ✓ 已取消更新
+        cd ..
+        pause
+        exit /b 0
+    )
+    
+    echo.
+    echo [3/5] 正在還原本地修改...
+    echo.
+    
+    :: 清理未追蹤的檔案和目錄
+    git clean -fd
+    if errorlevel 1 (
+        echo ❌ 清理未追蹤檔案失敗
+        cd ..
+        pause
+        exit /b 1
+    )
+    
+    :: 還原所有修改
+    git reset --hard HEAD
+    if errorlevel 1 (
+        echo ❌ 還原本地修改失敗
+        cd ..
+        pause
+        exit /b 1
+    )
+    
+    echo ✓ 本地修改已還原
+    echo.
+) else (
+    echo ✓ 沒有本地修改，無需還原
+    echo.
+    echo [3/5] 跳過還原步驟...
+    echo.
+)
+
+echo [4/5] 正在從 GitHub 拉取最新代碼...
 echo.
 
 :: 檢查遠端 URL 是否為 SSH，如果是則切換為 HTTPS
@@ -87,11 +156,11 @@ if errorlevel 1 (
 )
 
 echo.
-git pull origin %CURRENT_BRANCH%
+:: 使用 reset 而不是 pull，確保強制同步
+git reset --hard origin/%CURRENT_BRANCH%
 if errorlevel 1 (
     echo.
-    echo ❌ 合併代碼失敗
-    echo 可能有衝突需要手動解決
+    echo ❌ 同步代碼失敗
     cd ..
     pause
     exit /b 1
@@ -101,7 +170,7 @@ echo.
 echo ✓ 代碼更新完成
 echo.
 
-echo [3/3] 正在更新依賴套件...
+echo [5/5] 正在更新依賴套件...
 echo.
 
 :: 更新 npm 依賴

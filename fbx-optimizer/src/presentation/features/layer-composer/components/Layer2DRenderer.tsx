@@ -374,6 +374,7 @@ const Layer2DRendererComponent: React.FC<Layer2DRendererProps> = ({
   return (
     <div
       ref={containerRef}
+      data-layer-id={layer.id}
       className="absolute inset-0"
       style={{
         zIndex,
