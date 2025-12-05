@@ -1039,7 +1039,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     if (useMatcap > 0.5 && useUnlit < 0.5) {
                                         vec2 matcapUv;
                                         matcapUv.x = viewNormal.x * 0.49 + 0.5;
-                                        matcapUv.y = -viewNormal.y * 0.49 + 0.5;
+                                        matcapUv.y = viewNormal.y * 0.49 + 0.5;
                                         
                                         // 檢查是否使用 RGB 通道遮罩模式
                                         float useRGBMask = matcapUseMaskR + matcapUseMaskG + matcapUseMaskB;
@@ -1093,7 +1093,7 @@ const Model = forwardRef<ModelRef, ModelProps>(
                                     if (useMatcapAdd > 0.5 && useUnlit < 0.5) {
                                         vec2 matcapAddUv;
                                         matcapAddUv.x = viewNormal.x * 0.49 + 0.5;
-                                        matcapAddUv.y = -viewNormal.y * 0.49 + 0.5;
+                                        matcapAddUv.y = viewNormal.y * 0.49 + 0.5;
                                 
                                         // 檢查是否使用 RGB 通道遮罩模式
                                         float useAddRGBMask = matcapAddUseMaskR + matcapAddUseMaskG + matcapAddUseMaskB;
