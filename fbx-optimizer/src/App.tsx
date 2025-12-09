@@ -453,6 +453,37 @@ function App() {
     return { width: finalWidth, height: finalHeight };
   }, [aspectRatio, customWidth, customHeight, containerSize]);
 
+  // 根據比例計算精確的截圖尺寸
+  const screenshotSize = useMemo(() => {
+    // 預設比例對應的精確像素尺寸
+    const presetSizes: Record<string, { width: number; height: number }> = {
+      '2.5:1': { width: 1600, height: 640 },
+      '16:9': { width: 1920, height: 1080 },
+      '16:10': { width: 1728, height: 1080 },
+      '21:9': { width: 2560, height: 1080 },
+      '32:9': { width: 3840, height: 1080 },
+    };
+
+    if (aspectRatio === 'free') {
+      // 自由比例：不指定尺寸，使用當前 canvas 尺寸
+      return { width: undefined, height: undefined };
+    }
+
+    if (aspectRatio === 'custom') {
+      // 自訂尺寸：使用用戶指定的精確尺寸
+      return { width: customWidth, height: customHeight };
+    }
+
+    // 預設比例：使用對應的精確像素尺寸
+    const preset = presetSizes[aspectRatio];
+    if (preset) {
+      return { width: preset.width, height: preset.height };
+    }
+
+    // 未知比例：使用當前 canvas 尺寸
+    return { width: undefined, height: undefined };
+  }, [aspectRatio, customWidth, customHeight]);
+
   // 計算 aspect ratio 容器樣式
   const getAspectRatioStyle = (): React.CSSProperties => {
     if (aspectRatio === 'free' || viewerSize.width === 0) {
@@ -1587,6 +1618,8 @@ function App() {
                       onModelPositionChange={(modelId, position) => {
                         updateModel(modelId, { position });
                       }}
+                      screenshotWidth={screenshotSize.width}
+                      screenshotHeight={screenshotSize.height}
                     />
                   </div>
                   {/* 3D 預覽關閉提示 */}

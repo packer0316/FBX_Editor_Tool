@@ -99,6 +99,9 @@ interface SceneViewerProps {
     // Transform Gizmo
     showTransformGizmo?: boolean;
     onModelPositionChange?: (modelId: string, position: [number, number, number]) => void;
+    // 截圖尺寸設定
+    screenshotWidth?: number;
+    screenshotHeight?: number;
 }
 
 // Scene Settings Controller
@@ -1805,7 +1808,9 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         cameraSprintMultiplier = 2.0,
         isDirectorMode = false,
         showTransformGizmo = false,
-        onModelPositionChange
+        onModelPositionChange,
+        screenshotWidth,
+        screenshotHeight
     }, ref) => {
         // 決定使用單模型還是多模型模式
         const isMultiModelMode = models && models.length > 0;
@@ -1827,6 +1832,8 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         const modelRef = useRef<ModelRef>(null);
         const orbitControlsRef = useRef<any>(null);
         const glRef = useRef<THREE.WebGLRenderer | null>(null);
+        const sceneRef = useRef<THREE.Scene | null>(null);
+        const cameraRef = useRef<THREE.Camera | null>(null);
         const mediaRecorderRef = useRef<MediaRecorder | null>(null);
         const recordedChunksRef = useRef<Blob[]>([]);
         const isRecordingRef = useRef<boolean>(false);
@@ -1862,56 +1869,94 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                 }
             },
             takeScreenshot: () => {
-                if (glRef.current) {
+                if (glRef.current && sceneRef.current && cameraRef.current) {
                     try {
                         const gl = glRef.current;
+                        const scene = sceneRef.current;
+                        const camera = cameraRef.current;
                         const canvas = gl.domElement;
                         
-                        console.log('Canvas dimensions:', canvas.width, 'x', canvas.height);
+                        // 確定目標尺寸：優先使用用戶指定的尺寸，否則使用當前 canvas 尺寸
+                        const targetWidth = screenshotWidth || canvas.width;
+                        const targetHeight = screenshotHeight || canvas.height;
                         
-                        // 儲存當前背景色設定
+                        // 儲存當前狀態
+                        const currentWidth = canvas.width;
+                        const currentHeight = canvas.height;
                         const currentClearAlpha = gl.getClearAlpha();
                         const currentClearColor = gl.getClearColor(new THREE.Color());
+                        const currentPixelRatio = gl.getPixelRatio();
+                        
+                        // 儲存相機狀態（如果是透視相機）
+                        let originalAspect: number | undefined;
+                        if (camera instanceof THREE.PerspectiveCamera) {
+                            originalAspect = camera.aspect;
+                        }
+                        
+                        console.log(`Screenshot: Current ${currentWidth}x${currentHeight} → Target ${targetWidth}x${targetHeight}`);
                         
                         // 臨時設定為透明背景
                         gl.setClearAlpha(0);
                         gl.setClearColor(new THREE.Color(0x000000), 0);
                         
-                        // 等待下一幀渲染完成（透明背景）
-                        requestAnimationFrame(() => {
-                            try {
-                                // 使用 canvas.toDataURL 生成圖片（透明背景）
-                                const dataURL = canvas.toDataURL('image/png', 1.0);
+                        // 如果需要不同尺寸，調整渲染器
+                        const needsResize = targetWidth !== currentWidth || targetHeight !== currentHeight;
+                        if (needsResize) {
+                            // 設定渲染器尺寸為目標尺寸
+                            gl.setPixelRatio(1); // 使用 1:1 pixel ratio 確保精確尺寸
+                            gl.setSize(targetWidth, targetHeight, false); // false = 不更新 canvas style
+                            
+                            // 更新相機 aspect ratio
+                            if (camera instanceof THREE.PerspectiveCamera) {
+                                camera.aspect = targetWidth / targetHeight;
+                                camera.updateProjectionMatrix();
+                            }
+                        }
+                        
+                        // 立即渲染一幀
+                        gl.render(scene, camera);
+                        
+                        try {
+                            // 使用 canvas.toDataURL 生成圖片（透明背景）
+                            const dataURL = canvas.toDataURL('image/png', 1.0);
+                            
+                            console.log(`Screenshot captured: ${targetWidth}x${targetHeight}, DataURL length: ${dataURL.length}`);
+                            
+                            // 驗證截圖不是空白的
+                            if (dataURL === 'data:,' || dataURL.length < 100) {
+                                throw new Error('Canvas appears to be empty');
+                            }
+                            
+                            // 創建下載連結
+                            const link = document.createElement('a');
+                            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+                            link.download = `screenshot_${targetWidth}x${targetHeight}_${timestamp}.png`;
+                            link.href = dataURL;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            
+                            console.log('Screenshot saved successfully:', link.download);
+                        } finally {
+                            // 恢復原始狀態
+                            gl.setClearAlpha(currentClearAlpha);
+                            gl.setClearColor(currentClearColor, currentClearAlpha);
+                            
+                            if (needsResize) {
+                                // 恢復原始尺寸
+                                gl.setPixelRatio(currentPixelRatio);
+                                gl.setSize(currentWidth, currentHeight, false);
                                 
-                                // 立即恢復原始背景色設定
-                                gl.setClearAlpha(currentClearAlpha);
-                                gl.setClearColor(currentClearColor, currentClearAlpha);
-                                
-                                console.log('DataURL length:', dataURL.length);
-                                
-                                // 驗證截圖不是空白的
-                                if (dataURL === 'data:,' || dataURL.length < 100) {
-                                    throw new Error('Canvas appears to be empty');
+                                // 恢復相機 aspect ratio
+                                if (camera instanceof THREE.PerspectiveCamera && originalAspect !== undefined) {
+                                    camera.aspect = originalAspect;
+                                    camera.updateProjectionMatrix();
                                 }
                                 
-                                // 創建下載連結
-                                const link = document.createElement('a');
-                                const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-                                link.download = `screenshot_${timestamp}.png`;
-                                link.href = dataURL;
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                                
-                                console.log('Screenshot saved successfully:', link.download);
-                            } catch (error) {
-                                // 確保恢復背景設定
-                                gl.setClearAlpha(currentClearAlpha);
-                                gl.setClearColor(currentClearColor, currentClearAlpha);
-                                console.error('Failed to take screenshot:', error);
-                                alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+                                // 重新渲染一幀以恢復顯示
+                                gl.render(scene, camera);
                             }
-                        });
+                        }
                     } catch (error) {
                         console.error('Failed to take screenshot:', error);
                         alert(`截圖失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
@@ -2085,7 +2130,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         antialias: true,
                         alpha: true
                     }}
-                    onCreated={({ gl }) => {
+                    onCreated={({ gl, scene, camera }) => {
                         // 統一輸出色彩空間為 sRGB
                         gl.outputColorSpace = THREE.SRGBColorSpace;
                         // 改用 Linear Tone Mapping 以匹配 Cocos Creator（保持顏色鮮豔度）
@@ -2099,8 +2144,10 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         if (toneMappingExposure !== undefined) {
                             gl.toneMappingExposure = toneMappingExposure;
                         }
-                        // 保存 gl 引用以供截圖使用
+                        // 保存 gl, scene, camera 引用以供截圖使用
                         glRef.current = gl;
+                        sceneRef.current = scene;
+                        cameraRef.current = camera;
                     }}>
                     <EffekseerFrameBridge />
                     <FrameEmitter enabled={isDirectorMode} />
