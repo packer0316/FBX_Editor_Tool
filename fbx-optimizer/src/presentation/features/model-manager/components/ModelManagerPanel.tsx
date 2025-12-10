@@ -25,6 +25,8 @@ interface ModelManagerPanelProps {
       modelRotationSpeed?: number;
     }
   ) => void;
+  /** 聚焦相機到指定模型 */
+  onFocusModel?: (id: string) => void;
   isLoading?: boolean;
   // 場景設置參數
   toneMappingExposure?: number;
@@ -41,6 +43,7 @@ export default function ModelManagerPanel({
   onRemoveModel,
   onRenameModel,
   onUpdateModelTransform,
+  onFocusModel,
   isLoading = false,
   toneMappingExposure,
   environmentIntensity,
@@ -138,6 +141,7 @@ export default function ModelManagerPanel({
               onRemove={() => onRemoveModel(modelInstance.id)}
               onRename={(newName) => onRenameModel(modelInstance.id, newName)}
               onUpdateTransform={(updates) => onUpdateModelTransform(modelInstance.id, updates)}
+              onFocusModel={onFocusModel ? () => onFocusModel(modelInstance.id) : undefined}
               toneMappingExposure={toneMappingExposure}
               environmentIntensity={environmentIntensity}
               hdriUrl={hdriUrl}

@@ -43,6 +43,8 @@ export interface SceneViewerRef extends ModelRef {
     stopRecording: () => void;
     isRecording: () => boolean;
     getRendererInfo: () => RendererInfo | null;
+    /** 聚焦到指定模型，相機以 45 度俯角看向模型 */
+    focusOnModel: (modelId: string) => void;
 }
 
 interface ModelInstanceForRender {
@@ -2106,6 +2108,71 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     },
                     programs: info.programs?.length ?? null
                 };
+            },
+            focusOnModel: (modelId: string) => {
+                if (!models || !cameraRef.current || !orbitControlsRef.current) {
+                    console.warn('[focusOnModel] Missing models, camera, or controls');
+                    return;
+                }
+
+                // 找到目標模型
+                const targetModelInstance = models.find(m => m.id === modelId);
+                if (!targetModelInstance || !targetModelInstance.model) {
+                    console.warn(`[focusOnModel] Model not found: ${modelId}`);
+                    return;
+                }
+
+                const modelGroup = targetModelInstance.model;
+
+                // 計算模型的 bounding box（使用世界矩陣）
+                const box = new THREE.Box3();
+                
+                // 遍歷所有 mesh 計算邊界
+                modelGroup.traverse((child) => {
+                    if ((child as THREE.Mesh).isMesh) {
+                        const mesh = child as THREE.Mesh;
+                        if (mesh.geometry) {
+                            mesh.geometry.computeBoundingBox();
+                            if (mesh.geometry.boundingBox) {
+                                const meshBox = mesh.geometry.boundingBox.clone();
+                                meshBox.applyMatrix4(mesh.matrixWorld);
+                                box.union(meshBox);
+                            }
+                        }
+                    }
+                });
+
+                // 如果沒有找到任何 mesh，使用模型位置作為中心
+                if (box.isEmpty()) {
+                    const pos = targetModelInstance.position || [0, 0, 0];
+                    box.setFromCenterAndSize(
+                        new THREE.Vector3(pos[0], pos[1], pos[2]),
+                        new THREE.Vector3(1, 1, 1)
+                    );
+                }
+
+                const worldCenter = box.getCenter(new THREE.Vector3());
+                const size = box.getSize(new THREE.Vector3());
+
+                // 計算適當的觀看距離（基於模型最大維度）
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const distance = Math.max(maxDim * 2.5, 3); // 最小距離 3
+
+                // 45 度俯角計算相機位置
+                const angle = Math.PI / 4; // 45 度
+                const cameraY = worldCenter.y + distance * Math.sin(angle);
+                const cameraZ = worldCenter.z + distance * Math.cos(angle);
+
+                // 設置相機位置
+                const camera = cameraRef.current;
+                camera.position.set(worldCenter.x, cameraY, cameraZ);
+
+                // 設置 OrbitControls 的 target
+                const controls = orbitControlsRef.current;
+                controls.target.copy(worldCenter);
+                controls.update();
+
+                console.log(`[focusOnModel] Focused on model: ${modelId}, center:`, worldCenter, 'distance:', distance);
             }
         }));
 

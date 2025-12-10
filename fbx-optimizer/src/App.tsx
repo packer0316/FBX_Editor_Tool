@@ -1899,6 +1899,9 @@ function App() {
                 onUpdateModelTransform={(id, updates) => {
                   updateModel(id, updates);
                 }}
+                onFocusModel={(id) => {
+                  sceneViewerRef.current?.focusOnModel(id);
+                }}
                 isLoading={isLoading}
                 toneMappingExposure={toneMappingExposure}
                 environmentIntensity={environmentIntensity}

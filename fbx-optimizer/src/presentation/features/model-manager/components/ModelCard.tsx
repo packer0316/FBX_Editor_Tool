@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d, Grid3x3 } from 'lucide-react';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d, Grid3x3, Focus } from 'lucide-react';
 import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
@@ -93,6 +93,8 @@ interface ModelCardProps {
     isModelRotating?: boolean;
     modelRotationSpeed?: number;
   }) => void;
+  /** 聚焦相機到此模型 */
+  onFocusModel?: () => void;
   // 場景設置參數
   toneMappingExposure?: number;
   environmentIntensity?: number;
@@ -107,6 +109,7 @@ export default function ModelCard({
   onRemove,
   onRename,
   onUpdateTransform,
+  onFocusModel,
   toneMappingExposure,
   environmentIntensity,
   hdriUrl,
@@ -224,6 +227,18 @@ export default function ModelCard({
               >
                 <Info className="w-3 h-3" />
               </button>
+              {onFocusModel && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onFocusModel();
+                  }}
+                  className="p-1 text-gray-400 hover:text-yellow-400 hover:bg-gray-700 rounded transition-colors"
+                  title="聚焦相機到此模型"
+                >
+                  <Focus className="w-3 h-3" />
+                </button>
+              )}
               <button
                 onClick={(e) => {
                   e.stopPropagation();
