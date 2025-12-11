@@ -1,9 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
+import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -196,6 +198,13 @@ const EffectPlaybackControls = ({
     );
 };
 
+// 資源狀態介面
+export interface ResourceStatus {
+    path: string;       // 資源路徑
+    exists: boolean;    // 是否存在
+    type: 'image' | 'material' | 'model' | 'other';
+}
+
 // 定義單個特效卡片的狀態介面
 export interface EffectItem {
     id: string;          // 唯一識別碼
@@ -220,6 +229,9 @@ export interface EffectItem {
     // Frame Triggers
     triggers: EffectTrigger[]; // 觸發設定
     color: string; // 特效顏色（用於時間軸顯示）
+
+    // Resource Status (載入時追蹤的資源狀態)
+    resourceStatus?: ResourceStatus[];
 }
 
 // 向量輸入組件
@@ -288,7 +300,9 @@ const EffectCard = ({
     createdClips,
     theme,
     duration,
-    fps = 30
+    fps = 30,
+    effectResourceCache,
+    setEffectResourceCache
 }: {
     item: EffectItem,
     isRuntimeReady: boolean,
@@ -299,7 +313,9 @@ const EffectCard = ({
     createdClips: IdentifiableClip[],
     theme: ThemeStyle,
     duration: number,
-    fps?: number
+    fps?: number,
+    effectResourceCache: Map<string, ResourceStatus[]>,
+    setEffectResourceCache: React.Dispatch<React.SetStateAction<Map<string, ResourceStatus[]>>>
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
@@ -308,6 +324,84 @@ const EffectCard = ({
     const [editingFrame, setEditingFrame] = useState<string>('');
     const [editingDuration, setEditingDuration] = useState<string>('');
     const [hasActiveEffect, setHasActiveEffect] = useState(false); // 追蹤特效是否存在
+    const [showResourcePopover, setShowResourcePopover] = useState(false); // 資源狀態 Popover
+    const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 }); // Popover 位置
+    const [previewImage, setPreviewImage] = useState<string | null>(null); // 預覽圖片 URL
+    const [fullsizeImage, setFullsizeImage] = useState<string | null>(null); // 全尺寸預覽圖片
+    const [isDragging, setIsDragging] = useState(false); // 是否正在拖曳
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 }); // 拖曳偏移量
+    const resourcePopoverRef = useRef<HTMLDivElement>(null); // Popover 參考
+    const resourceButtonRef = useRef<HTMLButtonElement>(null); // 按鈕參考
+    const fullsizeModalRef = useRef<HTMLDivElement>(null); // 全尺寸 Modal 參考
+
+    // 點擊外部關閉 Popover 和預覽
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            // 如果點擊的是全尺寸 Modal 內部，不關閉 Popover
+            if (fullsizeModalRef.current && fullsizeModalRef.current.contains(target)) {
+                return;
+            }
+            // 如果點擊的是 Popover 外部，關閉 Popover
+            if (resourcePopoverRef.current && !resourcePopoverRef.current.contains(target)) {
+                setShowResourcePopover(false);
+                setPreviewImage(null);
+            }
+        };
+        if (showResourcePopover) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showResourcePopover]);
+
+    // 拖曳邏輯
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            setPopoverPosition({
+                top: e.clientY - dragOffset.y,
+                left: e.clientX - dragOffset.x
+            });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragOffset]);
+
+    // 開始拖曳
+    const handleDragStart = (e: React.MouseEvent) => {
+        if (resourcePopoverRef.current) {
+            const rect = resourcePopoverRef.current.getBoundingClientRect();
+            setDragOffset({
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            });
+            setIsDragging(true);
+        }
+    };
+
+    // 計算並更新 Popover 位置（置中）
+    const updatePopoverPosition = () => {
+        // 預設置中顯示
+        const popoverWidth = 450;
+        const popoverHeight = 350;
+        setPopoverPosition({
+            top: Math.max(50, (window.innerHeight - popoverHeight) / 2),
+            left: Math.max(50, (window.innerWidth - popoverWidth) / 2)
+        });
+    };
 
     // 追蹤當前播放的 Handle，以便即時更新參數
     const currentHandleRef = useRef<effekseer.EffekseerHandle | null>(null);
@@ -349,11 +443,34 @@ const EffectCard = ({
         ? bones.find(b => b.uuid === item.boundBoneUuid) || null
         : null;
 
+    // 根據副檔名判斷資源類型
+    const getResourceType = (path: string): ResourceStatus['type'] => {
+        const ext = path.split('.').pop()?.toLowerCase() || '';
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'dds', 'tga'].includes(ext)) return 'image';
+        if (['efkmat'].includes(ext)) return 'material';
+        if (['efkmodel', 'fbx', 'obj'].includes(ext)) return 'model';
+        return 'other';
+    };
+
     // 載入特效
     const handleLoad = async () => {
         if (!isRuntimeReady || !localPath.trim()) return;
 
+        console.log('[EffectCard] 🔵 開始載入特效:', localPath);
+        
+        // 🔥 檢查全域資源快取
+        const cachedResources = effectResourceCache.get(localPath);
+        if (cachedResources && cachedResources.length > 0) {
+            console.log('[EffectCard] 📋 使用快取的資源列表:', cachedResources.length, '個');
+        }
+        
         onUpdate(item.id, { isLoading: true });
+        
+        // 用於追蹤資源狀態
+        const resourceStatusMap = new Map<string, ResourceStatus>();
+        // 追蹤所有資源檢查的 Promise
+        const resourceCheckPromises: Promise<void>[] = [];
+        
         try {
             const adapter = getEffekseerRuntimeAdapter();
             const context = adapter.effekseerContext;
@@ -361,33 +478,218 @@ const EffectCard = ({
             if (!context) throw new Error('Effekseer Context 未初始化');
 
             const effectUrl = `/effekseer/${localPath}`;
+            const baseDir = effectUrl.substring(0, effectUrl.lastIndexOf('/') + 1);
+            console.log('[EffectCard] 📂 Base Directory:', baseDir);
 
-            await new Promise<void>((resolve, reject) => {
+            // redirect 回調：攔截資源請求並檢查是否存在
+            const redirect = (path: string): string => {
+                console.log('[EffectCard] 🔍 資源請求:', path);
+                
+                // 計算完整 URL
+                let fullUrl = path;
+                if (!path.startsWith('/') && !path.startsWith('http')) {
+                    // 相對路徑，拼接基礎目錄
+                    fullUrl = baseDir + path;
+                }
+
+                // 保留完整相對路徑用於顯示
+                const resourcePath = path;
+
+                // 避免重複檢查同一資源
+                if (!resourceStatusMap.has(resourcePath)) {
+                    // 使用 fetch HEAD 檢查資源是否存在
+                    const checkPromise = fetch(fullUrl, { method: 'HEAD' })
+                        .then(response => {
+                            resourceStatusMap.set(resourcePath, {
+                                path: resourcePath,
+                                exists: response.ok,
+                                type: getResourceType(resourcePath)
+                            });
+                            console.log('[EffectCard]', response.ok ? '✅' : '❌', resourcePath, response.ok ? '存在' : '不存在');
+                        })
+                        .catch(() => {
+                            resourceStatusMap.set(resourcePath, {
+                                path: resourcePath,
+                                exists: false,
+                                type: getResourceType(resourcePath)
+                            });
+                            console.log('[EffectCard] ❌', resourcePath, '請求失敗');
+                        });
+                    
+                    resourceCheckPromises.push(checkPromise);
+                }
+
+                return fullUrl;
+            };
+
+            // 🔥 載入特效：收集所有缺失的資源
+            let loadSuccess = true;
+            const missingResources: string[] = []; // 記錄 Effekseer 報告的缺失資源
+            
+            await new Promise<void>((resolve) => {
                 const effect = context.loadEffect(
                     effectUrl,
-                    1.0, // 載入時 Scale 設為 1.0，完全由動態 Scale 控制
+                    1.0,
                     () => {
+                        console.log('[EffectCard] ✅ 特效載入成功');
                         adapter.loadedEffects.set(item.id, effect);
                         resolve();
                     },
-                    (msg: string, filePath: string) => {
-                        reject(new Error(`${msg} (${filePath})`));
-                    }
+                    (_msg: string, filePath: string) => {
+                        console.log('[EffectCard] ❌ 資源缺失:', filePath);
+                        loadSuccess = false;
+                        // 記錄缺失的資源路徑
+                        missingResources.push(filePath);
+                        // 不 resolve，讓 Effekseer 繼續嘗試載入其他資源
+                        // Effekseer 會多次呼叫 onerror 直到所有缺失資源都報告完畢
+                    },
+                    redirect
                 );
+                
+                // 設定超時，等待 Effekseer 報告所有缺失資源
+                setTimeout(() => {
+                    resolve();
+                }, 2000); // 2 秒超時
             });
 
             const fileName = localPath.split('/').pop()?.split('.')[0] || localPath;
 
-            onUpdate(item.id, {
-                isLoaded: true,
-                isLoading: false,
-                name: fileName,
-                path: localPath
-            });
+            // 🔥 等待所有資源檢查完成
+            console.log('[EffectCard] ⏳ 等待所有資源檢查完成... (共', resourceCheckPromises.length, '個)');
+            if (resourceCheckPromises.length > 0) {
+                await Promise.all(resourceCheckPromises);
+            }
+
+            // 🔥 使用 Effekseer 報告的缺失資源來修正 resourceStatusMap
+            for (const missingPath of missingResources) {
+                // 從完整路徑提取純檔名
+                const fileName = missingPath.split('/').pop() || missingPath;
+                
+                console.log('[EffectCard] 🔴 標記為缺失:', fileName);
+                
+                // 檢查 resourceStatusMap 中是否已有此資源（可能用不同的 key）
+                let found = false;
+                for (const [key, value] of resourceStatusMap.entries()) {
+                    const keyFileName = key.split('/').pop() || key;
+                    if (keyFileName === fileName) {
+                        // 更新現有記錄為缺失
+                        resourceStatusMap.set(key, {
+                            ...value,
+                            exists: false
+                        });
+                        found = true;
+                        break;
+                    }
+                }
+                
+                // 如果沒找到，新增記錄
+                if (!found) {
+                    resourceStatusMap.set(fileName, {
+                        path: fileName,
+                        exists: false,
+                        type: getResourceType(fileName)
+                    });
+                }
+            }
+            
+            const resourceStatusArray = Array.from(resourceStatusMap.values());
+            const successCount = resourceStatusArray.filter(r => r.exists).length;
+            const failCount = resourceStatusArray.filter(r => !r.exists).length;
+            
+            console.log('[EffectCard] 📊 引用資源:', successCount, '/ 缺失資源:', failCount);
+            console.log('[EffectCard] 📊 Effekseer 報告的缺失資源:', missingResources);
+
+            // 🔥 處理載入結果
+            if (!loadSuccess) {
+                // 載入失敗，顯示詳細的資源報告
+                const failedResources = resourceStatusArray.filter(r => !r.exists);
+                const successResources = resourceStatusArray.filter(r => r.exists);
+                
+                const failedList = failedResources.map(r => `  ❌ ${r.path}`).join('\n');
+                const successList = successResources.map(r => `  ✅ ${r.path}`).join('\n');
+                
+                let errorMessage = `載入特效失敗！\n\n`;
+                errorMessage += `📋 引用資源: ${successCount}\n`;
+                errorMessage += `❌ 缺失資源: ${failCount}\n\n`;
+                
+                if (failedResources.length > 0) {
+                    errorMessage += `缺失的資源:\n${failedList}\n\n`;
+                }
+                if (successResources.length > 0) {
+                    errorMessage += `已找到的資源:\n${successList}`;
+                }
+                
+                alert(errorMessage);
+                
+                onUpdate(item.id, {
+                    isLoaded: false,
+                    isLoading: false,
+                    name: fileName,
+                    path: localPath,
+                    resourceStatus: resourceStatusArray
+                });
+            } else {
+                // 載入成功
+                console.log('[EffectCard] 🎉 載入完成');
+                
+                // 處理快取情況
+                if (resourceStatusArray.length === 0) {
+                    // 沒有追蹤到新資源，檢查全域快取
+                    if (cachedResources && cachedResources.length > 0) {
+                        // 🔥 使用全域快取的資源列表
+                        console.log('[EffectCard] 📋 使用全域快取的資源狀態:', cachedResources.length, '個');
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath,
+                            resourceStatus: cachedResources
+                        });
+                    } else if (item.resourceStatus && item.resourceStatus.length > 0) {
+                        // 保留當前 item 的 resourceStatus
+                        console.log('[EffectCard] ⚠️ 保留現有資源狀態');
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath
+                        });
+                    } else {
+                        // 真的沒有外部資源
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath,
+                            resourceStatus: [{
+                                path: '(資源已快取，by其他特效檔)',
+                                exists: true,
+                                type: 'other' as const
+                            }]
+                        });
+                    }
+                } else {
+                    // 🔥 追蹤到新資源，存入全域快取
+                    console.log('[EffectCard] 💾 存入全域快取:', localPath, '->', resourceStatusArray.length, '個資源');
+                    setEffectResourceCache(prev => new Map(prev).set(localPath, resourceStatusArray));
+                    
+                    onUpdate(item.id, {
+                        isLoaded: true,
+                        isLoading: false,
+                        name: fileName,
+                        path: localPath,
+                        resourceStatus: resourceStatusArray
+                    });
+                }
+            }
         } catch (error) {
             console.error('[EffectCard] 載入失敗:', error);
             alert(`載入失敗: ${error instanceof Error ? error.message : String(error)}`);
-            onUpdate(item.id, { isLoading: false, isLoaded: false });
+            onUpdate(item.id, { 
+                isLoading: false, 
+                isLoaded: false,
+                resourceStatus: Array.from(resourceStatusMap.values())
+            });
         }
     };
 
@@ -806,6 +1108,201 @@ const EffectCard = ({
                     {item.isLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                     {item.isLoaded && !item.isLoading && <CheckCircle2 className="w-4 h-4 text-green-500" />}
 
+                    {/* 資源狀態按鈕 */}
+                    {item.isLoaded && item.resourceStatus && item.resourceStatus.length > 0 && (
+                        <>
+                            <button
+                                ref={resourceButtonRef}
+                                onClick={() => {
+                                    updatePopoverPosition();
+                                    setShowResourcePopover(!showResourcePopover);
+                                    setPreviewImage(null);
+                                }}
+                                className={`p-1.5 rounded transition-colors ${
+                                    item.resourceStatus.some(r => !r.exists)
+                                        ? 'text-red-400 hover:text-red-300 hover:bg-red-600/20'
+                                        : 'text-green-400 hover:text-green-300 hover:bg-green-600/20'
+                                }`}
+                                title="查看引用資源"
+                            >
+                                <FileImage className="w-4 h-4" />
+                            </button>
+
+                            {/* 資源狀態 Popover - 使用 Portal 渲染到 body */}
+                            {showResourcePopover && createPortal(
+                                <div 
+                                    ref={resourcePopoverRef}
+                                    className="fixed w-[450px] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl overflow-hidden"
+                                    style={{ 
+                                        top: popoverPosition.top, 
+                                        left: popoverPosition.left,
+                                        zIndex: 99999
+                                    }}
+                                >
+                                    {/* 可拖曳的標題列 */}
+                                    <div 
+                                        className="px-3 py-2.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between cursor-move select-none"
+                                        onMouseDown={handleDragStart}
+                                    >
+                                        <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                                            <FileImage className="w-4 h-4" />
+                                            <span>引用資源列表</span>
+                                            <span className="ml-2 px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-400">
+                                                {item.resourceStatus.filter(r => r.exists).length}/{item.resourceStatus.length}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setShowResourcePopover(false);
+                                                setPreviewImage(null);
+                                            }}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-700 rounded transition-colors"
+                                        >
+                                            <X className="w-4 h-4" />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex">
+                                        {/* 資源列表 */}
+                                        <div className="flex-1 max-h-[300px] overflow-y-auto">
+                                            {item.resourceStatus.map((resource, idx) => {
+                                                const effectDir = `/effekseer/${localPath.substring(0, localPath.lastIndexOf('/') + 1)}`;
+                                                // 處理路徑：如果已經是完整路徑就直接使用，否則拼接 effectDir
+                                                let imageUrl: string | null = null;
+                                                if (resource.type === 'image' && resource.exists) {
+                                                    if (resource.path.startsWith('/effekseer/') || resource.path.startsWith('http')) {
+                                                        // 已經是完整路徑
+                                                        imageUrl = resource.path;
+                                                    } else if (resource.path.startsWith('/')) {
+                                                        // 以 / 開頭的絕對路徑
+                                                        imageUrl = resource.path;
+                                                    } else {
+                                                        // 相對路徑，拼接 effectDir
+                                                        imageUrl = `${effectDir}${resource.path}`;
+                                                    }
+                                                }
+                                                
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={`flex items-center gap-2 px-3 py-2 border-b border-gray-800 last:border-b-0 transition-colors cursor-pointer ${
+                                                            previewImage === imageUrl ? 'bg-blue-900/30' : 'hover:bg-gray-800/50'
+                                                        }`}
+                                                        onClick={() => {
+                                                            if (imageUrl) {
+                                                                setPreviewImage(previewImage === imageUrl ? null : imageUrl);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {/* 資源類型圖示 */}
+                                                        {resource.type === 'image' && <Image className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                                        {resource.type === 'material' && <Box className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />}
+                                                        {resource.type === 'model' && <Box className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />}
+                                                        {resource.type === 'other' && <FileQuestion className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+                                                        
+                                                        {/* 檔名 */}
+                                                        <span className="text-xs text-gray-300 truncate flex-1" title={resource.path}>
+                                                            {resource.path}
+                                                        </span>
+                                                        
+                                                        {/* 預覽按鈕（僅圖片類型且存在時顯示） */}
+                                                        {imageUrl && (
+                                                            <Eye className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400 flex-shrink-0" />
+                                                        )}
+                                                        
+                                                        {/* 狀態圖示 */}
+                                                        {resource.exists ? (
+                                                            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                                        ) : (
+                                                            <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* 圖片預覽區域 */}
+                                        {previewImage && (
+                                            <div className="w-[180px] border-l border-gray-700 bg-gray-950 p-3 flex flex-col items-center justify-center">
+                                                <div className="relative">
+                                                    <img 
+                                                        src={previewImage} 
+                                                        alt="Preview" 
+                                                        className="max-w-full max-h-[240px] object-contain rounded border border-gray-700"
+                                                        style={{ imageRendering: 'pixelated' }}
+                                                    />
+                                                    {/* 放大按鈕 */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFullsizeImage(previewImage);
+                                                        }}
+                                                        className="absolute bottom-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-blue-600/80 rounded transition-colors"
+                                                        title="檢視原始大小"
+                                                    >
+                                                        <Maximize className="w-4 h-4 text-white" />
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 mt-2 text-center truncate w-full">
+                                                    {previewImage.split('/').pop()}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {item.resourceStatus.some(r => !r.exists) && (
+                                        <div className="px-3 py-2 bg-red-900/20 border-t border-red-900/50">
+                                            <p className="text-xs text-red-400">
+                                                有 {item.resourceStatus.filter(r => !r.exists).length} 個資源缺失
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>,
+                                document.body
+                            )}
+
+                            {/* 全尺寸圖片 Modal */}
+                            {fullsizeImage && createPortal(
+                                <div 
+                                    ref={fullsizeModalRef}
+                                    className="fixed inset-0 bg-black/80 flex items-center justify-center"
+                                    style={{ zIndex: 999999 }}
+                                    onClick={() => setFullsizeImage(null)}
+                                >
+                                    <div 
+                                        className="relative max-w-[90vw] max-h-[90vh] bg-gray-900 rounded-lg border border-gray-700 shadow-2xl overflow-auto"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {/* 標題列 */}
+                                        <div className="sticky top-0 flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                                                <Image className="w-4 h-4 text-blue-400" />
+                                                <span>{fullsizeImage.split('/').pop()}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setFullsizeImage(null)}
+                                                className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        {/* 圖片 */}
+                                        <div className="p-4 flex items-center justify-center" style={{ background: 'repeating-conic-gradient(#1a1a1a 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px' }}>
+                                            <img 
+                                                src={fullsizeImage} 
+                                                alt="Full size preview" 
+                                                className="max-w-full max-h-[80vh]"
+                                                style={{ imageRendering: 'pixelated' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </>
+                    )}
+
                     {/* 顯示/隱藏按鈕 */}
                     <button
                         onClick={() => {
@@ -1134,6 +1631,8 @@ interface EffectTestPanelProps {
     duration?: number;
     /** 幀率 */
     fps?: number;
+    /** 清除所有模型的特效快取回調（因為 Effekseer 快取是全域共用的） */
+    onClearAllModelsEffects?: () => void;
 }
 
 export default function EffectTestPanel({
@@ -1144,9 +1643,13 @@ export default function EffectTestPanel({
     createdClips,
     theme,
     duration = 0,
-    fps = 30
+    fps = 30,
+    onClearAllModelsEffects
 }: EffectTestPanelProps) {
     const [isRuntimeReady, setIsRuntimeReady] = useState(false);
+    
+    // 全域資源快取：特效路徑 -> 資源列表（解決 Effekseer 內部快取導致重複載入無法追蹤資源的問題）
+    const [effectResourceCache, setEffectResourceCache] = useState<Map<string, ResourceStatus[]>>(new Map());
 
     // 檢查 Runtime 狀態
     useEffect(() => {
@@ -1195,6 +1698,261 @@ export default function EffectTestPanel({
         setEffects(prev => prev.filter(item => item.id !== id));
     };
 
+    // 載入資料夾中的所有 EFK
+    const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+    const [availableFolders, setAvailableFolders] = useState<string[]>([]);
+    const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+    const folderDropdownRef = useRef<HTMLDivElement>(null);
+
+    // 載入 manifest 獲取可用資料夾
+    useEffect(() => {
+        fetch('/effekseer/manifest.json')
+            .then(res => res.json())
+            .then(manifest => {
+                const folders = Object.keys(manifest.root?.subdirs || {});
+                setAvailableFolders(folders);
+            })
+            .catch(err => console.warn('[EffectTestPanel] Failed to load manifest:', err));
+    }, []);
+
+    // 點擊外部關閉下拉選單
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (folderDropdownRef.current && !folderDropdownRef.current.contains(e.target as Node)) {
+                setShowFolderDropdown(false);
+            }
+        };
+        if (showFolderDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFolderDropdown]);
+
+    // 載入指定資料夾的所有 EFK
+    const loadFolder = async (folderName: string) => {
+        setIsLoadingFolder(true);
+        setShowFolderDropdown(false);
+
+        try {
+            const res = await fetch('/effekseer/manifest.json');
+            const manifest = await res.json();
+            
+            const folderData = manifest.root?.subdirs?.[folderName];
+            if (!folderData) {
+                console.warn(`[EffectTestPanel] Folder "${folderName}" not found in manifest`);
+                return;
+            }
+
+            const efkFiles: { name: string; path: string }[] = folderData.efk || [];
+            
+            if (efkFiles.length === 0) {
+                console.warn(`[EffectTestPanel] No EFK files found in "${folderName}"`);
+                return;
+            }
+
+            // 預設顏色列表
+            const colors = ['#9333EA', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'];
+
+            // 批量新增 EFK
+            const newEffects: EffectItem[] = efkFiles.map((file, index) => ({
+                id: `effect_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                name: file.name.replace('.efk', ''),
+                path: file.path,
+                isLoaded: false,
+                isLoading: false,
+                isPlaying: false,
+                isLooping: false,
+                loopIntervalId: null,
+                isVisible: true,
+                position: [0, 0, 0] as [number, number, number],
+                rotation: [0, 0, 0] as [number, number, number],
+                scale: [1, 1, 1] as [number, number, number],
+                speed: 1.0,
+                boundBoneUuid: null,
+                triggers: [],
+                color: colors[index % colors.length]
+            }));
+
+            setEffects(prev => [...prev, ...newEffects]);
+            console.log(`[EffectTestPanel] Added ${newEffects.length} effects from "${folderName}"`);
+
+        } catch (err) {
+            console.error('[EffectTestPanel] Failed to load folder:', err);
+        } finally {
+            setIsLoadingFolder(false);
+        }
+    };
+
+    // 清除 Effekseer 快取
+    const handleClearCache = () => {
+        const adapter = getEffekseerRuntimeAdapter();
+        
+        // 確認對話框
+        if (!window.confirm('確定要清除所有特效快取嗎？\n\n這將釋放所有已載入的特效資源，需要重新載入才能播放。')) {
+            return;
+        }
+
+        try {
+            adapter.clearAllCache();
+            
+            // 清空全域資源快取
+            setEffectResourceCache(new Map());
+            console.log('[EffectTestPanel] 🗑️ 全域資源快取已清空');
+            
+            // 清除所有模型的特效狀態（因為 Effekseer 快取是全域共用的）
+            if (onClearAllModelsEffects) {
+                onClearAllModelsEffects();
+                console.log('[EffectTestPanel] 🗑️ 所有模型的特效狀態已清除');
+            } else {
+                // 如果沒有提供回調，只清除當前模型的特效
+                setEffects(prev => prev.map(effect => ({
+                    ...effect,
+                    isLoaded: false,
+                    resourceStatus: undefined
+                })));
+            }
+            
+            console.log('[EffectTestPanel] ✅ 快取已清除，所有特效已重置');
+            alert('✅ 快取已清除！\n\n所有模型的特效都需要重新點擊「載入」按鈕。');
+        } catch (err) {
+            console.error('[EffectTestPanel] 清除快取失敗:', err);
+            alert('❌ 清除快取失敗，請查看 Console');
+        }
+    };
+
+    // 打包匯出所有特效及其資源
+    const [isExporting, setIsExporting] = useState(false);
+    
+    const handleExportEffects = async () => {
+        // 檢查是否有已載入的特效
+        const loadedEffects = effects.filter(e => e.isLoaded);
+        if (loadedEffects.length === 0) {
+            alert('❌ 沒有已載入的特效！\n\n請先載入至少一個特效。');
+            return;
+        }
+
+        // 確認對話框
+        const effectNames = loadedEffects.map(e => `  • ${e.name}`).join('\n');
+        if (!window.confirm(`確定要打包匯出以下特效嗎？\n\n${effectNames}\n\n將會包含所有引用的資源檔案。`)) {
+            return;
+        }
+
+        setIsExporting(true);
+        console.log('[EffectTestPanel] 📦 開始打包匯出...');
+
+        try {
+            const zip = new JSZip();
+            const addedFiles = new Set<string>(); // 避免重複添加
+            const failedFiles: string[] = []; // 記錄失敗的檔案
+
+            for (const effect of loadedEffects) {
+                console.log(`[EffectTestPanel] 📂 處理特效: ${effect.name}`);
+                
+                // 1. 添加 .efk 檔案
+                const efkPath = effect.path;
+                const efkUrl = `/effekseer/${efkPath}`;
+                
+                if (!addedFiles.has(efkPath)) {
+                    try {
+                        const response = await fetch(efkUrl);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            zip.file(efkPath, blob);
+                            addedFiles.add(efkPath);
+                            console.log(`[EffectTestPanel] ✅ 添加: ${efkPath}`);
+                        } else {
+                            failedFiles.push(efkPath);
+                            console.warn(`[EffectTestPanel] ⚠️ 無法下載: ${efkPath}`);
+                        }
+                    } catch (err) {
+                        failedFiles.push(efkPath);
+                        console.error(`[EffectTestPanel] ❌ 下載失敗: ${efkPath}`, err);
+                    }
+                }
+
+                // 2. 添加引用的資源
+                if (effect.resourceStatus && effect.resourceStatus.length > 0) {
+                    for (const resource of effect.resourceStatus) {
+                        // 跳過特殊標記
+                        if (resource.path === '(資源已快取，by其他特效檔)') continue;
+                        
+                        // 計算資源的完整路徑
+                        let resourcePath = resource.path;
+                        
+                        // 如果是相對路徑，拼接特效所在目錄
+                        if (!resourcePath.startsWith('/') && !resourcePath.startsWith('http')) {
+                            const effectDir = efkPath.includes('/') 
+                                ? efkPath.substring(0, efkPath.lastIndexOf('/') + 1) 
+                                : '';
+                            resourcePath = effectDir + resourcePath;
+                        } else if (resourcePath.startsWith('/effekseer/')) {
+                            resourcePath = resourcePath.replace('/effekseer/', '');
+                        }
+
+                        if (!addedFiles.has(resourcePath) && resource.exists) {
+                            try {
+                                const resourceUrl = `/effekseer/${resourcePath}`;
+                                const response = await fetch(resourceUrl);
+                                if (response.ok) {
+                                    const blob = await response.blob();
+                                    zip.file(resourcePath, blob);
+                                    addedFiles.add(resourcePath);
+                                    console.log(`[EffectTestPanel] ✅ 添加資源: ${resourcePath}`);
+                                } else {
+                                    failedFiles.push(resourcePath);
+                                    console.warn(`[EffectTestPanel] ⚠️ 無法下載資源: ${resourcePath}`);
+                                }
+                            } catch (err) {
+                                failedFiles.push(resourcePath);
+                                console.error(`[EffectTestPanel] ❌ 下載資源失敗: ${resourcePath}`, err);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 生成 ZIP 檔案
+            console.log(`[EffectTestPanel] 📦 生成 ZIP 檔案... (${addedFiles.size} 個檔案)`);
+            const zipBlob = await zip.generateAsync({ 
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 }
+            });
+
+            // 下載
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const fileName = `effekseer_export_${timestamp}.zip`;
+            
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // 顯示結果
+            let resultMessage = `✅ 打包完成！\n\n`;
+            resultMessage += `📦 檔案名稱: ${fileName}\n`;
+            resultMessage += `📋 已打包: ${addedFiles.size} 個檔案\n`;
+            
+            if (failedFiles.length > 0) {
+                resultMessage += `\n⚠️ 以下檔案無法下載:\n`;
+                resultMessage += failedFiles.map(f => `  • ${f}`).join('\n');
+            }
+            
+            alert(resultMessage);
+            console.log('[EffectTestPanel] ✅ 匯出完成:', fileName);
+
+        } catch (err) {
+            console.error('[EffectTestPanel] ❌ 打包失敗:', err);
+            alert(`❌ 打包失敗！\n\n${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="flex flex-col gap-4">
             {/* Header / Status */}
@@ -1205,13 +1963,73 @@ export default function EffectTestPanel({
                         {isRuntimeReady ? 'Runtime Ready' : 'Initializing...'}
                     </span>
                 </div>
-                <button
-                    onClick={addEffectCard}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    新增特效
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* 打包匯出按鈕 */}
+                    <button
+                        onClick={handleExportEffects}
+                        disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-green-600/30"
+                        title="打包匯出所有已載入的特效及其資源"
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <Download className="w-3.5 h-3.5" />
+                        )}
+                        {isExporting ? '打包中...' : '打包匯出'}
+                    </button>
+                    
+                    {/* 清除快取按鈕 */}
+                    <button
+                        onClick={handleClearCache}
+                        disabled={!isRuntimeReady}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-red-600/30"
+                        title="清除所有特效快取（釋放記憶體）"
+                    >
+                        <Trash className="w-3.5 h-3.5" />
+                        清除快取
+                    </button>
+                    
+                    {/* 載入資料夾下拉選單 */}
+                    <div className="relative" ref={folderDropdownRef}>
+                        <button
+                            onClick={() => setShowFolderDropdown(!showFolderDropdown)}
+                            disabled={isLoadingFolder || availableFolders.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-purple-900/20"
+                        >
+                            {isLoadingFolder ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <FolderOpen className="w-3.5 h-3.5" />
+                            )}
+                            載入資料夾
+                            <ChevronDown className="w-3 h-3" />
+                        </button>
+                        
+                        {showFolderDropdown && availableFolders.length > 0 && (
+                            <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                {availableFolders.map(folder => (
+                                    <button
+                                        key={folder}
+                                        onClick={() => loadFolder(folder)}
+                                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
+                                    >
+                                        <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
+                                        {folder}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={addEffectCard}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        新增特效
+                    </button>
+                </div>
             </div>
 
             {/* Effect Cards List */}
@@ -1235,6 +2053,8 @@ export default function EffectTestPanel({
                             theme={theme}
                             duration={duration}
                             fps={fps}
+                            effectResourceCache={effectResourceCache}
+                            setEffectResourceCache={setEffectResourceCache}
                         />
                     ))
                 )}
