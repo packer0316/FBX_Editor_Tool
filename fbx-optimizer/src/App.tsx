@@ -1943,6 +1943,24 @@ function App() {
                 theme={currentTheme}
                 duration={duration}
                 fps={30}
+                onClearAllModelsEffects={() => {
+                  // 清除所有模型的特效狀態（因為 Effekseer 快取是全域共用的）
+                  models.forEach(m => {
+                    updateModel(m.id, {
+                      effects: m.effects.map(effect => ({
+                        ...effect,
+                        isLoaded: false,
+                        resourceStatus: undefined
+                      }))
+                    });
+                  });
+                  // 同時清除當前活動模型的 effects 狀態
+                  setEffects(prev => prev.map(effect => ({
+                    ...effect,
+                    isLoaded: false,
+                    resourceStatus: undefined
+                  })));
+                }}
               />
             </div>
 

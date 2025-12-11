@@ -1631,6 +1631,8 @@ interface EffectTestPanelProps {
     duration?: number;
     /** 幀率 */
     fps?: number;
+    /** 清除所有模型的特效快取回調（因為 Effekseer 快取是全域共用的） */
+    onClearAllModelsEffects?: () => void;
 }
 
 export default function EffectTestPanel({
@@ -1641,7 +1643,8 @@ export default function EffectTestPanel({
     createdClips,
     theme,
     duration = 0,
-    fps = 30
+    fps = 30,
+    onClearAllModelsEffects
 }: EffectTestPanelProps) {
     const [isRuntimeReady, setIsRuntimeReady] = useState(false);
     
@@ -1796,15 +1799,21 @@ export default function EffectTestPanel({
             setEffectResourceCache(new Map());
             console.log('[EffectTestPanel] 🗑️ 全域資源快取已清空');
             
-            // 將所有特效標記為未載入
-            setEffects(prev => prev.map(effect => ({
-                ...effect,
-                isLoaded: false,
-                resourceStatus: undefined // 清除資源狀態
-            })));
+            // 清除所有模型的特效狀態（因為 Effekseer 快取是全域共用的）
+            if (onClearAllModelsEffects) {
+                onClearAllModelsEffects();
+                console.log('[EffectTestPanel] 🗑️ 所有模型的特效狀態已清除');
+            } else {
+                // 如果沒有提供回調，只清除當前模型的特效
+                setEffects(prev => prev.map(effect => ({
+                    ...effect,
+                    isLoaded: false,
+                    resourceStatus: undefined
+                })));
+            }
             
             console.log('[EffectTestPanel] ✅ 快取已清除，所有特效已重置');
-            alert('✅ 快取已清除！\n\n所有特效需要重新點擊「已載入」按鈕。');
+            alert('✅ 快取已清除！\n\n所有模型的特效都需要重新點擊「載入」按鈕。');
         } catch (err) {
             console.error('[EffectTestPanel] 清除快取失敗:', err);
             alert('❌ 清除快取失敗，請查看 Console');
