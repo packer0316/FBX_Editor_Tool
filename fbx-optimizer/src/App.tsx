@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import * as THREE from 'three';
 import html2canvas from 'html2canvas';
+
+// 版本號（由 Vite 在構建時注入）
+declare const __APP_VERSION__: string;
+
 import { type IdentifiableClip } from './utils/clip/clipIdentifierUtils';
 import SceneViewer, { type SceneViewerRef } from './presentation/features/scene-viewer/components/SceneViewer';
 import SceneToolbar, { type AspectRatio } from './presentation/features/scene-viewer/components/SceneToolbar';
@@ -1951,7 +1955,7 @@ function App() {
           {/* 底部標籤 */}
           <div className="p-4 text-center opacity-30 hover:opacity-100 transition-opacity border-t border-gray-700">
             <p className="text-[10px] text-gray-400">
-              Designed for Game Developers
+              Designed for Game Developers · <span className="text-gray-500">v{__APP_VERSION__}</span>
             </p>
           </div>
         </div>
