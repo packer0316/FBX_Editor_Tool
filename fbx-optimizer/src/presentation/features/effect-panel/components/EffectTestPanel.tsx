@@ -451,10 +451,13 @@ const EffectCard = ({
     const handleLoad = async () => {
         if (!isRuntimeReady || !localPath.trim()) return;
 
+        console.log('[EffectCard] 🔵 開始載入特效:', localPath);
         onUpdate(item.id, { isLoading: true });
         
         // 用於追蹤資源狀態
         const resourceStatusMap = new Map<string, ResourceStatus>();
+        // 追蹤所有資源檢查的 Promise
+        const resourceCheckPromises: Promise<void>[] = [];
         
         try {
             const adapter = getEffekseerRuntimeAdapter();
@@ -464,9 +467,12 @@ const EffectCard = ({
 
             const effectUrl = `/effekseer/${localPath}`;
             const baseDir = effectUrl.substring(0, effectUrl.lastIndexOf('/') + 1);
+            console.log('[EffectCard] 📂 Base Directory:', baseDir);
 
             // redirect 回調：攔截資源請求並檢查是否存在
             const redirect = (path: string): string => {
+                console.log('[EffectCard] 🔍 資源請求:', path);
+                
                 // 計算完整 URL
                 let fullUrl = path;
                 if (!path.startsWith('/') && !path.startsWith('http')) {
@@ -474,59 +480,181 @@ const EffectCard = ({
                     fullUrl = baseDir + path;
                 }
 
-                // 取得純檔名用於顯示
-                const fileName = path.split('/').pop() || path;
+                // 保留完整相對路徑用於顯示
+                const resourcePath = path;
 
                 // 避免重複檢查同一資源
-                if (!resourceStatusMap.has(fileName)) {
+                if (!resourceStatusMap.has(resourcePath)) {
                     // 使用 fetch HEAD 檢查資源是否存在
-                    fetch(fullUrl, { method: 'HEAD' })
+                    const checkPromise = fetch(fullUrl, { method: 'HEAD' })
                         .then(response => {
-                            resourceStatusMap.set(fileName, {
-                                path: fileName,
+                            resourceStatusMap.set(resourcePath, {
+                                path: resourcePath,
                                 exists: response.ok,
-                                type: getResourceType(fileName)
+                                type: getResourceType(resourcePath)
                             });
+                            console.log('[EffectCard]', response.ok ? '✅' : '❌', resourcePath, response.ok ? '存在' : '不存在');
                         })
                         .catch(() => {
-                            resourceStatusMap.set(fileName, {
-                                path: fileName,
+                            resourceStatusMap.set(resourcePath, {
+                                path: resourcePath,
                                 exists: false,
-                                type: getResourceType(fileName)
+                                type: getResourceType(resourcePath)
                             });
+                            console.log('[EffectCard] ❌', resourcePath, '請求失敗');
                         });
+                    
+                    resourceCheckPromises.push(checkPromise);
                 }
 
                 return fullUrl;
             };
 
-            await new Promise<void>((resolve, reject) => {
+            // 🔥 載入特效：收集所有缺失的資源
+            let loadSuccess = true;
+            const missingResources: string[] = []; // 記錄 Effekseer 報告的缺失資源
+            
+            await new Promise<void>((resolve) => {
                 const effect = context.loadEffect(
                     effectUrl,
-                    1.0, // 載入時 Scale 設為 1.0，完全由動態 Scale 控制
+                    1.0,
                     () => {
+                        console.log('[EffectCard] ✅ 特效載入成功');
                         adapter.loadedEffects.set(item.id, effect);
                         resolve();
                     },
-                    (msg: string, filePath: string) => {
-                        reject(new Error(`${msg} (${filePath})`));
+                    (_msg: string, filePath: string) => {
+                        console.log('[EffectCard] ❌ 資源缺失:', filePath);
+                        loadSuccess = false;
+                        // 記錄缺失的資源路徑
+                        missingResources.push(filePath);
+                        // 不 resolve，讓 Effekseer 繼續嘗試載入其他資源
+                        // Effekseer 會多次呼叫 onerror 直到所有缺失資源都報告完畢
                     },
-                    redirect // 傳入 redirect 回調
+                    redirect
                 );
+                
+                // 設定超時，等待 Effekseer 報告所有缺失資源
+                setTimeout(() => {
+                    resolve();
+                }, 2000); // 2 秒超時
             });
 
             const fileName = localPath.split('/').pop()?.split('.')[0] || localPath;
 
-            // 等待一小段時間讓 fetch 完成
-            await new Promise(r => setTimeout(r, 100));
+            // 🔥 等待所有資源檢查完成
+            console.log('[EffectCard] ⏳ 等待所有資源檢查完成... (共', resourceCheckPromises.length, '個)');
+            if (resourceCheckPromises.length > 0) {
+                await Promise.all(resourceCheckPromises);
+            }
 
-            onUpdate(item.id, {
-                isLoaded: true,
-                isLoading: false,
-                name: fileName,
-                path: localPath,
-                resourceStatus: Array.from(resourceStatusMap.values())
-            });
+            // 🔥 使用 Effekseer 報告的缺失資源來修正 resourceStatusMap
+            for (const missingPath of missingResources) {
+                // 從完整路徑提取純檔名
+                const fileName = missingPath.split('/').pop() || missingPath;
+                
+                console.log('[EffectCard] 🔴 標記為缺失:', fileName);
+                
+                // 檢查 resourceStatusMap 中是否已有此資源（可能用不同的 key）
+                let found = false;
+                for (const [key, value] of resourceStatusMap.entries()) {
+                    const keyFileName = key.split('/').pop() || key;
+                    if (keyFileName === fileName) {
+                        // 更新現有記錄為缺失
+                        resourceStatusMap.set(key, {
+                            ...value,
+                            exists: false
+                        });
+                        found = true;
+                        break;
+                    }
+                }
+                
+                // 如果沒找到，新增記錄
+                if (!found) {
+                    resourceStatusMap.set(fileName, {
+                        path: fileName,
+                        exists: false,
+                        type: getResourceType(fileName)
+                    });
+                }
+            }
+            
+            const resourceStatusArray = Array.from(resourceStatusMap.values());
+            const successCount = resourceStatusArray.filter(r => r.exists).length;
+            const failCount = resourceStatusArray.filter(r => !r.exists).length;
+            
+            console.log('[EffectCard] 📊 引用資源:', successCount, '/ 缺失資源:', failCount);
+            console.log('[EffectCard] 📊 Effekseer 報告的缺失資源:', missingResources);
+
+            // 🔥 處理載入結果
+            if (!loadSuccess) {
+                // 載入失敗，顯示詳細的資源報告
+                const failedResources = resourceStatusArray.filter(r => !r.exists);
+                const successResources = resourceStatusArray.filter(r => r.exists);
+                
+                const failedList = failedResources.map(r => `  ❌ ${r.path}`).join('\n');
+                const successList = successResources.map(r => `  ✅ ${r.path}`).join('\n');
+                
+                let errorMessage = `載入特效失敗！\n\n`;
+                errorMessage += `📋 引用資源: ${successCount}\n`;
+                errorMessage += `❌ 缺失資源: ${failCount}\n\n`;
+                
+                if (failedResources.length > 0) {
+                    errorMessage += `缺失的資源:\n${failedList}\n\n`;
+                }
+                if (successResources.length > 0) {
+                    errorMessage += `已找到的資源:\n${successList}`;
+                }
+                
+                alert(errorMessage);
+                
+                onUpdate(item.id, {
+                    isLoaded: false,
+                    isLoading: false,
+                    name: fileName,
+                    path: localPath,
+                    resourceStatus: resourceStatusArray
+                });
+            } else {
+                // 載入成功
+                console.log('[EffectCard] 🎉 載入完成');
+                
+                // 處理快取情況
+                if (resourceStatusArray.length === 0) {
+                    if (item.resourceStatus && item.resourceStatus.length > 0) {
+                        // 保留舊的 resourceStatus
+                        console.log('[EffectCard] ⚠️ 已快取，保留現有資源狀態');
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath
+                        });
+                    } else {
+                        // 真的沒有外部資源
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath,
+                            resourceStatus: [{
+                                path: '(無外部資源)',
+                                exists: true,
+                                type: 'other' as const
+                            }]
+                        });
+                    }
+                } else {
+                    onUpdate(item.id, {
+                        isLoaded: true,
+                        isLoading: false,
+                        name: fileName,
+                        path: localPath,
+                        resourceStatus: resourceStatusArray
+                    });
+                }
+            }
         } catch (error) {
             console.error('[EffectCard] 載入失敗:', error);
             alert(`載入失敗: ${error instanceof Error ? error.message : String(error)}`);
@@ -1013,9 +1141,20 @@ const EffectCard = ({
                                         <div className="flex-1 max-h-[300px] overflow-y-auto">
                                             {item.resourceStatus.map((resource, idx) => {
                                                 const effectDir = `/effekseer/${localPath.substring(0, localPath.lastIndexOf('/') + 1)}`;
-                                                const imageUrl = resource.type === 'image' && resource.exists 
-                                                    ? `${effectDir}${resource.path}`
-                                                    : null;
+                                                // 處理路徑：如果已經是完整路徑就直接使用，否則拼接 effectDir
+                                                let imageUrl: string | null = null;
+                                                if (resource.type === 'image' && resource.exists) {
+                                                    if (resource.path.startsWith('/effekseer/') || resource.path.startsWith('http')) {
+                                                        // 已經是完整路徑
+                                                        imageUrl = resource.path;
+                                                    } else if (resource.path.startsWith('/')) {
+                                                        // 以 / 開頭的絕對路徑
+                                                        imageUrl = resource.path;
+                                                    } else {
+                                                        // 相對路徑，拼接 effectDir
+                                                        imageUrl = `${effectDir}${resource.path}`;
+                                                    }
+                                                }
                                                 
                                                 return (
                                                     <div 
