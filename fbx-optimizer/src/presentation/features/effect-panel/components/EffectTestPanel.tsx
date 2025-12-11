@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -196,6 +197,13 @@ const EffectPlaybackControls = ({
     );
 };
 
+// 資源狀態介面
+export interface ResourceStatus {
+    path: string;       // 資源路徑
+    exists: boolean;    // 是否存在
+    type: 'image' | 'material' | 'model' | 'other';
+}
+
 // 定義單個特效卡片的狀態介面
 export interface EffectItem {
     id: string;          // 唯一識別碼
@@ -220,6 +228,9 @@ export interface EffectItem {
     // Frame Triggers
     triggers: EffectTrigger[]; // 觸發設定
     color: string; // 特效顏色（用於時間軸顯示）
+
+    // Resource Status (載入時追蹤的資源狀態)
+    resourceStatus?: ResourceStatus[];
 }
 
 // 向量輸入組件
@@ -308,6 +319,46 @@ const EffectCard = ({
     const [editingFrame, setEditingFrame] = useState<string>('');
     const [editingDuration, setEditingDuration] = useState<string>('');
     const [hasActiveEffect, setHasActiveEffect] = useState(false); // 追蹤特效是否存在
+    const [showResourcePopover, setShowResourcePopover] = useState(false); // 資源狀態 Popover
+    const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 }); // Popover 位置
+    const [previewImage, setPreviewImage] = useState<string | null>(null); // 預覽圖片 URL
+    const [fullsizeImage, setFullsizeImage] = useState<string | null>(null); // 全尺寸預覽圖片
+    const resourcePopoverRef = useRef<HTMLDivElement>(null); // Popover 參考
+    const resourceButtonRef = useRef<HTMLButtonElement>(null); // 按鈕參考
+    const fullsizeModalRef = useRef<HTMLDivElement>(null); // 全尺寸 Modal 參考
+
+    // 點擊外部關閉 Popover 和預覽
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            // 如果點擊的是全尺寸 Modal 內部，不關閉 Popover
+            if (fullsizeModalRef.current && fullsizeModalRef.current.contains(target)) {
+                return;
+            }
+            // 如果點擊的是 Popover 外部，關閉 Popover
+            if (resourcePopoverRef.current && !resourcePopoverRef.current.contains(target)) {
+                setShowResourcePopover(false);
+                setPreviewImage(null);
+            }
+        };
+        if (showResourcePopover) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [showResourcePopover]);
+
+    // 計算並更新 Popover 位置
+    const updatePopoverPosition = () => {
+        if (resourceButtonRef.current) {
+            const rect = resourceButtonRef.current.getBoundingClientRect();
+            setPopoverPosition({
+                top: rect.bottom + 8,
+                left: Math.max(10, rect.right - 320) // 確保不超出左側
+            });
+        }
+    };
 
     // 追蹤當前播放的 Handle，以便即時更新參數
     const currentHandleRef = useRef<effekseer.EffekseerHandle | null>(null);
@@ -349,11 +400,24 @@ const EffectCard = ({
         ? bones.find(b => b.uuid === item.boundBoneUuid) || null
         : null;
 
+    // 根據副檔名判斷資源類型
+    const getResourceType = (path: string): ResourceStatus['type'] => {
+        const ext = path.split('.').pop()?.toLowerCase() || '';
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'dds', 'tga'].includes(ext)) return 'image';
+        if (['efkmat'].includes(ext)) return 'material';
+        if (['efkmodel', 'fbx', 'obj'].includes(ext)) return 'model';
+        return 'other';
+    };
+
     // 載入特效
     const handleLoad = async () => {
         if (!isRuntimeReady || !localPath.trim()) return;
 
         onUpdate(item.id, { isLoading: true });
+        
+        // 用於追蹤資源狀態
+        const resourceStatusMap = new Map<string, ResourceStatus>();
+        
         try {
             const adapter = getEffekseerRuntimeAdapter();
             const context = adapter.effekseerContext;
@@ -361,6 +425,42 @@ const EffectCard = ({
             if (!context) throw new Error('Effekseer Context 未初始化');
 
             const effectUrl = `/effekseer/${localPath}`;
+            const baseDir = effectUrl.substring(0, effectUrl.lastIndexOf('/') + 1);
+
+            // redirect 回調：攔截資源請求並檢查是否存在
+            const redirect = (path: string): string => {
+                // 計算完整 URL
+                let fullUrl = path;
+                if (!path.startsWith('/') && !path.startsWith('http')) {
+                    // 相對路徑，拼接基礎目錄
+                    fullUrl = baseDir + path;
+                }
+
+                // 取得純檔名用於顯示
+                const fileName = path.split('/').pop() || path;
+
+                // 避免重複檢查同一資源
+                if (!resourceStatusMap.has(fileName)) {
+                    // 使用 fetch HEAD 檢查資源是否存在
+                    fetch(fullUrl, { method: 'HEAD' })
+                        .then(response => {
+                            resourceStatusMap.set(fileName, {
+                                path: fileName,
+                                exists: response.ok,
+                                type: getResourceType(fileName)
+                            });
+                        })
+                        .catch(() => {
+                            resourceStatusMap.set(fileName, {
+                                path: fileName,
+                                exists: false,
+                                type: getResourceType(fileName)
+                            });
+                        });
+                }
+
+                return fullUrl;
+            };
 
             await new Promise<void>((resolve, reject) => {
                 const effect = context.loadEffect(
@@ -372,22 +472,31 @@ const EffectCard = ({
                     },
                     (msg: string, filePath: string) => {
                         reject(new Error(`${msg} (${filePath})`));
-                    }
+                    },
+                    redirect // 傳入 redirect 回調
                 );
             });
 
             const fileName = localPath.split('/').pop()?.split('.')[0] || localPath;
 
+            // 等待一小段時間讓 fetch 完成
+            await new Promise(r => setTimeout(r, 100));
+
             onUpdate(item.id, {
                 isLoaded: true,
                 isLoading: false,
                 name: fileName,
-                path: localPath
+                path: localPath,
+                resourceStatus: Array.from(resourceStatusMap.values())
             });
         } catch (error) {
             console.error('[EffectCard] 載入失敗:', error);
             alert(`載入失敗: ${error instanceof Error ? error.message : String(error)}`);
-            onUpdate(item.id, { isLoading: false, isLoaded: false });
+            onUpdate(item.id, { 
+                isLoading: false, 
+                isLoaded: false,
+                resourceStatus: Array.from(resourceStatusMap.values())
+            });
         }
     };
 
@@ -805,6 +914,185 @@ const EffectCard = ({
                 <div className="flex items-center gap-2">
                     {item.isLoading && <Loader2 className="w-4 h-4 text-blue-400 animate-spin" />}
                     {item.isLoaded && !item.isLoading && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+
+                    {/* 資源狀態按鈕 */}
+                    {item.isLoaded && item.resourceStatus && item.resourceStatus.length > 0 && (
+                        <>
+                            <button
+                                ref={resourceButtonRef}
+                                onClick={() => {
+                                    updatePopoverPosition();
+                                    setShowResourcePopover(!showResourcePopover);
+                                    setPreviewImage(null);
+                                }}
+                                className={`p-1.5 rounded transition-colors ${
+                                    item.resourceStatus.some(r => !r.exists)
+                                        ? 'text-red-400 hover:text-red-300 hover:bg-red-600/20'
+                                        : 'text-green-400 hover:text-green-300 hover:bg-green-600/20'
+                                }`}
+                                title="查看引用資源"
+                            >
+                                <FileImage className="w-4 h-4" />
+                            </button>
+
+                            {/* 資源狀態 Popover - 使用 Portal 渲染到 body */}
+                            {showResourcePopover && createPortal(
+                                <div 
+                                    ref={resourcePopoverRef}
+                                    className="fixed min-w-[280px] max-w-[360px] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl overflow-hidden"
+                                    style={{ 
+                                        top: popoverPosition.top, 
+                                        left: popoverPosition.left,
+                                        zIndex: 99999
+                                    }}
+                                >
+                                    <div className="px-3 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-xs font-medium text-gray-300">
+                                            <FileImage className="w-3.5 h-3.5" />
+                                            <span>引用資源列表</span>
+                                            <span className="ml-2 text-gray-500">
+                                                {item.resourceStatus.filter(r => r.exists).length}/{item.resourceStatus.length}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={() => {
+                                                setShowResourcePopover(false);
+                                                setPreviewImage(null);
+                                            }}
+                                            className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
+                                        >
+                                            <X className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                    
+                                    <div className="flex">
+                                        {/* 資源列表 */}
+                                        <div className="flex-1 max-h-[250px] overflow-y-auto">
+                                            {item.resourceStatus.map((resource, idx) => {
+                                                const effectDir = `/effekseer/${localPath.substring(0, localPath.lastIndexOf('/') + 1)}`;
+                                                const imageUrl = resource.type === 'image' && resource.exists 
+                                                    ? `${effectDir}${resource.path}`
+                                                    : null;
+                                                
+                                                return (
+                                                    <div 
+                                                        key={idx} 
+                                                        className={`flex items-center gap-2 px-3 py-2 border-b border-gray-800 last:border-b-0 transition-colors cursor-pointer ${
+                                                            previewImage === imageUrl ? 'bg-blue-900/30' : 'hover:bg-gray-800/50'
+                                                        }`}
+                                                        onClick={() => {
+                                                            if (imageUrl) {
+                                                                setPreviewImage(previewImage === imageUrl ? null : imageUrl);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {/* 資源類型圖示 */}
+                                                        {resource.type === 'image' && <Image className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />}
+                                                        {resource.type === 'material' && <Box className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />}
+                                                        {resource.type === 'model' && <Box className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />}
+                                                        {resource.type === 'other' && <FileQuestion className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />}
+                                                        
+                                                        {/* 檔名 */}
+                                                        <span className="text-xs text-gray-300 truncate flex-1" title={resource.path}>
+                                                            {resource.path}
+                                                        </span>
+                                                        
+                                                        {/* 預覽按鈕（僅圖片類型且存在時顯示） */}
+                                                        {imageUrl && (
+                                                            <Eye className="w-3.5 h-3.5 text-gray-500 hover:text-blue-400 flex-shrink-0" />
+                                                        )}
+                                                        
+                                                        {/* 狀態圖示 */}
+                                                        {resource.exists ? (
+                                                            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
+                                                        ) : (
+                                                            <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {/* 圖片預覽區域 */}
+                                        {previewImage && (
+                                            <div className="w-[160px] border-l border-gray-700 bg-gray-950 p-2 flex flex-col items-center justify-center">
+                                                <div className="relative">
+                                                    <img 
+                                                        src={previewImage} 
+                                                        alt="Preview" 
+                                                        className="max-w-full max-h-[200px] object-contain rounded border border-gray-700"
+                                                        style={{ imageRendering: 'pixelated' }}
+                                                    />
+                                                    {/* 放大按鈕 */}
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setFullsizeImage(previewImage);
+                                                        }}
+                                                        className="absolute bottom-1 right-1 p-1 bg-black/70 hover:bg-blue-600/80 rounded transition-colors"
+                                                        title="檢視原始大小"
+                                                    >
+                                                        <Maximize className="w-3.5 h-3.5 text-white" />
+                                                    </button>
+                                                </div>
+                                                <p className="text-[10px] text-gray-500 mt-2 text-center truncate w-full">
+                                                    {previewImage.split('/').pop()}
+                                                </p>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {item.resourceStatus.some(r => !r.exists) && (
+                                        <div className="px-3 py-2 bg-red-900/20 border-t border-red-900/50">
+                                            <p className="text-xs text-red-400">
+                                                有 {item.resourceStatus.filter(r => !r.exists).length} 個資源缺失
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>,
+                                document.body
+                            )}
+
+                            {/* 全尺寸圖片 Modal */}
+                            {fullsizeImage && createPortal(
+                                <div 
+                                    ref={fullsizeModalRef}
+                                    className="fixed inset-0 bg-black/80 flex items-center justify-center"
+                                    style={{ zIndex: 999999 }}
+                                    onClick={() => setFullsizeImage(null)}
+                                >
+                                    <div 
+                                        className="relative max-w-[90vw] max-h-[90vh] bg-gray-900 rounded-lg border border-gray-700 shadow-2xl overflow-auto"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        {/* 標題列 */}
+                                        <div className="sticky top-0 flex items-center justify-between px-4 py-2 bg-gray-800 border-b border-gray-700">
+                                            <div className="flex items-center gap-2 text-sm text-gray-300">
+                                                <Image className="w-4 h-4 text-blue-400" />
+                                                <span>{fullsizeImage.split('/').pop()}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => setFullsizeImage(null)}
+                                                className="p-1 text-gray-400 hover:text-white hover:bg-gray-700 rounded transition-colors"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
+                                        {/* 圖片 */}
+                                        <div className="p-4 flex items-center justify-center" style={{ background: 'repeating-conic-gradient(#1a1a1a 0% 25%, #2a2a2a 0% 50%) 50% / 20px 20px' }}>
+                                            <img 
+                                                src={fullsizeImage} 
+                                                alt="Full size preview" 
+                                                className="max-w-full max-h-[80vh]"
+                                                style={{ imageRendering: 'pixelated' }}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>,
+                                document.body
+                            )}
+                        </>
+                    )}
 
                     {/* 顯示/隱藏按鈕 */}
                     <button
