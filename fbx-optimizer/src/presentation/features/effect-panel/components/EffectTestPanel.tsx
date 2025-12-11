@@ -2070,7 +2070,18 @@ export default function EffectTestPanel({
                     <ul className="space-y-1.5 pl-1 mb-3 pb-3 border-b border-gray-700/50">
                         <li className="flex gap-2">
                             <span className="text-gray-600">•</span>
-                            <span>將 .efk 和所有資源（.png, .efkmat 等）放到 <code className="bg-gray-700 px-1 py-0.5 rounded text-gray-300">public/effekseer/</code></span>
+                            <span>將 .efk 和所有資源（.png, .efkmat 等）放到 <code className="bg-gray-700 px-1 py-0.5 rounded text-gray-300">fbx-optimizer/public/effekseer/</code>
+                                <button
+                                    onClick={() => {
+                                        navigator.clipboard.writeText('fbx-optimizer/public/effekseer/');
+                                        alert('✅ 路徑已複製到剪貼簿！\n\n請在專案資料夾中開啟：\nfbx-optimizer/public/effekseer/');
+                                    }}
+                                    className="inline-flex items-center ml-1 p-0.5 rounded hover:bg-gray-600 text-blue-400 hover:text-blue-300 transition-colors"
+                                    title="複製路徑"
+                                >
+                                    <FolderOpen className="w-3.5 h-3.5" />
+                                </button>
+                            </span>
                         </li>
                         <li className="flex gap-2">
                             <span className="text-gray-600">•</span>
@@ -2097,6 +2108,28 @@ export default function EffectTestPanel({
                         <li className="flex gap-2">
                             <span className="text-gray-600">•</span>
                             <span>Rotation 單位為角度 (Degrees)</span>
+                        </li>
+                    </ul>
+                    <div className="flex items-center gap-2 mb-2 mt-3 pt-3 border-t border-gray-700/50 text-gray-300 font-medium">
+                        <Download className="w-3.5 h-3.5 text-purple-400" />
+                        打包提醒
+                    </div>
+                    <ul className="space-y-1.5 pl-1">
+                        <li className="flex gap-2">
+                            <span className="text-gray-600">1.</span>
+                            <span><span className="text-purple-400">打包匯出</span> 功能只針對當前選中的模型</span>
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-gray-600">2.</span>
+                            <span>避免不同模型之間的 efk 引用，若有多支 3D 模型掛上共享資源的 efk，請先 <span className="text-red-400">「清除快取」</span></span>
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-gray-600">3.</span>
+                            <span><span className="text-red-400">「清除快取」</span> 會將此專案所有的 efk 清除 cache，可重新載入</span>
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-gray-600">4.</span>
+                            <span>若有多個 efk 吃共同資源，管理列表將顯示 <span className="text-yellow-400">「已存於快取」</span></span>
                         </li>
                     </ul>
                 </div>
