@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
+import JSZip from 'jszip';
 import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -1777,6 +1778,139 @@ export default function EffectTestPanel({
         }
     };
 
+    // 打包匯出所有特效及其資源
+    const [isExporting, setIsExporting] = useState(false);
+    
+    const handleExportEffects = async () => {
+        // 檢查是否有已載入的特效
+        const loadedEffects = effects.filter(e => e.isLoaded);
+        if (loadedEffects.length === 0) {
+            alert('❌ 沒有已載入的特效！\n\n請先載入至少一個特效。');
+            return;
+        }
+
+        // 確認對話框
+        const effectNames = loadedEffects.map(e => `  • ${e.name}`).join('\n');
+        if (!window.confirm(`確定要打包匯出以下特效嗎？\n\n${effectNames}\n\n將會包含所有引用的資源檔案。`)) {
+            return;
+        }
+
+        setIsExporting(true);
+        console.log('[EffectTestPanel] 📦 開始打包匯出...');
+
+        try {
+            const zip = new JSZip();
+            const addedFiles = new Set<string>(); // 避免重複添加
+            const failedFiles: string[] = []; // 記錄失敗的檔案
+
+            for (const effect of loadedEffects) {
+                console.log(`[EffectTestPanel] 📂 處理特效: ${effect.name}`);
+                
+                // 1. 添加 .efk 檔案
+                const efkPath = effect.path;
+                const efkUrl = `/effekseer/${efkPath}`;
+                
+                if (!addedFiles.has(efkPath)) {
+                    try {
+                        const response = await fetch(efkUrl);
+                        if (response.ok) {
+                            const blob = await response.blob();
+                            zip.file(efkPath, blob);
+                            addedFiles.add(efkPath);
+                            console.log(`[EffectTestPanel] ✅ 添加: ${efkPath}`);
+                        } else {
+                            failedFiles.push(efkPath);
+                            console.warn(`[EffectTestPanel] ⚠️ 無法下載: ${efkPath}`);
+                        }
+                    } catch (err) {
+                        failedFiles.push(efkPath);
+                        console.error(`[EffectTestPanel] ❌ 下載失敗: ${efkPath}`, err);
+                    }
+                }
+
+                // 2. 添加引用的資源
+                if (effect.resourceStatus && effect.resourceStatus.length > 0) {
+                    for (const resource of effect.resourceStatus) {
+                        // 跳過「無外部資源」標記
+                        if (resource.path === '(無外部資源)') continue;
+                        
+                        // 計算資源的完整路徑
+                        let resourcePath = resource.path;
+                        
+                        // 如果是相對路徑，拼接特效所在目錄
+                        if (!resourcePath.startsWith('/') && !resourcePath.startsWith('http')) {
+                            const effectDir = efkPath.includes('/') 
+                                ? efkPath.substring(0, efkPath.lastIndexOf('/') + 1) 
+                                : '';
+                            resourcePath = effectDir + resourcePath;
+                        } else if (resourcePath.startsWith('/effekseer/')) {
+                            resourcePath = resourcePath.replace('/effekseer/', '');
+                        }
+
+                        if (!addedFiles.has(resourcePath) && resource.exists) {
+                            try {
+                                const resourceUrl = `/effekseer/${resourcePath}`;
+                                const response = await fetch(resourceUrl);
+                                if (response.ok) {
+                                    const blob = await response.blob();
+                                    zip.file(resourcePath, blob);
+                                    addedFiles.add(resourcePath);
+                                    console.log(`[EffectTestPanel] ✅ 添加資源: ${resourcePath}`);
+                                } else {
+                                    failedFiles.push(resourcePath);
+                                    console.warn(`[EffectTestPanel] ⚠️ 無法下載資源: ${resourcePath}`);
+                                }
+                            } catch (err) {
+                                failedFiles.push(resourcePath);
+                                console.error(`[EffectTestPanel] ❌ 下載資源失敗: ${resourcePath}`, err);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 生成 ZIP 檔案
+            console.log(`[EffectTestPanel] 📦 生成 ZIP 檔案... (${addedFiles.size} 個檔案)`);
+            const zipBlob = await zip.generateAsync({ 
+                type: 'blob',
+                compression: 'DEFLATE',
+                compressionOptions: { level: 6 }
+            });
+
+            // 下載
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+            const fileName = `effekseer_export_${timestamp}.zip`;
+            
+            const url = URL.createObjectURL(zipBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            // 顯示結果
+            let resultMessage = `✅ 打包完成！\n\n`;
+            resultMessage += `📦 檔案名稱: ${fileName}\n`;
+            resultMessage += `📋 已打包: ${addedFiles.size} 個檔案\n`;
+            
+            if (failedFiles.length > 0) {
+                resultMessage += `\n⚠️ 以下檔案無法下載:\n`;
+                resultMessage += failedFiles.map(f => `  • ${f}`).join('\n');
+            }
+            
+            alert(resultMessage);
+            console.log('[EffectTestPanel] ✅ 匯出完成:', fileName);
+
+        } catch (err) {
+            console.error('[EffectTestPanel] ❌ 打包失敗:', err);
+            alert(`❌ 打包失敗！\n\n${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div className="flex flex-col gap-4">
             {/* Header / Status */}
@@ -1788,6 +1922,21 @@ export default function EffectTestPanel({
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* 打包匯出按鈕 */}
+                    <button
+                        onClick={handleExportEffects}
+                        disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-green-600/30"
+                        title="打包匯出所有已載入的特效及其資源"
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                            <Download className="w-3.5 h-3.5" />
+                        )}
+                        {isExporting ? '打包中...' : '打包匯出'}
+                    </button>
+                    
                     {/* 清除快取按鈕 */}
                     <button
                         onClick={handleClearCache}
