@@ -323,6 +323,8 @@ const EffectCard = ({
     const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 }); // Popover 位置
     const [previewImage, setPreviewImage] = useState<string | null>(null); // 預覽圖片 URL
     const [fullsizeImage, setFullsizeImage] = useState<string | null>(null); // 全尺寸預覽圖片
+    const [isDragging, setIsDragging] = useState(false); // 是否正在拖曳
+    const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 }); // 拖曳偏移量
     const resourcePopoverRef = useRef<HTMLDivElement>(null); // Popover 參考
     const resourceButtonRef = useRef<HTMLButtonElement>(null); // 按鈕參考
     const fullsizeModalRef = useRef<HTMLDivElement>(null); // 全尺寸 Modal 參考
@@ -349,15 +351,51 @@ const EffectCard = ({
         };
     }, [showResourcePopover]);
 
-    // 計算並更新 Popover 位置
-    const updatePopoverPosition = () => {
-        if (resourceButtonRef.current) {
-            const rect = resourceButtonRef.current.getBoundingClientRect();
+    // 拖曳邏輯
+    useEffect(() => {
+        if (!isDragging) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
             setPopoverPosition({
-                top: rect.bottom + 8,
-                left: Math.max(10, rect.right - 320) // 確保不超出左側
+                top: e.clientY - dragOffset.y,
+                left: e.clientX - dragOffset.x
             });
+        };
+
+        const handleMouseUp = () => {
+            setIsDragging(false);
+        };
+
+        document.addEventListener('mousemove', handleMouseMove);
+        document.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            document.removeEventListener('mousemove', handleMouseMove);
+            document.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isDragging, dragOffset]);
+
+    // 開始拖曳
+    const handleDragStart = (e: React.MouseEvent) => {
+        if (resourcePopoverRef.current) {
+            const rect = resourcePopoverRef.current.getBoundingClientRect();
+            setDragOffset({
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            });
+            setIsDragging(true);
         }
+    };
+
+    // 計算並更新 Popover 位置（置中）
+    const updatePopoverPosition = () => {
+        // 預設置中顯示
+        const popoverWidth = 450;
+        const popoverHeight = 350;
+        setPopoverPosition({
+            top: Math.max(50, (window.innerHeight - popoverHeight) / 2),
+            left: Math.max(50, (window.innerWidth - popoverWidth) / 2)
+        });
     };
 
     // 追蹤當前播放的 Handle，以便即時更新參數
@@ -939,18 +977,22 @@ const EffectCard = ({
                             {showResourcePopover && createPortal(
                                 <div 
                                     ref={resourcePopoverRef}
-                                    className="fixed min-w-[280px] max-w-[360px] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl overflow-hidden"
+                                    className="fixed w-[450px] bg-gray-900 border border-gray-700 rounded-lg shadow-2xl overflow-hidden"
                                     style={{ 
                                         top: popoverPosition.top, 
                                         left: popoverPosition.left,
                                         zIndex: 99999
                                     }}
                                 >
-                                    <div className="px-3 py-2 bg-gray-800 border-b border-gray-700 flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-xs font-medium text-gray-300">
-                                            <FileImage className="w-3.5 h-3.5" />
+                                    {/* 可拖曳的標題列 */}
+                                    <div 
+                                        className="px-3 py-2.5 bg-gray-800 border-b border-gray-700 flex items-center justify-between cursor-move select-none"
+                                        onMouseDown={handleDragStart}
+                                    >
+                                        <div className="flex items-center gap-2 text-sm font-medium text-gray-300">
+                                            <FileImage className="w-4 h-4" />
                                             <span>引用資源列表</span>
-                                            <span className="ml-2 text-gray-500">
+                                            <span className="ml-2 px-2 py-0.5 bg-gray-700 rounded text-xs text-gray-400">
                                                 {item.resourceStatus.filter(r => r.exists).length}/{item.resourceStatus.length}
                                             </span>
                                         </div>
@@ -959,15 +1001,16 @@ const EffectCard = ({
                                                 setShowResourcePopover(false);
                                                 setPreviewImage(null);
                                             }}
-                                            className="p-1 text-gray-500 hover:text-gray-300 transition-colors"
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            className="p-1.5 text-gray-500 hover:text-gray-300 hover:bg-gray-700 rounded transition-colors"
                                         >
-                                            <X className="w-3.5 h-3.5" />
+                                            <X className="w-4 h-4" />
                                         </button>
                                     </div>
                                     
                                     <div className="flex">
                                         {/* 資源列表 */}
-                                        <div className="flex-1 max-h-[250px] overflow-y-auto">
+                                        <div className="flex-1 max-h-[300px] overflow-y-auto">
                                             {item.resourceStatus.map((resource, idx) => {
                                                 const effectDir = `/effekseer/${localPath.substring(0, localPath.lastIndexOf('/') + 1)}`;
                                                 const imageUrl = resource.type === 'image' && resource.exists 
@@ -1015,12 +1058,12 @@ const EffectCard = ({
 
                                         {/* 圖片預覽區域 */}
                                         {previewImage && (
-                                            <div className="w-[160px] border-l border-gray-700 bg-gray-950 p-2 flex flex-col items-center justify-center">
+                                            <div className="w-[180px] border-l border-gray-700 bg-gray-950 p-3 flex flex-col items-center justify-center">
                                                 <div className="relative">
                                                     <img 
                                                         src={previewImage} 
                                                         alt="Preview" 
-                                                        className="max-w-full max-h-[200px] object-contain rounded border border-gray-700"
+                                                        className="max-w-full max-h-[240px] object-contain rounded border border-gray-700"
                                                         style={{ imageRendering: 'pixelated' }}
                                                     />
                                                     {/* 放大按鈕 */}
@@ -1029,10 +1072,10 @@ const EffectCard = ({
                                                             e.stopPropagation();
                                                             setFullsizeImage(previewImage);
                                                         }}
-                                                        className="absolute bottom-1 right-1 p-1 bg-black/70 hover:bg-blue-600/80 rounded transition-colors"
+                                                        className="absolute bottom-1.5 right-1.5 p-1.5 bg-black/70 hover:bg-blue-600/80 rounded transition-colors"
                                                         title="檢視原始大小"
                                                     >
-                                                        <Maximize className="w-3.5 h-3.5 text-white" />
+                                                        <Maximize className="w-4 h-4 text-white" />
                                                     </button>
                                                 </div>
                                                 <p className="text-[10px] text-gray-500 mt-2 text-center truncate w-full">
