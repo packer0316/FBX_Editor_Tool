@@ -59,89 +59,109 @@ export class MaterialFixService {
     }
   }
 
+  /**
+   * 修復單一材質
+   */
+  private static fixSingleMaterial(material: THREE.Material, meshName: string): void {
+    const mat = material as THREE.MeshStandardMaterial | THREE.MeshPhongMaterial;
+    
+    console.log(`[Mesh: ${meshName}] Material: `, mat.name || mat.type);
+
+    // 1. 關閉頂點顏色 (Vertex Colors)
+    // 很多 FBX 模型會帶有頂點顏色 (通常是黑色或用作遮罩)，這會導致模型在 Three.js 中變黑
+    if ('vertexColors' in mat) {
+      mat.vertexColors = false;
+    }
+
+    // 2. 確保有貼圖時，基礎顏色是白色的
+    if (mat.map && mat.color) {
+      console.log(`  - Has Texture: ${mat.map.name || 'Unnamed'} `);
+      mat.color.setHex(0xffffff);
+
+      // 設定 BaseColor 貼圖為 sRGB
+      this.setTextureEncoding(mat.map, 'baseColor');
+    }
+
+    // 3. 遍歷所有貼圖並設定正確的色彩編碼
+    if ((mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+      const stdMat = mat as THREE.MeshStandardMaterial;
+      
+      // BaseColor / Diffuse
+      if (stdMat.map) {
+        this.setTextureEncoding(stdMat.map, 'baseColor');
+      }
+      
+      // Emissive
+      if (stdMat.emissiveMap) {
+        this.setTextureEncoding(stdMat.emissiveMap, 'emissive');
+      }
+      
+      // Normal
+      if (stdMat.normalMap) {
+        this.setTextureEncoding(stdMat.normalMap, 'normal');
+      }
+      
+      // Metallic
+      if (stdMat.metalnessMap) {
+        this.setTextureEncoding(stdMat.metalnessMap, 'metallic');
+      }
+      
+      // Roughness
+      if (stdMat.roughnessMap) {
+        this.setTextureEncoding(stdMat.roughnessMap, 'roughness');
+      }
+      
+      // AO (通常也是 Linear)
+      if (stdMat.aoMap) {
+        this.setTextureEncoding(stdMat.aoMap, 'mask');
+      }
+    }
+
+    // 4. 處理其他可能的貼圖（例如 MeshPhongMaterial 的 specularMap）
+    if ((mat as THREE.MeshPhongMaterial).isMeshPhongMaterial) {
+      const phongMat = mat as THREE.MeshPhongMaterial;
+      if (phongMat.specularMap) {
+        this.setTextureEncoding(phongMat.specularMap, 'mask');
+      }
+    }
+
+    // 5. 嘗試修復全黑問題：如果沒有貼圖，給一個預設顏色
+    if (!mat.map && mat.color && mat.color.getHex() === 0x000000) {
+      console.warn(`  - Black color detected without texture. Resetting to gray.`);
+      mat.color.setHex(0x888888);
+    }
+
+    // 6. 重置一些可能導致變黑的 PBR 參數
+    if ((mat as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+      const stdMat = mat as THREE.MeshStandardMaterial;
+      stdMat.roughness = 0.7; // 避免過度光滑導致全黑反射
+      stdMat.metalness = 0.1; // 避免全金屬導致全黑 (如果沒有環境貼圖)
+    }
+
+    // 7. 雙面渲染 (避免法線反轉導致看不見)
+    mat.side = THREE.DoubleSide;
+
+    // 8. 確保材質更新
+    mat.needsUpdate = true;
+  }
+
   static fixMaterials(model: THREE.Group): void {
     model.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        const material = mesh.material as THREE.MeshStandardMaterial | THREE.MeshPhongMaterial;
-
-        console.log(`[Mesh: ${mesh.name}]Material: `, material);
-
-        if (material) {
-          // 1. 關閉頂點顏色 (Vertex Colors)
-          // 很多 FBX 模型會帶有頂點顏色 (通常是黑色或用作遮罩)，這會導致模型在 Three.js 中變黑
-          material.vertexColors = false;
-
-          // 2. 確保有貼圖時，基礎顏色是白色的
-          if (material.map) {
-            console.log(`  - Has Texture: ${material.map.name || 'Unnamed'} `);
-            material.color.setHex(0xffffff);
-
-            // 設定 BaseColor 貼圖為 sRGB
-            this.setTextureEncoding(material.map, 'baseColor');
-          }
-
-          // 3. 遍歷所有貼圖並設定正確的色彩編碼
-          if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
-            const stdMat = material as THREE.MeshStandardMaterial;
-            
-            // BaseColor / Diffuse
-            if (stdMat.map) {
-              this.setTextureEncoding(stdMat.map, 'baseColor');
+        
+        // 🔧 處理多材質情況：mesh.material 可能是陣列或單一材質
+        if (Array.isArray(mesh.material)) {
+          // 多材質 (Multi-Material)
+          console.log(`[Mesh: ${mesh.name}] Multi-Material detected (${mesh.material.length} materials)`);
+          mesh.material.forEach((mat, index) => {
+            if (mat) {
+              this.fixSingleMaterial(mat, `${mesh.name}[${index}]`);
             }
-            
-            // Emissive
-            if (stdMat.emissiveMap) {
-              this.setTextureEncoding(stdMat.emissiveMap, 'emissive');
-            }
-            
-            // Normal
-            if (stdMat.normalMap) {
-              this.setTextureEncoding(stdMat.normalMap, 'normal');
-            }
-            
-            // Metallic
-            if (stdMat.metalnessMap) {
-              this.setTextureEncoding(stdMat.metalnessMap, 'metallic');
-            }
-            
-            // Roughness
-            if (stdMat.roughnessMap) {
-              this.setTextureEncoding(stdMat.roughnessMap, 'roughness');
-            }
-            
-            // AO (通常也是 Linear)
-            if (stdMat.aoMap) {
-              this.setTextureEncoding(stdMat.aoMap, 'mask');
-            }
-          }
-
-          // 4. 處理其他可能的貼圖（例如 MeshPhongMaterial 的 specularMap）
-          if ((material as THREE.MeshPhongMaterial).isMeshPhongMaterial) {
-            const phongMat = material as THREE.MeshPhongMaterial;
-            if (phongMat.specularMap) {
-              this.setTextureEncoding(phongMat.specularMap, 'mask');
-            }
-          }
-
-          // 5. 嘗試修復全黑問題：如果沒有貼圖，給一個預設顏色
-          if (!material.map && material.color.getHex() === 0x000000) {
-            console.warn(`  - Black color detected without texture.Resetting to gray.`);
-            material.color.setHex(0x888888);
-          }
-
-          // 6. 重置一些可能導致變黑的 PBR 參數
-          if ((material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
-            const stdMat = material as THREE.MeshStandardMaterial;
-            stdMat.roughness = 0.7; // 避免過度光滑導致全黑反射
-            stdMat.metalness = 0.1; // 避免全金屬導致全黑 (如果沒有環境貼圖)
-          }
-
-          // 7. 雙面渲染 (避免法線反轉導致看不見)
-          material.side = THREE.DoubleSide;
-
-          // 8. 確保材質更新
-          material.needsUpdate = true;
+          });
+        } else if (mesh.material) {
+          // 單一材質
+          this.fixSingleMaterial(mesh.material, mesh.name);
         }
       }
     });

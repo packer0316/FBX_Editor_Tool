@@ -753,9 +753,24 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     oldMat.dispose();
                 }
                 
-                const originalMaterial = child.userData.originalMaterial as THREE.MeshStandardMaterial;
-                const baseTexture = originalMaterial.map || null;
-                const baseColor = originalMaterial.color ? originalMaterial.color.clone() : new THREE.Color(0xffffff);
+                // 🔧 處理多材質情況：originalMaterial 可能是陣列或單一材質
+                const originalMaterial = child.userData.originalMaterial;
+                let baseTexture: THREE.Texture | null = null;
+                let baseColor = new THREE.Color(0xffffff);
+                
+                if (Array.isArray(originalMaterial)) {
+                    // 多材質：取第一個材質的屬性作為基礎
+                    const firstMat = originalMaterial[0] as THREE.MeshStandardMaterial;
+                    if (firstMat) {
+                        baseTexture = firstMat.map || null;
+                        baseColor = firstMat.color?.clone() || new THREE.Color(0xffffff);
+                    }
+                } else if (originalMaterial) {
+                    const mat = originalMaterial as THREE.MeshStandardMaterial;
+                    baseTexture = mat.map || null;
+                    baseColor = mat.color?.clone() || new THREE.Color(0xffffff);
+                }
+                
                 const isSkinnedMesh = (child as any).isSkinnedMesh;
 
                 // 保存當前的 wireframe 和 side 設置
