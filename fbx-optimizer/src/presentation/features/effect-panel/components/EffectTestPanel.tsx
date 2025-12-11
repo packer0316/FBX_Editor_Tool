@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -1611,6 +1611,33 @@ export default function EffectTestPanel({
         }
     };
 
+    // 清除 Effekseer 快取
+    const handleClearCache = () => {
+        const adapter = getEffekseerRuntimeAdapter();
+        
+        // 確認對話框
+        if (!window.confirm('確定要清除所有特效快取嗎？\n\n這將釋放所有已載入的特效資源，需要重新載入才能播放。')) {
+            return;
+        }
+
+        try {
+            adapter.clearAllCache();
+            
+            // 將所有特效標記為未載入
+            setEffects(prev => prev.map(effect => ({
+                ...effect,
+                isLoaded: false,
+                resourceStatus: undefined // 清除資源狀態
+            })));
+            
+            console.log('[EffectTestPanel] ✅ 快取已清除，所有特效已重置');
+            alert('✅ 快取已清除！\n\n所有特效需要重新點擊「已載入」按鈕。');
+        } catch (err) {
+            console.error('[EffectTestPanel] 清除快取失敗:', err);
+            alert('❌ 清除快取失敗，請查看 Console');
+        }
+    };
+
     return (
         <div className="flex flex-col gap-4">
             {/* Header / Status */}
@@ -1622,6 +1649,17 @@ export default function EffectTestPanel({
                     </span>
                 </div>
                 <div className="flex items-center gap-2">
+                    {/* 清除快取按鈕 */}
+                    <button
+                        onClick={handleClearCache}
+                        disabled={!isRuntimeReady}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-red-600/30"
+                        title="清除所有特效快取（釋放記憶體）"
+                    >
+                        <Trash className="w-3.5 h-3.5" />
+                        清除快取
+                    </button>
+                    
                     {/* 載入資料夾下拉選單 */}
                     <div className="relative" ref={folderDropdownRef}>
                         <button
