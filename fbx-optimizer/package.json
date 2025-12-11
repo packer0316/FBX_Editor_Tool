@@ -1,7 +1,7 @@
 {
   "name": "jr-3d-viewer",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "efk:manifest": "node scripts/generate-efk-manifest.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",

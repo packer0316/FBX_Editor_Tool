@@ -240,6 +240,50 @@ localTime = (globalFrame - clip.startFrame) / fps
 
 ---
 
+## 🎇 Effekseer 特效系統速查
+
+### 核心組件
+- **EffekseerRuntimeAdapter**：封裝 Effekseer WebGL Runtime
+- **EffectTestPanel**：特效測試面板（含資源管理）
+- **effectResourceCache**：全域資源快取 Map（解決內部快取問題）
+
+### 資源追蹤機制
+```typescript
+// redirect 回調攔截資源請求
+loadEffect(url, {
+  redirect: (path) => {
+    // 記錄資源路徑和類型
+    resourceStatusMap.set(path, { path, exists, type });
+    return fullUrl;
+  }
+});
+
+// 存入全域快取
+effectResourceCache.set(localPath, resourceStatusArray);
+```
+
+### ⚠️ Effekseer 快取注意事項
+
+1. **Effekseer 內部快取是全域共用的**
+   - 重複載入時 `redirect` 不被呼叫
+   - 使用 `effectResourceCache` 解決
+
+2. **清除快取影響所有模型**
+   ```typescript
+   // 需要清除所有模型的特效狀態
+   onClearAllModelsEffects={() => {
+     models.forEach(m => updateModel(m.id, { effects: resetEffects }));
+   }}
+   ```
+
+3. **打包匯出必須使用 effectResourceCache**
+   - 不能使用 `item.resourceStatus`（可能顯示「已快取」）
+
+### 詳細文檔
+- `archi_docs/EFFEKSEER_INTEGRATION_ARCHITECTURE.md`
+
+---
+
 ## 🦴 Spine 動畫系統速查
 
 ### 核心組件
@@ -287,5 +331,6 @@ onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById 
 
 - **架構詳解**：`PROJECT_ARCHITECTURE.md`
 - **技術上下文**：`PROJECT_CONTEXT.md`
-- **Director Mode 設計**：`docs/DIRECTOR_MODE_DESIGN.md`
-- **Spine 整合架構**：`docs/SPINE_INTEGRATION_ARCHITECTURE.md`
+- **Director Mode 設計**：`archi_docs/DIRECTOR_MODE_DESIGN.md`
+- **Spine 整合架構**：`archi_docs/SPINE_INTEGRATION_ARCHITECTURE.md`
+- **Effekseer 整合架構**：`archi_docs/EFFEKSEER_INTEGRATION_ARCHITECTURE.md`

@@ -42,6 +42,9 @@
 - 粒子特效載入與播放
 - 與 Three.js 場景整合
 - 動畫時間同步
+- 資源追蹤與管理（引用資源列表）
+- 快取管理（全域快取清除）
+- 打包匯出（ZIP 壓縮）
 
 ### 6. 2D 圖層合成系統
 - 多圖層管理（前景/背景）
@@ -404,6 +407,14 @@ SpineCanvasRenderer 渲染到 Canvas
 
 ---
 
-**最後更新**：2025.11.28  
+## 📖 相關文檔
+
+- **Effekseer 整合架構**：`archi_docs/EFFEKSEER_INTEGRATION_ARCHITECTURE.md`
+- **Spine 整合架構**：`archi_docs/SPINE_INTEGRATION_ARCHITECTURE.md`
+- **Director Mode 設計**：`archi_docs/DIRECTOR_MODE_DESIGN.md`
+
+---
+
+**最後更新**：2025.12.12  
 **維護者**：JR.H
 

@@ -294,6 +294,36 @@ export class EffekseerRuntimeAdapter {
     }
 
     /**
+     * 清除所有快取的特效資源
+     * 
+     * 釋放所有已載入的特效，清空快取。
+     * 這對於強制重新載入資源或釋放大量記憶體很有用。
+     */
+    public clearAllCache(): void {
+        if (!this.effekseerContext) {
+            console.warn('[EffekseerRuntimeAdapter] Context 不存在，無法清除快取');
+            return;
+        }
+
+        console.log(`[EffekseerRuntimeAdapter] 🗑️ 開始清除快取，共 ${this.loadedEffects.size} 個特效`);
+        
+        // 釋放所有特效資源
+        for (const [id, effect] of this.loadedEffects) {
+            try {
+                this.effekseerContext.releaseEffect(effect);
+                console.log(`[EffekseerRuntimeAdapter] ✓ 釋放特效: ${id}`);
+            } catch (error) {
+                console.error(`[EffekseerRuntimeAdapter] ✗ 釋放特效失敗: ${id}`, error);
+            }
+        }
+        
+        // 清空 Map
+        this.loadedEffects.clear();
+        
+        console.log('[EffekseerRuntimeAdapter] ✅ 快取已清除');
+    }
+
+    /**
      * 更新 Effekseer 的播放狀態
      *
      * Effekseer API 的 `update` 以「幀數」為單位，因此這裡使用 `deltaTime * 60` 估計幀數。
