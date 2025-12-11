@@ -300,7 +300,9 @@ const EffectCard = ({
     createdClips,
     theme,
     duration,
-    fps = 30
+    fps = 30,
+    effectResourceCache,
+    setEffectResourceCache
 }: {
     item: EffectItem,
     isRuntimeReady: boolean,
@@ -311,7 +313,9 @@ const EffectCard = ({
     createdClips: IdentifiableClip[],
     theme: ThemeStyle,
     duration: number,
-    fps?: number
+    fps?: number,
+    effectResourceCache: Map<string, ResourceStatus[]>,
+    setEffectResourceCache: React.Dispatch<React.SetStateAction<Map<string, ResourceStatus[]>>>
 }) => {
     const [isExpanded, setIsExpanded] = useState(true);
     const [localPath, setLocalPath] = useState(item.path);
@@ -453,6 +457,13 @@ const EffectCard = ({
         if (!isRuntimeReady || !localPath.trim()) return;
 
         console.log('[EffectCard] 🔵 開始載入特效:', localPath);
+        
+        // 🔥 檢查全域資源快取
+        const cachedResources = effectResourceCache.get(localPath);
+        if (cachedResources && cachedResources.length > 0) {
+            console.log('[EffectCard] 📋 使用快取的資源列表:', cachedResources.length, '個');
+        }
+        
         onUpdate(item.id, { isLoading: true });
         
         // 用於追蹤資源狀態
@@ -623,9 +634,20 @@ const EffectCard = ({
                 
                 // 處理快取情況
                 if (resourceStatusArray.length === 0) {
-                    if (item.resourceStatus && item.resourceStatus.length > 0) {
-                        // 保留舊的 resourceStatus
-                        console.log('[EffectCard] ⚠️ 已快取，保留現有資源狀態');
+                    // 沒有追蹤到新資源，檢查全域快取
+                    if (cachedResources && cachedResources.length > 0) {
+                        // 🔥 使用全域快取的資源列表
+                        console.log('[EffectCard] 📋 使用全域快取的資源狀態:', cachedResources.length, '個');
+                        onUpdate(item.id, {
+                            isLoaded: true,
+                            isLoading: false,
+                            name: fileName,
+                            path: localPath,
+                            resourceStatus: cachedResources
+                        });
+                    } else if (item.resourceStatus && item.resourceStatus.length > 0) {
+                        // 保留當前 item 的 resourceStatus
+                        console.log('[EffectCard] ⚠️ 保留現有資源狀態');
                         onUpdate(item.id, {
                             isLoaded: true,
                             isLoading: false,
@@ -640,13 +662,17 @@ const EffectCard = ({
                             name: fileName,
                             path: localPath,
                             resourceStatus: [{
-                                path: '(無外部資源)',
+                                path: '(資源已快取，by其他特效檔)',
                                 exists: true,
                                 type: 'other' as const
                             }]
                         });
                     }
                 } else {
+                    // 🔥 追蹤到新資源，存入全域快取
+                    console.log('[EffectCard] 💾 存入全域快取:', localPath, '->', resourceStatusArray.length, '個資源');
+                    setEffectResourceCache(prev => new Map(prev).set(localPath, resourceStatusArray));
+                    
                     onUpdate(item.id, {
                         isLoaded: true,
                         isLoading: false,
@@ -1618,6 +1644,9 @@ export default function EffectTestPanel({
     fps = 30
 }: EffectTestPanelProps) {
     const [isRuntimeReady, setIsRuntimeReady] = useState(false);
+    
+    // 全域資源快取：特效路徑 -> 資源列表（解決 Effekseer 內部快取導致重複載入無法追蹤資源的問題）
+    const [effectResourceCache, setEffectResourceCache] = useState<Map<string, ResourceStatus[]>>(new Map());
 
     // 檢查 Runtime 狀態
     useEffect(() => {
@@ -1763,6 +1792,10 @@ export default function EffectTestPanel({
         try {
             adapter.clearAllCache();
             
+            // 清空全域資源快取
+            setEffectResourceCache(new Map());
+            console.log('[EffectTestPanel] 🗑️ 全域資源快取已清空');
+            
             // 將所有特效標記為未載入
             setEffects(prev => prev.map(effect => ({
                 ...effect,
@@ -1831,8 +1864,8 @@ export default function EffectTestPanel({
                 // 2. 添加引用的資源
                 if (effect.resourceStatus && effect.resourceStatus.length > 0) {
                     for (const resource of effect.resourceStatus) {
-                        // 跳過「無外部資源」標記
-                        if (resource.path === '(無外部資源)') continue;
+                        // 跳過特殊標記
+                        if (resource.path === '(資源已快取，by其他特效檔)') continue;
                         
                         // 計算資源的完整路徑
                         let resourcePath = resource.path;
@@ -2011,6 +2044,8 @@ export default function EffectTestPanel({
                             theme={theme}
                             duration={duration}
                             fps={fps}
+                            effectResourceCache={effectResourceCache}
+                            setEffectResourceCache={setEffectResourceCache}
                         />
                     ))
                 )}
