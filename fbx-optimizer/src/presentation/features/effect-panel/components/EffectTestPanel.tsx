@@ -1526,6 +1526,91 @@ export default function EffectTestPanel({
         setEffects(prev => prev.filter(item => item.id !== id));
     };
 
+    // 載入資料夾中的所有 EFK
+    const [isLoadingFolder, setIsLoadingFolder] = useState(false);
+    const [availableFolders, setAvailableFolders] = useState<string[]>([]);
+    const [showFolderDropdown, setShowFolderDropdown] = useState(false);
+    const folderDropdownRef = useRef<HTMLDivElement>(null);
+
+    // 載入 manifest 獲取可用資料夾
+    useEffect(() => {
+        fetch('/effekseer/manifest.json')
+            .then(res => res.json())
+            .then(manifest => {
+                const folders = Object.keys(manifest.root?.subdirs || {});
+                setAvailableFolders(folders);
+            })
+            .catch(err => console.warn('[EffectTestPanel] Failed to load manifest:', err));
+    }, []);
+
+    // 點擊外部關閉下拉選單
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (folderDropdownRef.current && !folderDropdownRef.current.contains(e.target as Node)) {
+                setShowFolderDropdown(false);
+            }
+        };
+        if (showFolderDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [showFolderDropdown]);
+
+    // 載入指定資料夾的所有 EFK
+    const loadFolder = async (folderName: string) => {
+        setIsLoadingFolder(true);
+        setShowFolderDropdown(false);
+
+        try {
+            const res = await fetch('/effekseer/manifest.json');
+            const manifest = await res.json();
+            
+            const folderData = manifest.root?.subdirs?.[folderName];
+            if (!folderData) {
+                console.warn(`[EffectTestPanel] Folder "${folderName}" not found in manifest`);
+                return;
+            }
+
+            const efkFiles: { name: string; path: string }[] = folderData.efk || [];
+            
+            if (efkFiles.length === 0) {
+                console.warn(`[EffectTestPanel] No EFK files found in "${folderName}"`);
+                return;
+            }
+
+            // 預設顏色列表
+            const colors = ['#9333EA', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'];
+
+            // 批量新增 EFK
+            const newEffects: EffectItem[] = efkFiles.map((file, index) => ({
+                id: `effect_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                name: file.name.replace('.efk', ''),
+                path: file.path,
+                isLoaded: false,
+                isLoading: false,
+                isPlaying: false,
+                isLooping: false,
+                loopIntervalId: null,
+                isVisible: true,
+                position: [0, 0, 0] as [number, number, number],
+                rotation: [0, 0, 0] as [number, number, number],
+                scale: [1, 1, 1] as [number, number, number],
+                speed: 1.0,
+                boundBoneUuid: null,
+                triggers: [],
+                color: colors[index % colors.length]
+            }));
+
+            setEffects(prev => [...prev, ...newEffects]);
+            console.log(`[EffectTestPanel] Added ${newEffects.length} effects from "${folderName}"`);
+
+        } catch (err) {
+            console.error('[EffectTestPanel] Failed to load folder:', err);
+        } finally {
+            setIsLoadingFolder(false);
+        }
+    };
+
     return (
         <div className="flex flex-col gap-4">
             {/* Header / Status */}
@@ -1536,13 +1621,47 @@ export default function EffectTestPanel({
                         {isRuntimeReady ? 'Runtime Ready' : 'Initializing...'}
                     </span>
                 </div>
-                <button
-                    onClick={addEffectCard}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                    新增特效
-                </button>
+                <div className="flex items-center gap-2">
+                    {/* 載入資料夾下拉選單 */}
+                    <div className="relative" ref={folderDropdownRef}>
+                        <button
+                            onClick={() => setShowFolderDropdown(!showFolderDropdown)}
+                            disabled={isLoadingFolder || availableFolders.length === 0}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-purple-900/20"
+                        >
+                            {isLoadingFolder ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                                <FolderOpen className="w-3.5 h-3.5" />
+                            )}
+                            載入資料夾
+                            <ChevronDown className="w-3 h-3" />
+                        </button>
+                        
+                        {showFolderDropdown && availableFolders.length > 0 && (
+                            <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                                {availableFolders.map(folder => (
+                                    <button
+                                        key={folder}
+                                        onClick={() => loadFolder(folder)}
+                                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
+                                    >
+                                        <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
+                                        {folder}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <button
+                        onClick={addEffectCard}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                        新增特效
+                    </button>
+                </div>
             </div>
 
             {/* Effect Cards List */}

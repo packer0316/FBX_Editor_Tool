@@ -1,0 +1,200 @@
+{
+  "generated": "2025-12-11T13:41:27.561Z",
+  "root": {
+    "efk": [
+      {
+        "name": "BigExplosion_Orange.efk",
+        "path": "BigExplosion_Orange.efk"
+      }
+    ],
+    "subdirs": {
+      "Boss": {
+        "efk": [
+          {
+            "name": "BigExplosion_Orange.efk",
+            "path": "Boss/BigExplosion_Orange.efk"
+          },
+          {
+            "name": "BigExplosion_Purple.efk",
+            "path": "Boss/BigExplosion_Purple.efk"
+          },
+          {
+            "name": "BigExplosion_Red.efk",
+            "path": "Boss/BigExplosion_Red.efk"
+          },
+          {
+            "name": "Bs03_Appear.efk",
+            "path": "Boss/Bs03_Appear.efk"
+          },
+          {
+            "name": "Bs03_BigWinAwake.efk",
+            "path": "Boss/Bs03_BigWinAwake.efk"
+          },
+          {
+            "name": "Bs03_BigWinAwakeStart.efk",
+            "path": "Boss/Bs03_BigWinAwakeStart.efk"
+          },
+          {
+            "name": "Bs03_BigWinRainBomb.efk",
+            "path": "Boss/Bs03_BigWinRainBomb.efk"
+          },
+          {
+            "name": "Bs03_BigWinRainBomb_Crystal.efk",
+            "path": "Boss/Bs03_BigWinRainBomb_Crystal.efk"
+          },
+          {
+            "name": "Bs03_BigWinRainBomb_Explosion.efk",
+            "path": "Boss/Bs03_BigWinRainBomb_Explosion.efk"
+          },
+          {
+            "name": "Bs03_BigWinRecharge.efk",
+            "path": "Boss/Bs03_BigWinRecharge.efk"
+          },
+          {
+            "name": "Bs03_BigWinRechargeLaser.efk",
+            "path": "Boss/Bs03_BigWinRechargeLaser.efk"
+          },
+          {
+            "name": "Bs03_BigWinRechargeTail.efk",
+            "path": "Boss/Bs03_BigWinRechargeTail.efk"
+          },
+          {
+            "name": "Bs03_BigWinTailBomb.efk",
+            "path": "Boss/Bs03_BigWinTailBomb.efk"
+          },
+          {
+            "name": "Bs03_BigWinTailBomb_Explosion.efk",
+            "path": "Boss/Bs03_BigWinTailBomb_Explosion.efk"
+          },
+          {
+            "name": "Bs03_BigWinTailBomb_Tail.efk",
+            "path": "Boss/Bs03_BigWinTailBomb_Tail.efk"
+          },
+          {
+            "name": "Bs03_Dig.efk",
+            "path": "Boss/Bs03_Dig.efk"
+          },
+          {
+            "name": "Bs03_Ingame.efk",
+            "path": "Boss/Bs03_Ingame.efk"
+          },
+          {
+            "name": "Bs03_track.efk",
+            "path": "Boss/Bs03_track.efk"
+          },
+          {
+            "name": "Bs03_track_bomb.efk",
+            "path": "Boss/Bs03_track_bomb.efk"
+          },
+          {
+            "name": "Bs04_Bigwin_end.efk",
+            "path": "Boss/Bs04_Bigwin_end.efk"
+          },
+          {
+            "name": "Bs04_Bigwin_end_Bomb.efk",
+            "path": "Boss/Bs04_Bigwin_end_Bomb.efk"
+          },
+          {
+            "name": "Bs04_dead.efk",
+            "path": "Boss/Bs04_dead.efk"
+          },
+          {
+            "name": "Bs04_Hurt.efk",
+            "path": "Boss/Bs04_Hurt.efk"
+          },
+          {
+            "name": "Bs04_idle.efk",
+            "path": "Boss/Bs04_idle.efk"
+          },
+          {
+            "name": "Bs04_Ingame.efk",
+            "path": "Boss/Bs04_Ingame.efk"
+          },
+          {
+            "name": "Bs04_Ingame_Roar.efk",
+            "path": "Boss/Bs04_Ingame_Roar.efk"
+          },
+          {
+            "name": "Bs04_pulloutCoin.efk",
+            "path": "Boss/Bs04_pulloutCoin.efk"
+          },
+          {
+            "name": "Bs04_PulloutGem.efk",
+            "path": "Boss/Bs04_PulloutGem.efk"
+          },
+          {
+            "name": "Bs04_walk.efk",
+            "path": "Boss/Bs04_walk.efk"
+          },
+          {
+            "name": "Bs04_walk_.efk",
+            "path": "Boss/Bs04_walk_.efk"
+          },
+          {
+            "name": "Bs04_win.efk",
+            "path": "Boss/Bs04_win.efk"
+          },
+          {
+            "name": "TSTreeTurtle_BigExplosion.efk",
+            "path": "Boss/TSTreeTurtle_BigExplosion.efk"
+          }
+        ],
+        "subdirs": {}
+      },
+      "Resources": {
+        "efk": [
+          {
+            "name": "block.efk",
+            "path": "Resources/block.efk"
+          },
+          {
+            "name": "Laser01.efk",
+            "path": "Resources/Laser01.efk"
+          },
+          {
+            "name": "Laser02.efk",
+            "path": "Resources/Laser02.efk"
+          },
+          {
+            "name": "Simple_Ribbon_Parent.efk",
+            "path": "Resources/Simple_Ribbon_Parent.efk"
+          },
+          {
+            "name": "Simple_Ribbon_Sword.efk",
+            "path": "Resources/Simple_Ribbon_Sword.efk"
+          },
+          {
+            "name": "Simple_Ring_Shape1.efk",
+            "path": "Resources/Simple_Ring_Shape1.efk"
+          },
+          {
+            "name": "Simple_Ring_Shape2.efk",
+            "path": "Resources/Simple_Ring_Shape2.efk"
+          },
+          {
+            "name": "Simple_Sprite_FixedYAxis.efk",
+            "path": "Resources/Simple_Sprite_FixedYAxis.efk"
+          },
+          {
+            "name": "Simple_Track1.efk",
+            "path": "Resources/Simple_Track1.efk"
+          }
+        ],
+        "subdirs": {
+          "Model": {
+            "efk": [],
+            "subdirs": {}
+          },
+          "Sound": {
+            "efk": [],
+            "subdirs": {}
+          },
+          "Texture": {
+            "efk": [],
+            "subdirs": {}
+          }
+        }
+      }
+    }
+  }
+}

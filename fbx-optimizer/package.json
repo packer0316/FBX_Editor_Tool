@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "efk:manifest": "node scripts/generate-efk-manifest.js"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
