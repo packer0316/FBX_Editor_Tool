@@ -422,3 +422,43 @@ input[type=range]:focus {
 .animate-slide-in-right {
   animation: slide-in-right 0.3s ease-out;
 }
+
+/* ============================================================================
+ * Tab 圖標呼吸光動畫 - 柔和、優雅、不搶眼
+ * ============================================================================ */
+
+@keyframes gentle-breathe {
+  0%, 100% {
+    filter: drop-shadow(0 0 3px var(--glow-color));
+    opacity: 0.9;
+  }
+  50% {
+    filter: drop-shadow(0 0 8px var(--glow-color)) drop-shadow(0 0 12px var(--glow-color));
+    opacity: 1;
+  }
+}
+
+.tab-icon-breathe-cyan {
+  --glow-color: rgba(34, 211, 238, 0.6);
+  animation: gentle-breathe 3s ease-in-out infinite;
+}
+
+.tab-icon-breathe-blue {
+  --glow-color: rgba(96, 165, 250, 0.6);
+  animation: gentle-breathe 3s ease-in-out infinite;
+}
+
+.tab-icon-breathe-purple {
+  --glow-color: rgba(192, 132, 252, 0.6);
+  animation: gentle-breathe 3s ease-in-out infinite;
+}
+
+.tab-icon-breathe-green {
+  --glow-color: rgba(74, 222, 128, 0.6);
+  animation: gentle-breathe 3s ease-in-out infinite;
+}
+
+.tab-icon-breathe-orange {
+  --glow-color: rgba(251, 146, 60, 0.6);
+  animation: gentle-breathe 3s ease-in-out infinite;
+}

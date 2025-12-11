@@ -1771,58 +1771,58 @@ function App() {
           {/* 分頁切換 */}
           <div className={`flex border-b ${currentTheme.panelBorder} ${currentTheme.toolbarBg}/30`}>
             <button
-              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'layer'
+              className={`flex-1 py-2 text-xs font-medium transition-all flex flex-col items-center justify-center gap-1 ${activeTab === 'layer'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-cyan-400`
                 : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('layer')}
               title="2D Layers"
             >
-              <Layers size={18} />
+              <Layers size={18} className={activeTab === 'layer' ? 'text-cyan-400 tab-icon-breathe-cyan' : ''} />
               <span>2D</span>
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'optimization'
+              className={`flex-1 py-2 text-xs font-medium transition-all flex flex-col items-center justify-center gap-1 ${activeTab === 'optimization'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-blue-500`
                 : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('optimization')}
               title="Model Manager"
             >
-              <Box size={18} />
+              <Box size={18} className={activeTab === 'optimization' ? 'text-blue-400 tab-icon-breathe-blue' : ''} />
               <span>Model</span>
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'shader'
+              className={`flex-1 py-2 text-xs font-medium transition-all flex flex-col items-center justify-center gap-1 ${activeTab === 'shader'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-purple-500`
                 : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('shader')}
               title="Shader Tools"
             >
-              <Wand2 size={18} />
+              <Wand2 size={18} className={activeTab === 'shader' ? 'text-purple-400 tab-icon-breathe-purple' : ''} />
               <span>Shader</span>
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'audio'
+              className={`flex-1 py-2 text-xs font-medium transition-all flex flex-col items-center justify-center gap-1 ${activeTab === 'audio'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-green-500`
                 : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('audio')}
               title="Audio Settings"
             >
-              <Music size={18} />
+              <Music size={18} className={activeTab === 'audio' ? 'text-green-400 tab-icon-breathe-green' : ''} />
               <span>Audio</span>
             </button>
             <button
-              className={`flex-1 py-2 text-xs font-medium transition-colors flex flex-col items-center justify-center gap-1 ${activeTab === 'effect'
+              className={`flex-1 py-2 text-xs font-medium transition-all flex flex-col items-center justify-center gap-1 ${activeTab === 'effect'
                 ? `${currentTheme.panelBg} ${currentTheme.text} border-b-2 border-orange-500`
                 : `${currentTheme.button} text-gray-400 hover:text-gray-200`
                 }`}
               onClick={() => handleTabChange('effect')}
               title="Visual Effects"
             >
-              <Sparkles size={18} />
+              <Sparkles size={18} className={activeTab === 'effect' ? 'text-orange-400 tab-icon-breathe-orange' : ''} />
               <span>Efk</span>
             </button>
           </div>
