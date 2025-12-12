@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, RefreshCw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -1704,15 +1704,23 @@ export default function EffectTestPanel({
     const [showFolderDropdown, setShowFolderDropdown] = useState(false);
     const folderDropdownRef = useRef<HTMLDivElement>(null);
 
+    // 刷新資料夾列表
+    const refreshFolderList = async () => {
+        try {
+            // 加上時間戳避免快取
+            const res = await fetch(`/effekseer/manifest.json?t=${Date.now()}`);
+            const manifest = await res.json();
+            const folders = Object.keys(manifest.root?.subdirs || {});
+            setAvailableFolders(folders);
+            console.log('✅ [EffectTestPanel] 資料夾列表已更新，共', folders.length, '個資料夾:', folders);
+        } catch (err) {
+            console.warn('⚠️ [EffectTestPanel] 更新資料夾列表失敗:', err);
+        }
+    };
+
     // 載入 manifest 獲取可用資料夾
     useEffect(() => {
-        fetch('/effekseer/manifest.json')
-            .then(res => res.json())
-            .then(manifest => {
-                const folders = Object.keys(manifest.root?.subdirs || {});
-                setAvailableFolders(folders);
-            })
-            .catch(err => console.warn('[EffectTestPanel] Failed to load manifest:', err));
+        refreshFolderList();
     }, []);
 
     // 點擊外部關閉下拉選單
@@ -1734,7 +1742,8 @@ export default function EffectTestPanel({
         setShowFolderDropdown(false);
 
         try {
-            const res = await fetch('/effekseer/manifest.json');
+            // 加上時間戳避免快取
+            const res = await fetch(`/effekseer/manifest.json?t=${Date.now()}`);
             const manifest = await res.json();
             
             const folderData = manifest.root?.subdirs?.[folderName];
@@ -1774,12 +1783,52 @@ export default function EffectTestPanel({
             }));
 
             setEffects(prev => [...prev, ...newEffects]);
-            console.log(`[EffectTestPanel] Added ${newEffects.length} effects from "${folderName}"`);
-
+            console.log(`[EffectTestPanel] 已新增 ${newEffects.length} 個特效 from "${folderName}"`);
         } catch (err) {
-            console.error('[EffectTestPanel] Failed to load folder:', err);
+            console.error('[EffectTestPanel] 載入資料夾失敗:', err);
         } finally {
             setIsLoadingFolder(false);
+        }
+    };
+
+    // 手動重新掃描並更新 manifest
+    const [isRefreshingManifest, setIsRefreshingManifest] = useState(false);
+
+    const handleRefreshManifest = async () => {
+        setIsRefreshingManifest(true);
+        setShowFolderDropdown(false); // 關閉下拉選單
+        console.log('🔄 [EffectTestPanel] 手動觸發重新掃描資料夾...');
+        
+        try {
+            // 呼叫 Vite 開發伺服器的 API
+            const response = await fetch('/api/efk/refresh-manifest', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                console.log('✅ [EffectTestPanel] Manifest 重新生成成功');
+                
+                // 等待一下讓檔案完全寫入
+                await new Promise(resolve => setTimeout(resolve, 300));
+                
+                // 重新載入資料夾列表
+                await refreshFolderList();
+                
+                console.log('✅ [EffectTestPanel] 資料夾列表已更新');
+            } else {
+                console.error('❌ [EffectTestPanel] Manifest 重新生成失敗:', result.message);
+                alert(`❌ 掃描失敗：${result.message}`);
+            }
+        } catch (err) {
+            console.error('❌ [EffectTestPanel] 呼叫 API 失敗:', err);
+            alert('❌ 掃描失敗\n\n請確認開發伺服器是否正常運行\n(npm run dev)');
+        } finally {
+            setIsRefreshingManifest(false);
         }
     };
 
@@ -1993,9 +2042,13 @@ export default function EffectTestPanel({
                     {/* 載入資料夾下拉選單 */}
                     <div className="relative" ref={folderDropdownRef}>
                         <button
-                            onClick={() => setShowFolderDropdown(!showFolderDropdown)}
-                            disabled={isLoadingFolder || availableFolders.length === 0}
+                            onClick={() => {
+                                refreshFolderList(); // 每次點擊都刷新列表
+                                setShowFolderDropdown(!showFolderDropdown);
+                            }}
+                            disabled={isLoadingFolder}
                             className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-purple-900/20"
+                            title={availableFolders.length === 0 ? '尚未找到資料夾，請確認 public/effekseer/ 下有子資料夾' : `共 ${availableFolders.length} 個資料夾可用`}
                         >
                             {isLoadingFolder ? (
                                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -2006,18 +2059,42 @@ export default function EffectTestPanel({
                             <ChevronDown className="w-3 h-3" />
                         </button>
                         
-                        {showFolderDropdown && availableFolders.length > 0 && (
+                        {showFolderDropdown && (
                             <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
-                                {availableFolders.map(folder => (
-                                    <button
-                                        key={folder}
-                                        onClick={() => loadFolder(folder)}
-                                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
-                                    >
-                                        <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
-                                        {folder}
-                                    </button>
-                                ))}
+                                {/* 重新掃描按鈕 - 置頂選項 */}
+                                <button
+                                    onClick={handleRefreshManifest}
+                                    disabled={isRefreshingManifest}
+                                    className="w-full px-3 py-2 text-left text-xs text-green-400 hover:bg-gray-700 hover:text-green-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                                >
+                                    {isRefreshingManifest ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    ) : (
+                                        <RefreshCw className="w-3.5 h-3.5" />
+                                    )}
+                                    {isRefreshingManifest ? '掃描中...' : '🔄 重新掃描資源'}
+                                </button>
+
+                                {/* 資料夾列表 */}
+                                {availableFolders.length > 0 ? (
+                                    availableFolders.map(folder => (
+                                        <button
+                                            key={folder}
+                                            onClick={() => loadFolder(folder)}
+                                            className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
+                                        >
+                                            <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
+                                            {folder}
+                                        </button>
+                                    ))
+                                ) : (
+                                    <div className="px-3 py-2 text-xs text-gray-500 text-center">
+                                        尚未找到資料夾
+                                        <div className="text-xs text-gray-600 mt-1">
+                                            請在 public/effekseer/ 下新增資料夾
+                                        </div>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
