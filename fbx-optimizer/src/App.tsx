@@ -1938,6 +1938,7 @@ function App() {
                 createdClips={createdClips}
                 audioController={audioControllerRef.current}
                 theme={currentTheme}
+                modelName={activeModel?.name}
               />
             )}
 

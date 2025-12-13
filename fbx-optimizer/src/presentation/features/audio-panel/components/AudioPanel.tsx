@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronRight, Play, Settings, Download, Music, X } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Play, Settings, Download, Music, X, Package } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 import type { AudioTrigger } from '../../../../domain/value-objects/AudioTrigger';
@@ -8,6 +8,7 @@ import { updateArrayItemById, updateArrayItemProperties } from '../../../../util
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 import AudioSettingsPanel from './AudioSettingsPanel';
+import { ExportAudioConfigUseCase } from '../../../../application/use-cases/ExportAudioConfigUseCase';
 
 interface AudioPanelProps {
     audioTracks: AudioTrack[];
@@ -15,9 +16,10 @@ interface AudioPanelProps {
     createdClips: IdentifiableClip[];
     audioController: InstanceType<typeof AudioController>;
     theme: ThemeStyle;
+    modelName?: string;
 }
 
-export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, audioController, theme }: AudioPanelProps) {
+export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, audioController, theme, modelName }: AudioPanelProps) {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const settingsButtonRefs = useRef<Record<string, HTMLButtonElement | null>>({});
     const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
@@ -25,9 +27,20 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
     const [expandedSettings, setExpandedSettings] = useState<Record<string, boolean>>({});
     const [editingNameId, setEditingNameId] = useState<string | null>(null);
     const [editingTrackName, setEditingTrackName] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
 
     // Temporary state for adding new triggers
     const [newTriggerState, setNewTriggerState] = useState<Record<string, { clipId: string, frame: string }>>({});
+
+    const handleExportConfig = async () => {
+        if (isExporting) return;
+        setIsExporting(true);
+        try {
+            await ExportAudioConfigUseCase.execute(audioTracks, modelName);
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     const playAudio = async (track: AudioTrack) => {
         await audioController.play(track);
@@ -175,7 +188,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
 
     return (
         <div className="flex flex-col gap-4">
-            {/* Upload Button */}
+            {/* Upload & Export Buttons */}
             <div className="flex flex-col gap-2">
                 <input
                     type="file"
@@ -192,6 +205,16 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                     <Plus className="w-5 h-5" />
                     <span>添加音效</span>
                 </button>
+                {audioTracks.length > 0 && (
+                    <button
+                        onClick={handleExportConfig}
+                        disabled={isExporting}
+                        className="flex items-center justify-center gap-2 w-full py-2.5 bg-gradient-to-r from-cyan-600 to-blue-500 hover:from-cyan-500 hover:to-blue-400 disabled:from-gray-600 disabled:to-gray-500 text-white font-medium rounded-xl transition-all shadow-lg shadow-cyan-900/20 hover:shadow-cyan-500/30 hover:scale-[1.01] disabled:hover:scale-100 disabled:cursor-not-allowed text-sm"
+                    >
+                        <Package className="w-4 h-4" />
+                        <span>{isExporting ? '匯出中...' : '匯出音效配置'}</span>
+                    </button>
+                )}
             </div>
 
             {/* Track List */}
