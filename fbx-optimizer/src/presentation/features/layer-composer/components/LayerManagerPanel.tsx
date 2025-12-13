@@ -1,5 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, GripVertical, HelpCircle, ImageIcon, Layers, Lock, PlusCircle, Trash2, Type, Unlock, X, Bone } from 'lucide-react';
+import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, GripVertical, HelpCircle, ImageIcon, Layers, Lock, PlusCircle, Trash2, Type, Unlock, X, Bone, Wand2 } from 'lucide-react';
+import { ImageToolsPanel } from './ImageToolsPanel';
 import type { Layer } from '../../../../domain/value-objects/Layer';
 import type { Element2D, ImageElement2D, ShapeElement2D, TextElement2D, SpineElement2D, SpineFitMode } from '../../../../domain/value-objects/Element2D';
 import { isImageElement, isShapeElement, isTextElement, isSpineElement } from '../../../../domain/value-objects/Element2D';
@@ -953,6 +954,7 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
   const [pendingSpineLayerId, setPendingSpineLayerId] = useState<string | null>(null);
   const [showSpineUploader, setShowSpineUploader] = useState(false);
   const [showHint, setShowHint] = useState(false);
+  const [showTools, setShowTools] = useState(false);
   const [expandedElementId, setExpandedElementId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1150,6 +1152,14 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
           >
             <HelpCircle size={16} />
           </button>
+          <button
+            type="button"
+            onClick={() => setShowTools(prev => !prev)}
+            className={`p-1 rounded transition-colors ${showTools ? 'text-cyan-400 bg-cyan-500/20' : 'text-gray-500 hover:text-gray-300'}`}
+            title="圖片工具"
+          >
+            <Wand2 size={16} />
+          </button>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -1171,6 +1181,9 @@ export const LayerManagerPanel: React.FC<LayerManagerPanelProps> = ({
 
       {/* 提示教學面板 */}
       <HintPanel isOpen={showHint} onClose={() => setShowHint(false)} />
+
+      {/* 圖片工具面板 */}
+      <ImageToolsPanel isOpen={showTools} onClose={() => setShowTools(false)} />
 
       {/* 前景層 */}
       <SectionDivider label="前景" color="teal" />
