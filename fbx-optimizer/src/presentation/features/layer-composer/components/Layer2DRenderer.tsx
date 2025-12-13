@@ -400,16 +400,17 @@ const Layer2DRendererComponent: React.FC<Layer2DRendererProps> = ({
           return (
             <div
               key={element.id}
-              className={`absolute cursor-pointer ${isDragging || isResizing ? '' : 'transition-all duration-150'}`}
+              className={`absolute ${element.locked ? '' : 'cursor-pointer'} ${isDragging || isResizing ? '' : 'transition-all duration-150'}`}
               style={{
                 ...style,
                 outline: isActive ? '2px solid rgba(168, 85, 247, 0.8)' : 'none',
                 outlineOffset: '2px',
-                cursor: isActive && !element.locked ? 'move' : 'pointer'
+                cursor: element.locked ? 'default' : (isActive ? 'move' : 'pointer'),
+                pointerEvents: element.locked ? 'none' : 'auto'
               }}
               onClick={(event) => {
                 event.stopPropagation();
-                if (!isDragging && !isResizing) {
+                if (!isDragging && !isResizing && !element.locked) {
                   onSelectElement?.(layer.id, element.id);
                 }
               }}
@@ -441,17 +442,18 @@ const Layer2DRendererComponent: React.FC<Layer2DRendererProps> = ({
           <div
             key={element.id}
             role="button"
-            tabIndex={0}
-            className={`absolute cursor-pointer ${isDragging || isResizing ? '' : 'transition-all duration-150'}`}
+            tabIndex={element.locked ? -1 : 0}
+            className={`absolute ${element.locked ? '' : 'cursor-pointer'} ${isDragging || isResizing ? '' : 'transition-all duration-150'}`}
             style={{
               ...style,
               outline: isActive ? '2px solid rgba(96, 165, 250, 0.8)' : 'none',
               outlineOffset: '2px',
-              cursor: isActive && !element.locked ? 'move' : 'pointer'
+              cursor: element.locked ? 'default' : (isActive ? 'move' : 'pointer'),
+              pointerEvents: element.locked ? 'none' : 'auto'
             }}
             onClick={(event) => {
               event.stopPropagation();
-              if (!isDragging && !isResizing) {
+              if (!isDragging && !isResizing && !element.locked) {
                 onSelectElement?.(layer.id, element.id);
               }
             }}

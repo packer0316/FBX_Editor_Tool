@@ -1254,7 +1254,12 @@ function App() {
     setLayers(prev => {
       const layer = prev.find(l => l.id === layerId);
       const element = layer?.children.find(e => e.id === elementId);
-      if (!layer || !element || element.locked) return prev;
+      if (!layer || !element) return prev;
+      
+      // 允許鎖定/解鎖操作，但鎖定時阻止其他更新
+      const isLockToggle = 'locked' in updates;
+      if (element.locked && !isLockToggle) return prev;
+      
       return UpdateElement2DUseCase.execute(prev, { layerId, elementId, updates });
     });
   }, []);
