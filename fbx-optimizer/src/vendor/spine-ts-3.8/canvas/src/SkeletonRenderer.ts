@@ -51,6 +51,7 @@ module spine.canvas {
 		private drawImages (skeleton: Skeleton) {
 			let ctx = this.ctx;
 			let drawOrder = skeleton.drawOrder;
+			let blendMode: BlendMode = null;
 
 			if (this.debugRendering) ctx.strokeStyle = "green";
 
@@ -68,6 +69,26 @@ module spine.canvas {
 					region = <TextureAtlasRegion>regionAttachment.region;
 					image = (<CanvasTexture>region.texture).getImage() as HTMLImageElement;
 				} else continue;
+
+				// 處理 BlendMode
+				let slotBlendMode = slot.data.blendMode;
+				if (slotBlendMode != blendMode) {
+					blendMode = slotBlendMode;
+					switch (blendMode) {
+						case BlendMode.Normal:
+							ctx.globalCompositeOperation = 'source-over';
+							break;
+						case BlendMode.Additive:
+							ctx.globalCompositeOperation = 'lighter';
+							break;
+						case BlendMode.Multiply:
+							ctx.globalCompositeOperation = 'multiply';
+							break;
+						case BlendMode.Screen:
+							ctx.globalCompositeOperation = 'screen';
+							break;
+					}
+				}
 
 				let skeleton = slot.bone.skeleton;
 				let skeletonColor = skeleton.color;
@@ -100,10 +121,6 @@ module spine.canvas {
 				ctx.scale(1, -1);
 				ctx.translate(-w / 2, -h / 2);
 				ctx.globalAlpha = color.a;
-				// experimental tinting via compositing, doesn't work
-				// ctx.globalCompositeOperation = "source-atop";
-				// ctx.fillStyle = "rgba(" + (color.r * 255 | 0) + ", " + (color.g * 255 | 0)  + ", " + (color.b * 255 | 0) + ", " + color.a + ")";
-				// ctx.fillRect(0, 0, w, h);
 				ctx.drawImage(image, region.x, region.y, w, h, 0, 0, w, h);
 				if (this.debugRendering) ctx.strokeRect(0, 0, w, h);
 				ctx.restore();
@@ -118,6 +135,7 @@ module spine.canvas {
 			let vertices: ArrayLike<number> = this.vertices;
 			let triangles: Array<number> = null;
 			let drawOrder = skeleton.drawOrder;
+			let ctx = this.ctx;
 
 			for (let i = 0, n = drawOrder.length; i < n; i++) {
 				let slot = drawOrder[i];
@@ -142,6 +160,21 @@ module spine.canvas {
 					let slotBlendMode = slot.data.blendMode;
 					if (slotBlendMode != blendMode) {
 						blendMode = slotBlendMode;
+						// 根據 BlendMode 設置 Canvas 的 globalCompositeOperation
+						switch (blendMode) {
+							case BlendMode.Normal:
+								ctx.globalCompositeOperation = 'source-over';
+								break;
+							case BlendMode.Additive:
+								ctx.globalCompositeOperation = 'lighter';
+								break;
+							case BlendMode.Multiply:
+								ctx.globalCompositeOperation = 'multiply';
+								break;
+							case BlendMode.Screen:
+								ctx.globalCompositeOperation = 'screen';
+								break;
+						}
 					}
 
 					let skeleton = slot.bone.skeleton;
@@ -154,8 +187,6 @@ module spine.canvas {
 					skeletonColor.g * slotColor.g * attachmentColor.g,
 					skeletonColor.b * slotColor.b * attachmentColor.b,
 					alpha);
-
-					let ctx = this.ctx;
 
 					ctx.globalAlpha = color.a;
 					// experimental tinting via compositing, doesn't work
@@ -185,7 +216,9 @@ module spine.canvas {
 				}
 			}
 
-			this.ctx.globalAlpha = 1;
+			// 重置 Canvas 狀態
+			ctx.globalAlpha = 1;
+			ctx.globalCompositeOperation = 'source-over';
 		}
 
 		// Adapted from http://extremelysatisfactorytotalitarianism.com/blog/?p=2120

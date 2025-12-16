@@ -8055,6 +8055,7 @@ var spine;
             drawImages(skeleton) {
                 let ctx = this.ctx;
                 let drawOrder = skeleton.drawOrder;
+                let blendMode = null;
                 if (this.debugRendering)
                     ctx.strokeStyle = "green";
                 ctx.save();
@@ -8073,6 +8074,25 @@ var spine;
                     }
                     else
                         continue;
+                    // 處理 BlendMode
+                    let slotBlendMode = slot.data.blendMode;
+                    if (slotBlendMode != blendMode) {
+                        blendMode = slotBlendMode;
+                        switch (blendMode) {
+                            case spine.BlendMode.Normal:
+                                ctx.globalCompositeOperation = 'source-over';
+                                break;
+                            case spine.BlendMode.Additive:
+                                ctx.globalCompositeOperation = 'lighter';
+                                break;
+                            case spine.BlendMode.Multiply:
+                                ctx.globalCompositeOperation = 'multiply';
+                                break;
+                            case spine.BlendMode.Screen:
+                                ctx.globalCompositeOperation = 'screen';
+                                break;
+                        }
+                    }
                     let skeleton = slot.bone.skeleton;
                     let skeletonColor = skeleton.color;
                     let slotColor = slot.color;
@@ -8112,6 +8132,7 @@ var spine;
                 let vertices = this.vertices;
                 let triangles = null;
                 let drawOrder = skeleton.drawOrder;
+                let ctx = this.ctx;
                 for (let i = 0, n = drawOrder.length; i < n; i++) {
                     let slot = drawOrder[i];
                     let attachment = slot.getAttachment();
@@ -8136,6 +8157,21 @@ var spine;
                         let slotBlendMode = slot.data.blendMode;
                         if (slotBlendMode != blendMode) {
                             blendMode = slotBlendMode;
+                            // 根據 BlendMode 設置 Canvas 的 globalCompositeOperation
+                            switch (blendMode) {
+                                case spine.BlendMode.Normal:
+                                    ctx.globalCompositeOperation = 'source-over';
+                                    break;
+                                case spine.BlendMode.Additive:
+                                    ctx.globalCompositeOperation = 'lighter';
+                                    break;
+                                case spine.BlendMode.Multiply:
+                                    ctx.globalCompositeOperation = 'multiply';
+                                    break;
+                                case spine.BlendMode.Screen:
+                                    ctx.globalCompositeOperation = 'screen';
+                                    break;
+                            }
                         }
                         let skeleton = slot.bone.skeleton;
                         let skeletonColor = skeleton.color;
@@ -8144,7 +8180,6 @@ var spine;
                         let alpha = skeletonColor.a * slotColor.a * attachmentColor.a;
                         let color = this.tempColor;
                         color.set(skeletonColor.r * slotColor.r * attachmentColor.r, skeletonColor.g * slotColor.g * attachmentColor.g, skeletonColor.b * slotColor.b * attachmentColor.b, alpha);
-                        let ctx = this.ctx;
                         ctx.globalAlpha = color.a;
                         for (var j = 0; j < triangles.length; j += 3) {
                             let t1 = triangles[j] * 8, t2 = triangles[j + 1] * 8, t3 = triangles[j + 2] * 8;
@@ -8164,7 +8199,9 @@ var spine;
                         }
                     }
                 }
-                this.ctx.globalAlpha = 1;
+                // 重置 Canvas 狀態
+                ctx.globalAlpha = 1;
+                ctx.globalCompositeOperation = 'source-over';
             }
             drawTriangle(img, x0, y0, u0, v0, x1, y1, u1, v1, x2, y2, u2, v2) {
                 let ctx = this.ctx;
