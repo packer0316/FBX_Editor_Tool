@@ -6,7 +6,7 @@
  */
 
 import { useRef, useEffect, useCallback, useState } from 'react';
-import { getSpineRuntimeAdapter, type SpineAnimationListener } from '../../infrastructure/spine/SpineRuntimeAdapter';
+import { getSpineWebglRuntimeAdapter, type SpineAnimationListener } from '../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
 // ============================================================================
 // 類型定義
@@ -70,7 +70,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
 
   // 檢查 Spine 實例是否存在
   useEffect(() => {
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     const loaded = adapter.has(spineId);
     setIsLoaded(loaded);
     
@@ -91,7 +91,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   useEffect(() => {
     if (!enabled || !isLoaded) return;
 
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     
     const listener: SpineAnimationListener = {
       onStart: (id, animationName) => {
@@ -126,7 +126,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   useEffect(() => {
     if (!enabled || !isLoaded) return;
 
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     
     const syncState = () => {
       const currentState = adapter.getState(spineId);
@@ -165,7 +165,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const play = useCallback((animationName?: string, loop = true) => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     const animation = animationName ?? state.currentAnimation;
     
     if (animation) {
@@ -178,7 +178,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const pause = useCallback(() => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.pause(spineId);
     setState(prev => ({ ...prev, isPlaying: false }));
   }, [spineId, isLoaded]);
@@ -187,7 +187,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const stop = useCallback(() => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.stop(spineId);
     setState(prev => ({ ...prev, isPlaying: false, currentTime: 0 }));
   }, [spineId, isLoaded]);
@@ -196,7 +196,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const seek = useCallback((time: number) => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.seek(spineId, time);
     setState(prev => ({ ...prev, currentTime: time }));
   }, [spineId, isLoaded]);
@@ -205,7 +205,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const setSpeed = useCallback((speed: number) => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.setTimeScale(spineId, speed);
   }, [spineId, isLoaded]);
 
@@ -213,7 +213,7 @@ export function useSpineAnimation(options: UseSpineAnimationOptions): UseSpineAn
   const setSkin = useCallback((skinName: string) => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.setSkin(spineId, skinName);
   }, [spineId, isLoaded]);
 

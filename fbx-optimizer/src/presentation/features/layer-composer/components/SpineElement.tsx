@@ -2,13 +2,12 @@
  * SpineElement - Spine 動畫元素組件
  * 
  * 在 2D Layer 中渲染 Spine 骨架動畫。
- * 使用 Canvas 2D API 進行渲染。
+ * 使用 Spine WebGL Runtime (`spine.webgl`) 進行渲染。
  */
 
 import React, { useRef, useEffect, useCallback, useState, memo } from 'react';
 import type { SpineElement2D } from '../../../../domain/value-objects/Element2D';
-import { getSpineRuntimeAdapter } from '../../../../infrastructure/spine/SpineRuntimeAdapter';
-import { createSpineCanvasRenderer, type SpineCanvasRenderer } from '../../../../infrastructure/spine/SpineCanvasRenderer';
+import { getSpineWebglRuntimeAdapter } from '../../../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
 // ============================================================================
 // 類型定義
@@ -41,8 +40,7 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
   onClick,
   onUpdate,
 }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<SpineCanvasRenderer | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -69,70 +67,74 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
 
   // 初始化 Canvas 和渲染器
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    const container = containerRef.current;
+    if (!container) return;
 
     try {
+      const adapter = getSpineWebglRuntimeAdapter();
+      if (!adapter.has(element.spineInstanceId)) {
+        setError('Spine 實例未載入');
+        setIsLoaded(false);
+        return;
+      }
+
+      const canvas = adapter.getCanvas(element.spineInstanceId);
+      if (!canvas) {
+        setError('WebGL Canvas 未建立');
+        setIsLoaded(false);
+        return;
+      }
+
+      // 掛載 canvas 到 DOM（per-instance canvas）
+      if (canvas.parentElement !== container) {
+        container.innerHTML = '';
+        container.appendChild(canvas);
+      }
+
+      // 設定尺寸
       const displayWidth = Math.max(actualWidth, 500);
       const displayHeight = Math.max(actualHeight, 500);
-      canvas.width = displayWidth;
-      canvas.height = displayHeight;
+      adapter.resize(element.spineInstanceId, displayWidth, displayHeight);
 
-      rendererRef.current = createSpineCanvasRenderer(canvas);
+      setIsLoaded(true);
+      setError(null);
 
-      const adapter = getSpineRuntimeAdapter();
-      if (adapter.has(element.spineInstanceId)) {
-        setIsLoaded(true);
-        setError(null);
-        
-        // 立即渲染一幀
-        requestAnimationFrame(() => {
-          if (rendererRef.current) {
-            rendererRef.current.render(element.spineInstanceId, {
-              flipX: element.flipX,
-              flipY: element.flipY,
-              scale: element.scale ?? 1,
-              fitMode: element.fitMode ?? 'fill',
-            });
-          }
+      // 立即渲染一幀
+      requestAnimationFrame(() => {
+        adapter.render(element.spineInstanceId, {
+          scale: element.scale ?? 1,
+          fitMode: element.fitMode ?? 'fill',
+          backgroundColor: null,
         });
-      } else {
-        setError('Spine 實例未載入');
-      }
+      });
     } catch (err) {
       console.error('[SpineElement] 初始化失敗:', err);
       setError(err instanceof Error ? err.message : '初始化失敗');
     }
 
     return () => {
-      if (rendererRef.current) {
-        rendererRef.current.dispose();
-        rendererRef.current = null;
-      }
+      // canvas 由 adapter 持有，不在這裡 dispose
     };
-  }, [element.spineInstanceId, actualWidth, actualHeight, element.flipX, element.flipY]);
+  }, [element.spineInstanceId, actualWidth, actualHeight, element.scale, element.fitMode]);
 
   // 控制 Runtime 的播放/暫停狀態
   useEffect(() => {
     if (!isLoaded) return;
     
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     
     if (element.isPlaying) {
       adapter.resume(element.spineInstanceId);
     } else {
       adapter.pause(element.spineInstanceId);
       // 暫停時渲染一幀
-      if (rendererRef.current) {
-        rendererRef.current.render(element.spineInstanceId, {
-          flipX: element.flipX,
-          flipY: element.flipY,
-          scale: element.scale ?? 1,
-          fitMode: element.fitMode ?? 'fill',
-        });
-      }
+      adapter.render(element.spineInstanceId, {
+        scale: element.scale ?? 1,
+        fitMode: element.fitMode ?? 'fill',
+        backgroundColor: null,
+      });
     }
-  }, [isLoaded, element.isPlaying, element.spineInstanceId, element.flipX, element.flipY, element.scale, element.fitMode]);
+  }, [isLoaded, element.isPlaying, element.spineInstanceId, element.scale, element.fitMode]);
 
   // 動畫循環（獨立的 useEffect，只在播放時運行）
   useEffect(() => {
@@ -141,7 +143,7 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
       return;
     }
 
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     lastTimeRef.current = performance.now();
     lastUISyncRef.current = performance.now();
     
@@ -159,14 +161,11 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
       adapter.update(element.spineInstanceId, deltaTime * element.timeScale);
 
       // 渲染
-      if (rendererRef.current) {
-        rendererRef.current.render(element.spineInstanceId, {
-          flipX: element.flipX,
-          flipY: element.flipY,
-          scale: element.scale ?? 1,
-          fitMode: element.fitMode ?? 'fill',
-        });
-      }
+      adapter.render(element.spineInstanceId, {
+        scale: element.scale ?? 1,
+        fitMode: element.fitMode ?? 'fill',
+        backgroundColor: null,
+      });
 
       // 每 33ms 同步時間到 UI（約 30fps）
       if (now - lastUISyncRef.current > 33) {
@@ -207,13 +206,13 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
         animationFrameRef.current = undefined;
       }
     };
-  }, [isLoaded, element.isPlaying, element.spineInstanceId, element.timeScale, element.flipX, element.flipY, element.loop, element.scale, element.fitMode]);
+  }, [isLoaded, element.isPlaying, element.spineInstanceId, element.timeScale, element.loop, element.scale, element.fitMode]);
 
   // 當動畫或 Skin 改變時
   useEffect(() => {
     if (!isLoaded) return;
 
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
 
     if (element.currentAnimation) {
       adapter.playAnimation(element.spineInstanceId, element.currentAnimation, element.loop);
@@ -240,21 +239,18 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
     // 降低閾值以支援更即時的拖動反饋（約 1 幀的差異）
     const diff = Math.abs(element.currentTime - internalTimeRef.current);
     if (diff > 0.016) {  // ~60fps 的一幀時間
-      const adapter = getSpineRuntimeAdapter();
+      const adapter = getSpineWebglRuntimeAdapter();
       adapter.seek(element.spineInstanceId, element.currentTime);
       internalTimeRef.current = element.currentTime;
       
       // 立即渲染（暫停時拖動也能看到畫面變化）
-      if (rendererRef.current) {
-        rendererRef.current.render(element.spineInstanceId, {
-          flipX: element.flipX,
-          flipY: element.flipY,
-          scale: element.scale ?? 1,
-          fitMode: element.fitMode ?? 'fill',
-        });
-      }
+      adapter.render(element.spineInstanceId, {
+        scale: element.scale ?? 1,
+        fitMode: element.fitMode ?? 'fill',
+        backgroundColor: null,
+      });
     }
-  }, [isLoaded, element.spineInstanceId, element.currentTime, element.flipX, element.flipY]);
+  }, [isLoaded, element.spineInstanceId, element.currentTime, element.scale, element.fitMode]);
 
 
   // 處理點擊
@@ -270,7 +266,7 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
     if (!isLoaded) return;
     
     // 獲取當前動畫資訊
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     const state = adapter.getState(element.spineInstanceId);
     
     if (!state) return;
@@ -301,8 +297,8 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
       }}
       onClick={handleClick}
     >
-      <canvas
-        ref={canvasRef}
+      <div
+        ref={containerRef}
         className="w-full h-full"
         style={{ display: isLoaded ? 'block' : 'none' }}
       />

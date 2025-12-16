@@ -85,7 +85,7 @@ describe('Director Components', () => {
     it('空列表時應該顯示提示', () => {
       render(<ActionSourcePanel actionSources={[]} />);
       
-      expect(screen.getByText('尚未載入模型')).toBeInTheDocument();
+      expect(screen.getByText('尚未載入模型或 Spine')).toBeInTheDocument();
     });
   });
 

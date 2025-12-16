@@ -8,7 +8,7 @@
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { Layers, ChevronDown, ChevronRight, Eye, EyeOff, Package } from 'lucide-react';
 import type { SpineInstance } from '../../../../domain/value-objects/SpineInstance';
-import { getSpineRuntimeAdapter } from '../../../../infrastructure/spine/SpineRuntimeAdapter';
+import { getSpineWebglRuntimeAdapter } from '../../../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
 // ============================================================================
 // 類型定義
@@ -142,7 +142,7 @@ export const SpineSlotTab: React.FC<SpineSlotTabProps> = ({
 
   // 從 SpineRuntimeAdapter 獲取即時 Slot 狀態
   useEffect(() => {
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     const state = adapter.getSlotsState(spineInstance.id);
     setSlotsState(state);
   }, [spineInstance.id, spineInstance.currentSkin]);
@@ -184,7 +184,7 @@ export const SpineSlotTab: React.FC<SpineSlotTabProps> = ({
 
   // 設定 Slot 的 Attachment
   const handleSetAttachment = useCallback((slotName: string, attachmentName: string | null) => {
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     adapter.setSlotAttachment(spineInstance.id, slotName, attachmentName);
     
     // 更新本地狀態

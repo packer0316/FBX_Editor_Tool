@@ -10,7 +10,7 @@ import type { DirectorClip } from '../../../../domain/entities/director/director
 import type { Layer } from '../../../../domain/value-objects/Layer';
 import type { SpineElement2D } from '../../../../domain/value-objects/Element2D';
 import { isSpineElement } from '../../../../domain/value-objects/Element2D';
-import { getSpineRuntimeAdapter } from '../../../../infrastructure/spine/SpineRuntimeAdapter';
+import { getSpineWebglRuntimeAdapter } from '../../../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
 interface UseDirectorSpineTriggerOptions {
   /** 是否啟用（Director Mode 啟用時） */
@@ -79,7 +79,7 @@ export function useDirectorSpineTrigger({
     fps: number,
     isPlaying: boolean
   ) => {
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
 
     tracks.forEach(track => {
       if (track.isMuted) return;
@@ -216,7 +216,7 @@ export function useDirectorSpineTrigger({
       
       if (isStopAction) {
         console.log('[SpineTrigger] Stop detected, clearing all tracks');
-        const adapter = getSpineRuntimeAdapter();
+        const adapter = getSpineWebglRuntimeAdapter();
         adapter.clearAllTracks();
         clipStatesRef.current.clear();
       }
@@ -243,7 +243,7 @@ export function useDirectorSpineTrigger({
   // 當 enabled 變為 false 時，暫停所有 Spine
   useEffect(() => {
     if (!enabled) {
-      const adapter = getSpineRuntimeAdapter();
+      const adapter = getSpineWebglRuntimeAdapter();
       
       // 遍歷所有圖層找出 Spine 元素並暫停
       layersRef.current.forEach(layer => {

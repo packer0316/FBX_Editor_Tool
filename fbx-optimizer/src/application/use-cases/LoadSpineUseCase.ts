@@ -14,7 +14,7 @@
  * ```
  */
 
-import { getSpineRuntimeAdapter } from '../../infrastructure/spine';
+import { getSpineWebglRuntimeAdapter } from '../../infrastructure/spine-webgl';
 import {
   createSpineInstance,
   type SpineInstance,
@@ -88,13 +88,14 @@ export class LoadSpineUseCase {
     ]);
 
     // 4. 載入到 Runtime
-    const adapter = getSpineRuntimeAdapter();
+    const adapter = getSpineWebglRuntimeAdapter();
     const instanceId = `spine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     const skeletonInfo = await adapter.load({
       id: instanceId,
       skelData,
       atlasText,
+      atlasFileName: classified.atlasFile.name,
       images,
     });
 

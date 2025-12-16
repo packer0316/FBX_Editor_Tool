@@ -12,7 +12,7 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import type { SpineInstance } from '../../domain/value-objects/SpineInstance';
-import { getSpineRuntimeAdapter } from '../../infrastructure/spine/SpineRuntimeAdapter';
+import { getSpineWebglRuntimeAdapter } from '../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
 // ============================================================================
 // Store 類型定義
@@ -122,7 +122,7 @@ export const useSpineStore = create<SpineStore>()(
         
         // 清理 SpineRuntimeAdapter 中的資源
         try {
-          const adapter = getSpineRuntimeAdapter();
+          const adapter = getSpineWebglRuntimeAdapter();
           adapter.cleanup(id);
         } catch (error) {
           console.error(`[SpineStore] 清理 Runtime 資源失敗: ${id}`, error);
@@ -168,7 +168,7 @@ export const useSpineStore = create<SpineStore>()(
         
         // 清理所有 SpineRuntimeAdapter 資源
         try {
-          const adapter = getSpineRuntimeAdapter();
+          const adapter = getSpineWebglRuntimeAdapter();
           adapter.cleanupAll();
         } catch (error) {
           console.error('[SpineStore] 清理所有 Runtime 資源失敗', error);
@@ -201,7 +201,7 @@ export const useSpineStore = create<SpineStore>()(
         if (unusedIds.length === 0) return;
         
         // 清理未使用的實例
-        const adapter = getSpineRuntimeAdapter();
+        const adapter = getSpineWebglRuntimeAdapter();
         for (const id of unusedIds) {
           try {
             adapter.cleanup(id);

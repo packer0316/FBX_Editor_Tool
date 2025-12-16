@@ -3,13 +3,167 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { SpineRuntimeAdapter, getSpineRuntimeAdapter } from '../../infrastructure/spine/SpineRuntimeAdapter';
+import { SpineWebglRuntimeAdapter, getSpineWebglRuntimeAdapter } from '../../infrastructure/spine-webgl/SpineWebglRuntimeAdapter';
 
-describe('SpineRuntimeAdapter', () => {
-  let adapter: SpineRuntimeAdapter;
+describe('SpineWebglRuntimeAdapter', () => {
+  let adapter: SpineWebglRuntimeAdapter;
+
+  const installMockSpineRuntime = () => {
+    class Vector2 {
+      x = 0;
+      y = 0;
+      constructor(x = 0, y = 0) {
+        this.x = x;
+        this.y = y;
+      }
+    }
+
+    class CanvasTexture {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(private image: any) {}
+      getImage() {
+        return this.image;
+      }
+      setFilters() {}
+      setWraps() {}
+      dispose() {}
+    }
+
+    class TextureAtlas {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(_atlasText: string, textureLoader: (path: string) => any) {
+        // 讓 textureLoader 至少被呼叫一次，模擬 page texture 建立
+        textureLoader('test.png');
+      }
+      findRegion(_name: string) {
+        return { texture: null, renderObject: null };
+      }
+      dispose() {}
+    }
+
+    class AtlasAttachmentLoader {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(public atlas: any) {}
+    }
+
+    const mockSkeletonData = {
+      width: 200,
+      height: 300,
+      version: '3.8.99',
+      fps: 30,
+      bones: [{ name: 'root' }],
+      slots: [{ name: 'root', boneData: { name: 'root' }, attachmentName: null }],
+      skins: [{ name: 'default', getAttachments: () => [] }],
+      animations: [{ name: 'idle', duration: 1.0 }],
+    };
+
+    class SkeletonBinary {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(_attachmentLoader: any) {}
+      scale = 1;
+      readSkeletonData(_binary: Uint8Array) {
+        return mockSkeletonData;
+      }
+    }
+
+    class AnimationStateData {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(public skeletonData: any) {}
+      defaultMix = 0.2;
+      setMix() {}
+    }
+
+    class AnimationState {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(public data: any) {}
+      timeScale = 1;
+      tracks: Array<any> = [];
+      setAnimation(_trackIndex: number, animationName: string, loop: boolean) {
+        const entry = {
+          trackIndex: 0,
+          loop,
+          trackTime: 0,
+          animation: { name: animationName, duration: 1.0 },
+          isComplete() {
+            return !loop && this.trackTime >= this.animation.duration;
+          },
+        };
+        this.tracks[0] = entry;
+        return entry;
+      }
+      update(delta: number) {
+        const entry = this.tracks[0];
+        if (entry) entry.trackTime += delta;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      apply(_skeleton: any) {
+        return true;
+      }
+      getCurrent(_trackIndex: number) {
+        return this.tracks[0] ?? null;
+      }
+      clearTrack(trackIndex: number) {
+        this.tracks[trackIndex] = null;
+      }
+      clearTracks() {
+        this.tracks = [];
+      }
+      setEmptyAnimation(trackIndex: number) {
+        this.clearTrack(trackIndex);
+      }
+    }
+
+    class Skeleton {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      constructor(public data: any) {}
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      skin: any = null;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      slots: any[] = [
+        {
+          data: { index: 0, name: 'root' },
+          bone: { data: { name: 'root' } },
+          getAttachment: () => null,
+          setAttachment: () => {},
+        },
+      ];
+      bones: Array<any> = [{ parent: null, worldX: 0, worldY: 0 }];
+      setToSetupPose() {}
+      setSlotsToSetupPose() {}
+      updateWorldTransform() {}
+      setSkinByName(name: string) {
+        this.skin = { name, getAttachments: () => [] };
+      }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      getBounds(offset: any, size: any) {
+        offset.x = 0;
+        offset.y = 0;
+        size.x = 200;
+        size.y = 300;
+      }
+      findSlot(slotName: string) {
+        return this.slots.find(s => s.data.name === slotName) ?? null;
+      }
+      setAttachment() {}
+    }
+
+    const mockSpine = {
+      Vector2,
+      canvas: { CanvasTexture },
+      TextureAtlas,
+      AtlasAttachmentLoader,
+      SkeletonBinary,
+      Skeleton,
+      AnimationStateData,
+      AnimationState,
+    };
+
+    vi.stubGlobal('spine', mockSpine);
+  };
 
   beforeEach(() => {
-    adapter = getSpineRuntimeAdapter();
+    installMockSpineRuntime();
+    adapter = getSpineWebglRuntimeAdapter();
     adapter.cleanupAll(); // 清理之前的實例
   });
 
@@ -19,8 +173,8 @@ describe('SpineRuntimeAdapter', () => {
 
   describe('單例模式', () => {
     it('應該返回相同的實例', () => {
-      const adapter1 = getSpineRuntimeAdapter();
-      const adapter2 = getSpineRuntimeAdapter();
+      const adapter1 = getSpineWebglRuntimeAdapter();
+      const adapter2 = getSpineWebglRuntimeAdapter();
       expect(adapter1).toBe(adapter2);
     });
   });
