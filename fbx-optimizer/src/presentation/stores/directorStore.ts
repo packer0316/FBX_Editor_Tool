@@ -200,18 +200,17 @@ export const useDirectorStore = create<DirectorStore>()(
       enterDirectorMode: () => {
         const { tracks } = get();
         
-        // 如果沒有 track，自動創建一個預設 track
+        // 如果沒有 track，自動創建 4 個預設 track
         let newTracks = tracks;
         if (tracks.length === 0) {
-          const defaultTrack: DirectorTrack = {
+          newTracks = Array.from({ length: 4 }, (_, i) => ({
             id: generateId(),
-            name: 'Track 1',
-            order: 0,
+            name: `Track ${i + 1}`,
+            order: i,
             isLocked: false,
             isMuted: false,
             clips: [],
-          };
-          newTracks = [defaultTrack];
+          }));
         }
         
         set(
