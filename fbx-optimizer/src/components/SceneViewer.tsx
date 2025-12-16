@@ -66,12 +66,18 @@ function CameraController({
         }
     }, [cameraSettings, camera]);
 
-    // Camera bone binding - update camera position every frame
+    // Camera bone binding - update camera position and rotation every frame
     useFrame(() => {
         if (isCameraBound && boundBone && camera) {
+            // 位置跟隨
             const boneWorldPos = new THREE.Vector3();
             boundBone.getWorldPosition(boneWorldPos);
             camera.position.copy(boneWorldPos);
+            
+            // 旋轉跟隨
+            const boneWorldQuat = new THREE.Quaternion();
+            boundBone.getWorldQuaternion(boneWorldQuat);
+            camera.quaternion.copy(boneWorldQuat);
         }
     });
 
