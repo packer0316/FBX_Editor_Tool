@@ -10,4 +10,7 @@ export type { SpineLoadParams, SpineAnimationListener } from './SpineRuntimeAdap
 export { SpineCanvasRenderer, createSpineCanvasRenderer } from './SpineCanvasRenderer';
 export type { SpineRenderOptions } from './SpineCanvasRenderer';
 
+export { SpineWebGLRenderer, createSpineWebGLRenderer } from './SpineWebGLRenderer';
+export type { SpineRenderOptions as SpineWebGLRenderOptions, SpineFitMode } from './SpineWebGLRenderer';
+
 

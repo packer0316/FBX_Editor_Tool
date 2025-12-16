@@ -13,6 +13,8 @@
 
 // 載入 spine-runtime.js（會自動暴露 spine 到 window/globalThis）
 import './spine-runtime.js';
+// 載入 WebGL 模組
+import './webgl/spine-webgl.js';
 
 // 確保 TypeScript 知道 spine 是全域變數
 declare global {
@@ -41,10 +43,31 @@ declare global {
     TextureRegion: any;
     Utils: any;
     Color: any;
+    Vector2: any;
+    Texture: any;
+    TextureFilter: any;
+    TextureWrap: any;
+    BlendMode: any;
     // Canvas module
     canvas: {
       CanvasTexture: any;
       SkeletonRenderer: any;
+    };
+    // WebGL module
+    webgl: {
+      ManagedWebGLRenderingContext: any;
+      GLTexture: any;
+      Shader: any;
+      Mesh: any;
+      PolygonBatcher: any;
+      SkeletonRenderer: any;
+      Matrix4: any;
+      Vector3: any;
+      VertexAttribute: any;
+      Position2Attribute: any;
+      ColorAttribute: any;
+      TexCoordAttribute: any;
+      Color2Attribute: any;
     };
     // Attachments
     RegionAttachment: any;
