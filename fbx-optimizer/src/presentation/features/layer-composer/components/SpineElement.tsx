@@ -2,13 +2,13 @@
  * SpineElement - Spine 動畫元素組件
  * 
  * 在 2D Layer 中渲染 Spine 骨架動畫。
- * 使用 WebGL 進行渲染，正確處理 Additive 混合模式。
+ * 使用 Canvas 2D API 進行渲染。
  */
 
 import React, { useRef, useEffect, useCallback, useState, memo } from 'react';
 import type { SpineElement2D } from '../../../../domain/value-objects/Element2D';
 import { getSpineRuntimeAdapter } from '../../../../infrastructure/spine/SpineRuntimeAdapter';
-import { createSpineWebGLRenderer, type SpineWebGLRenderer } from '../../../../infrastructure/spine/SpineWebGLRenderer';
+import { createSpineCanvasRenderer, type SpineCanvasRenderer } from '../../../../infrastructure/spine/SpineCanvasRenderer';
 
 // ============================================================================
 // 類型定義
@@ -42,7 +42,7 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
   onUpdate,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rendererRef = useRef<SpineWebGLRenderer | null>(null);
+  const rendererRef = useRef<SpineCanvasRenderer | null>(null);
   const animationFrameRef = useRef<number>();
   const lastTimeRef = useRef<number>(0);
   const [isLoaded, setIsLoaded] = useState(false);
@@ -78,7 +78,7 @@ export const SpineElement: React.FC<SpineElementProps> = memo(({
       canvas.width = displayWidth;
       canvas.height = displayHeight;
 
-      rendererRef.current = createSpineWebGLRenderer(canvas);
+      rendererRef.current = createSpineCanvasRenderer(canvas);
 
       const adapter = getSpineRuntimeAdapter();
       if (adapter.has(element.spineInstanceId)) {
