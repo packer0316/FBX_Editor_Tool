@@ -48,7 +48,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   isLocked,
   models = [],
 }) => {
-  const { ui, selectClip, removeClip, moveClip, tracks, updateClip } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline } = useDirectorStore();
   const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -65,6 +65,18 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     const instance = spineInstances.get(clip.spineInstanceId);
     return instance?.skeletonInfo.skins ?? [];
   }, [clip.sourceType, clip.spineInstanceId, spineInstances]);
+  
+  // 計算 hover tooltip 文字
+  const tooltipText = useMemo(() => {
+    const durationSeconds = (clip.sourceAnimationDuration / timeline.fps).toFixed(2);
+    let text = `${clip.sourceModelName} - ${clip.sourceAnimationName}\n時長：${clip.sourceAnimationDuration} 幀 (${durationSeconds} 秒)`;
+    
+    if (clip.sourceType === 'spine' && clip.spineSkin) {
+      text += `\nSkin：${clip.spineSkin}`;
+    }
+    
+    return text;
+  }, [clip.sourceModelName, clip.sourceAnimationName, clip.sourceAnimationDuration, clip.sourceType, clip.spineSkin, timeline.fps]);
   
   // Marker hover tooltip 狀態
   const [hoveredTooltip, setHoveredTooltip] = useState<{
@@ -314,6 +326,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       <div
         role="button"
         tabIndex={0}
+        title={tooltipText}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onMouseDown={handleMouseDown}
