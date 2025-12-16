@@ -26,6 +26,7 @@ interface TimelineEditorProps {
 
 export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const headerContainerRef = useRef<HTMLDivElement>(null);
   const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame } = useDirectorStore();
   const loopRegion = useLoopRegion();
   
@@ -71,11 +72,17 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
     
     // 使用者滾動，更新 Store
     setScrollOffset(target.scrollLeft, target.scrollTop);
+    
+    // 同步左側 Track Headers 的垂直滾動
+    if (headerContainerRef.current) {
+      headerContainerRef.current.scrollTop = target.scrollTop;
+    }
   }, [setScrollOffset]);
   
   // 同步 Store scrollOffset → DOM scrollLeft/Top
   useEffect(() => {
     const container = containerRef.current;
+    const headerContainer = headerContainerRef.current;
     if (!container) return;
     
     const needUpdateX = Math.abs(container.scrollLeft - ui.scrollOffsetX) > 1;
@@ -89,7 +96,11 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
       
       // 同步到 DOM
       if (needUpdateX) container.scrollLeft = ui.scrollOffsetX;
-      if (needUpdateY) container.scrollTop = ui.scrollOffsetY;
+      if (needUpdateY) {
+        container.scrollTop = ui.scrollOffsetY;
+        // 同步左側 Track Headers
+        if (headerContainer) headerContainer.scrollTop = ui.scrollOffsetY;
+      }
     }
   }, [ui.scrollOffsetX, ui.scrollOffsetY]);
 
@@ -330,10 +341,23 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
 
       {/* 主體：Track Header + 軌道內容 */}
       <div className="flex-1 flex overflow-hidden">
-        {/* 左側：Track Headers（可調整寬度） */}
+        {/* 左側：Track Headers（可調整寬度，與右側同步垂直滾動） */}
         <div 
-          className="flex-shrink-0 bg-gray-800/50 overflow-y-auto relative"
-          style={{ width: headerWidth }}
+          ref={headerContainerRef}
+          className="flex-shrink-0 bg-gray-800/50 overflow-y-scroll overflow-x-hidden relative scrollbar-hide"
+          style={{ 
+            width: headerWidth,
+            // 隱藏滾動條但保持滾動功能
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+          onScroll={(e) => {
+            // 當左側被滾動時，同步右側
+            const target = e.target as HTMLDivElement;
+            if (containerRef.current && Math.abs(containerRef.current.scrollTop - target.scrollTop) > 1) {
+              containerRef.current.scrollTop = target.scrollTop;
+            }
+          }}
         >
           {tracks.map(track => (
             <TrackRow
