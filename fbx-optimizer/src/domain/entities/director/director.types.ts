@@ -79,8 +79,15 @@ export interface DirectorClip {
   /** 起始幀 */
   startFrame: number;
   
-  /** 結束幀（自動計算：startFrame + sourceAnimationDuration - 1） */
+  /** 結束幀（自動計算：startFrame + 有效長度 - 1） */
   endFrame: number;
+  
+  // 剪裁設定（Trim）
+  /** 剪裁入點（從原始動畫的第幾幀開始播放，預設 0） */
+  trimStart: number;
+  
+  /** 剪裁出點（到原始動畫的第幾幀結束，預設為 sourceAnimationDuration - 1） */
+  trimEnd: number;
   
   // 進階設定（未來擴充）
   /** 播放速度（預設 1.0） */
