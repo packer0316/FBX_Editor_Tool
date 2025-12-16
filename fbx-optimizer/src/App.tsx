@@ -1272,9 +1272,11 @@ function App() {
     
     if (!layer || !element || element.locked) return;
     
-    // 如果是 Spine 元素，清理 Spine 實例
+    // 如果是 Spine 元素，清理 Spine 實例和 Director clips
     if (isSpineElement(element) && element.spineInstanceId) {
       removeSpineInstance(element.spineInstanceId);
+      // 清理 Director Mode 中該 Spine 的所有 Clips
+      useDirectorStore.getState().removeClipsByModelId(element.spineInstanceId);
     }
     
     // 移除元素

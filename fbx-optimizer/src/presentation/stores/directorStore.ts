@@ -73,6 +73,9 @@ interface DirectorState {
   
   // UI 狀態
   ui: DirectorUIState;
+  
+  // 剪貼簿（複製的 Clip）
+  clipboardClip: DirectorClip | null;
 }
 
 interface DirectorActions {
@@ -91,7 +94,10 @@ interface DirectorActions {
   addClip: (params: CreateClipParams) => DirectorClip | null;
   moveClip: (params: MoveClipParams) => boolean;
   removeClip: (clipId: string) => void;
-  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut'>>) => void;
+  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin' | 'trimStart' | 'trimEnd'>>) => void;
+  trimClip: (clipId: string, side: 'start' | 'end', frameDelta: number) => void;
+  copyClip: (clipId: string) => void;
+  pasteClip: (trackId: string, startFrame: number) => DirectorClip | null;
   
   // 播放控制
   play: () => void;
@@ -166,6 +172,7 @@ const initialState: DirectorState = {
   timeline: initialTimelineState,
   tracks: [],
   ui: initialUIState,
+  clipboardClip: null,
 };
 
 // ============================================================================
@@ -194,18 +201,17 @@ export const useDirectorStore = create<DirectorStore>()(
       enterDirectorMode: () => {
         const { tracks } = get();
         
-        // 如果沒有 track，自動創建一個預設 track
+        // 如果沒有 track，自動創建 4 個預設 track
         let newTracks = tracks;
         if (tracks.length === 0) {
-          const defaultTrack: DirectorTrack = {
+          newTracks = Array.from({ length: 4 }, (_, i) => ({
             id: generateId(),
-            name: 'Track 1',
-            order: 0,
+            name: `Track ${i + 1}`,
+            order: i,
             isLocked: false,
             isMuted: false,
             clips: [],
-          };
-          newTracks = [defaultTrack];
+          }));
         }
         
         set(
@@ -322,6 +328,8 @@ export const useDirectorStore = create<DirectorStore>()(
           sourceAnimationDuration: params.sourceAnimationDuration,
           startFrame: params.startFrame,
           endFrame: params.startFrame + params.sourceAnimationDuration - 1,
+          trimStart: 0,
+          trimEnd: params.sourceAnimationDuration - 1,
           speed: 1.0,
           loop: false,
           blendIn: 0,
@@ -468,6 +476,127 @@ export const useDirectorStore = create<DirectorStore>()(
           undefined,
           'updateClip'
         );
+      },
+      
+      trimClip: (clipId: string, side: 'start' | 'end', frameDelta: number) => {
+        const { tracks } = get();
+        
+        // 找到要剪裁的 clip
+        let targetClip: DirectorClip | null = null;
+        for (const track of tracks) {
+          const clip = track.clips.find((c) => c.id === clipId);
+          if (clip) {
+            targetClip = clip;
+            break;
+          }
+        }
+        
+        if (!targetClip) return;
+        
+        // 計算新的 trim 值
+        let newTrimStart = targetClip.trimStart;
+        let newTrimEnd = targetClip.trimEnd;
+        let newStartFrame = targetClip.startFrame;
+        let newEndFrame = targetClip.endFrame;
+        
+        if (side === 'start') {
+          // 剪裁入點：調整 trimStart 和 startFrame
+          newTrimStart = Math.max(0, Math.min(targetClip.trimStart + frameDelta, targetClip.trimEnd - 1));
+          const trimDelta = newTrimStart - targetClip.trimStart;
+          newStartFrame = targetClip.startFrame + trimDelta;
+          // endFrame 不變，因為是從左邊剪裁
+        } else {
+          // 剪裁出點：調整 trimEnd 和 endFrame
+          newTrimEnd = Math.max(targetClip.trimStart + 1, Math.min(targetClip.trimEnd + frameDelta, targetClip.sourceAnimationDuration - 1));
+          const trimDelta = newTrimEnd - targetClip.trimEnd;
+          newEndFrame = targetClip.endFrame + trimDelta;
+        }
+        
+        // 確保 startFrame 不會小於 0
+        if (newStartFrame < 0) {
+          const offset = -newStartFrame;
+          newStartFrame = 0;
+          newTrimStart = targetClip.trimStart + offset;
+        }
+        
+        set(
+          (state) => ({
+            tracks: state.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.map((c) =>
+                c.id === clipId
+                  ? {
+                      ...c,
+                      trimStart: newTrimStart,
+                      trimEnd: newTrimEnd,
+                      startFrame: newStartFrame,
+                      endFrame: newEndFrame,
+                    }
+                  : c
+              ),
+            })),
+          }),
+          undefined,
+          'trimClip'
+        );
+      },
+      
+      copyClip: (clipId: string) => {
+        const clip = get().getClipById(clipId);
+        if (clip) {
+          set(
+            { clipboardClip: { ...clip } },
+            undefined,
+            'copyClip'
+          );
+        }
+      },
+      
+      pasteClip: (trackId: string, startFrame: number) => {
+        const { clipboardClip, tracks, timeline } = get();
+        if (!clipboardClip) return null;
+        
+        const track = tracks.find((t) => t.id === trackId);
+        if (!track || track.isLocked) return null;
+        
+        // 計算剪裁後的有效長度
+        const effectiveDuration = (clipboardClip.trimEnd ?? clipboardClip.sourceAnimationDuration - 1) - (clipboardClip.trimStart ?? 0) + 1;
+        
+        // 建立新的 clip（複製所有屬性，生成新 ID）
+        const newClip: DirectorClip = {
+          ...clipboardClip,
+          id: generateId(),
+          trackId,
+          startFrame,
+          endFrame: startFrame + effectiveDuration - 1,
+        };
+        
+        // 自動擴展時間軸（留 10% 緩衝空間）
+        const newEndFrame = newClip.endFrame;
+        const minTotalFrames = Math.ceil(newEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
+        set(
+          (state) => ({
+            tracks: state.tracks.map((t) =>
+              t.id === trackId
+                ? { ...t, clips: [...t.clips, newClip] }
+                : t
+            ),
+            timeline: {
+              ...state.timeline,
+              totalFrames: newTotalFrames,
+            },
+            ui: {
+              ...state.ui,
+              selectedClipId: newClip.id,
+            },
+          }),
+          undefined,
+          'pasteClip'
+        );
+        
+        return newClip;
       },
       
       // ========================================

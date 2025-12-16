@@ -34,6 +34,9 @@ export function secondsToFrame(seconds: number, fps: number = DEFAULT_FPS): numb
  * @param clip - 片段
  * @param fps - 幀率
  * @returns 局部時間結果
+ * 
+ * 注意：localTime 會考慮 trimStart 偏移，
+ * 例如 trimStart=30 時，clip 開始播放時 localTime 會是 1.0 秒（30/30fps）
  */
 export function getClipLocalTime(
   globalFrame: number,
@@ -50,8 +53,15 @@ export function getClipLocalTime(
     };
   }
   
-  const localFrame = globalFrame - clip.startFrame;
-  const localTime = frameToSeconds(localFrame, fps);
+  // 計算在 clip 內的相對幀數
+  const frameInClip = globalFrame - clip.startFrame;
+  
+  // 加上 trimStart 偏移，得到原始動畫中的實際幀數
+  const trimStart = clip.trimStart ?? 0;
+  const actualFrame = frameInClip + trimStart;
+  
+  // 轉換為秒數
+  const localTime = frameToSeconds(actualFrame, fps);
   
   return {
     isActive: true,
