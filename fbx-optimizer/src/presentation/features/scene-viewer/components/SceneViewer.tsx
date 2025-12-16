@@ -304,6 +304,13 @@ const Model = forwardRef<ModelRef, ModelProps>(
         useEffect(() => {
             if (model) {
                 mixerRef.current = new THREE.AnimationMixer(model);
+                
+                // 禁用視錐體剔除，避免相機綁定骨骼時模型因 bounding box 未更新而消失
+                model.traverse((child) => {
+                    if (child instanceof THREE.Mesh) {
+                        child.frustumCulled = false;
+                    }
+                });
             }
             return () => {
                 mixerRef.current?.stopAllAction();
