@@ -27,7 +27,7 @@ interface TimelineEditorProps {
 export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const headerContainerRef = useRef<HTMLDivElement>(null);
-  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame } = useDirectorStore();
+  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame, copyClip, pasteClip, clipboardClip, removeClip, getClipById } = useDirectorStore();
   const loopRegion = useLoopRegion();
   
   // 軌道名稱欄位寬度狀態
@@ -190,6 +190,48 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
       if (toastTimeoutRef.current) clearTimeout(toastTimeoutRef.current);
     };
   }, []);
+  
+  // 全域鍵盤快捷鍵（Ctrl+C/V、Delete）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 如果焦點在輸入框內，不處理快捷鍵
+      const activeElement = document.activeElement;
+      if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
+        return;
+      }
+      
+      // Ctrl+C / Cmd+C：複製選中的 clip
+      if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+        if (ui.selectedClipId) {
+          e.preventDefault();
+          copyClip(ui.selectedClipId);
+        }
+      }
+      
+      // Ctrl+V / Cmd+V：貼上 clip（緊接在原片段後方）
+      if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+        if (clipboardClip && ui.selectedClipId) {
+          e.preventDefault();
+          const selectedClip = getClipById(ui.selectedClipId);
+          if (selectedClip) {
+            const pasteFrame = selectedClip.endFrame + 1;
+            pasteClip(selectedClip.trackId, pasteFrame);
+          }
+        }
+      }
+      
+      // Delete / Backspace：刪除選中的 clip
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (ui.selectedClipId) {
+          e.preventDefault();
+          removeClip(ui.selectedClipId);
+        }
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [ui.selectedClipId, clipboardClip, copyClip, pasteClip, removeClip, getClipById]);
 
   // 縮放按鈕處理（TODO-4: 使用固定倍率縮放）
   const handleZoomIn = useCallback(() => {

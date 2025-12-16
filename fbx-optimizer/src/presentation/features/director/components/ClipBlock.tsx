@@ -4,7 +4,7 @@
 
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Bone, Trash2, Palette, Check } from 'lucide-react';
+import { Box, Bone, Trash2, Palette, Check, Copy, Clipboard } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { useSpineStore } from '../../../stores/spineStore';
 import type { DirectorClip } from '../../../../domain/entities/director/director.types';
@@ -48,7 +48,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   isLocked,
   models = [],
 }) => {
-  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline, copyClip, pasteClip, clipboardClip } = useDirectorStore();
   const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -223,7 +223,22 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     if (e.key === 'Delete' || e.key === 'Backspace') {
       removeClip(clip.id);
     }
-  }, [removeClip, clip.id]);
+    
+    // Ctrl+C 或 Cmd+C：複製 clip
+    if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+      e.preventDefault();
+      copyClip(clip.id);
+    }
+    
+    // Ctrl+V 或 Cmd+V：貼上 clip（緊接在原片段後方）
+    if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+      e.preventDefault();
+      if (clipboardClip) {
+        const pasteFrame = clip.endFrame + 1;
+        pasteClip(clip.trackId, pasteFrame);
+      }
+    }
+  }, [removeClip, clip.id, copyClip, clipboardClip, pasteClip, clip.trackId, clip.endFrame]);
 
   // 右鍵選單處理
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
@@ -248,6 +263,19 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     removeClip(clip.id);
     closeContextMenu();
   }, [removeClip, clip.id, closeContextMenu]);
+  
+  const handleCopyClip = useCallback(() => {
+    copyClip(clip.id);
+    closeContextMenu();
+  }, [copyClip, clip.id, closeContextMenu]);
+  
+  const handlePasteClipAtMouse = useCallback(() => {
+    if (!clipboardClip) return;
+    // 計算滑鼠右鍵位置對應的幀數
+    const mouseFrame = Math.round(contextMenu.x / pixelsPerFrame);
+    pasteClip(clip.trackId, mouseFrame);
+    closeContextMenu();
+  }, [clipboardClip, contextMenu.x, pixelsPerFrame, pasteClip, clip.trackId, closeContextMenu]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (isLocked || e.button !== 0) return;
@@ -500,6 +528,33 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
                 <div className="h-px bg-white/10 my-1" />
               </>
             )}
+            
+            {/* 複製片段 */}
+            <button
+              onClick={handleCopyClip}
+              className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2"
+            >
+              <Copy size={12} />
+              <span>複製動畫</span>
+              <span className="ml-auto text-gray-500 text-[10px]">Ctrl+C</span>
+            </button>
+            
+            {/* 貼上片段 */}
+            <button
+              onClick={handlePasteClipAtMouse}
+              disabled={!clipboardClip}
+              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                clipboardClip 
+                  ? 'text-gray-300 hover:bg-white/10' 
+                  : 'text-gray-600 cursor-not-allowed'
+              }`}
+            >
+              <Clipboard size={12} />
+              <span>貼上動畫</span>
+              <span className="ml-auto text-gray-500 text-[10px]">Ctrl+V</span>
+            </button>
+            
+            <div className="h-px bg-white/10 my-1" />
             
             {/* 刪除片段 */}
             <button

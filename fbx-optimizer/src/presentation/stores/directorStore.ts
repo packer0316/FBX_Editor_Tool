@@ -73,6 +73,9 @@ interface DirectorState {
   
   // UI 狀態
   ui: DirectorUIState;
+  
+  // 剪貼簿（複製的 Clip）
+  clipboardClip: DirectorClip | null;
 }
 
 interface DirectorActions {
@@ -92,6 +95,8 @@ interface DirectorActions {
   moveClip: (params: MoveClipParams) => boolean;
   removeClip: (clipId: string) => void;
   updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin'>>) => void;
+  copyClip: (clipId: string) => void;
+  pasteClip: (trackId: string, startFrame: number) => DirectorClip | null;
   
   // 播放控制
   play: () => void;
@@ -166,6 +171,7 @@ const initialState: DirectorState = {
   timeline: initialTimelineState,
   tracks: [],
   ui: initialUIState,
+  clipboardClip: null,
 };
 
 // ============================================================================
@@ -468,6 +474,61 @@ export const useDirectorStore = create<DirectorStore>()(
           undefined,
           'updateClip'
         );
+      },
+      
+      copyClip: (clipId: string) => {
+        const clip = get().getClipById(clipId);
+        if (clip) {
+          set(
+            { clipboardClip: { ...clip } },
+            undefined,
+            'copyClip'
+          );
+        }
+      },
+      
+      pasteClip: (trackId: string, startFrame: number) => {
+        const { clipboardClip, tracks, timeline } = get();
+        if (!clipboardClip) return null;
+        
+        const track = tracks.find((t) => t.id === trackId);
+        if (!track || track.isLocked) return null;
+        
+        // 建立新的 clip（複製所有屬性，生成新 ID）
+        const newClip: DirectorClip = {
+          ...clipboardClip,
+          id: generateId(),
+          trackId,
+          startFrame,
+          endFrame: startFrame + clipboardClip.sourceAnimationDuration - 1,
+        };
+        
+        // 自動擴展時間軸（留 10% 緩衝空間）
+        const newEndFrame = newClip.endFrame;
+        const minTotalFrames = Math.ceil(newEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
+        set(
+          (state) => ({
+            tracks: state.tracks.map((t) =>
+              t.id === trackId
+                ? { ...t, clips: [...t.clips, newClip] }
+                : t
+            ),
+            timeline: {
+              ...state.timeline,
+              totalFrames: newTotalFrames,
+            },
+            ui: {
+              ...state.ui,
+              selectedClipId: newClip.id,
+            },
+          }),
+          undefined,
+          'pasteClip'
+        );
+        
+        return newClip;
       },
       
       // ========================================

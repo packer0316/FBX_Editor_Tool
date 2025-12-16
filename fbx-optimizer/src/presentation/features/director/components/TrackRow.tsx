@@ -6,7 +6,7 @@
 
 import React, { memo, useCallback, useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Trash2, Lock, Unlock, Eye, EyeOff, Edit3, Copy, ArrowUp, ArrowDown } from 'lucide-react';
+import { Trash2, Lock, Unlock, Eye, EyeOff, Edit3, Copy, ArrowUp, ArrowDown, Clipboard } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ClipBlock } from './ClipBlock';
 import { useDragAndDrop } from '../hooks/useDragAndDrop';
@@ -39,7 +39,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   containerWidth,
   models = [],
 }) => {
-  const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui } = useDirectorStore();
+  const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui, clipboardClip, pasteClip } = useDirectorStore();
   
   // TODO-7: 虛擬化渲染 - 只渲染可視區域的 Clips
   const visibleClips = useMemo(() => {
@@ -141,6 +141,19 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
     }
     closeContextMenu();
   }, [ui.selectedClipId, removeClip, closeContextMenu]);
+  
+  // 貼上動畫到滑鼠位置
+  const handlePasteClipAtMouse = useCallback(() => {
+    if (!clipboardClip || !trackRef.current || track.isLocked) return;
+    
+    // 計算滑鼠右鍵位置相對於 track 起點的偏移
+    const trackRect = trackRef.current.getBoundingClientRect();
+    const mouseX = contextMenu.x - trackRect.left + (scrollOffsetX ?? 0);
+    const pasteFrame = Math.max(0, Math.round(mouseX / pixelsPerFrame));
+    
+    pasteClip(track.id, pasteFrame);
+    closeContextMenu();
+  }, [clipboardClip, track.id, track.isLocked, contextMenu.x, scrollOffsetX, pixelsPerFrame, pasteClip, closeContextMenu]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     handleTrackDragOver(e, track.id);
@@ -241,6 +254,19 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
               >
                 <Copy size={12} />
                 <span>複製軌道</span>
+              </button>
+              <button
+                onClick={handlePasteClipAtMouse}
+                disabled={!clipboardClip || track.isLocked}
+                className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                  clipboardClip && !track.isLocked 
+                    ? 'text-gray-300 hover:bg-white/10' 
+                    : 'text-gray-600 cursor-not-allowed'
+                }`}
+              >
+                <Clipboard size={12} />
+                <span>貼上動畫</span>
+                <span className="ml-auto text-gray-500 text-[10px]">Ctrl+V</span>
               </button>
               <div className="h-px bg-white/10 my-1" />
               <button
@@ -369,6 +395,20 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
             >
               {track.isLocked ? <Unlock size={12} /> : <Lock size={12} />}
               <span>{track.isLocked ? '解鎖' : '鎖定'}</span>
+            </button>
+            <div className="h-px bg-white/10 my-1" />
+            <button
+              onClick={handlePasteClipAtMouse}
+              disabled={!clipboardClip || track.isLocked}
+              className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
+                clipboardClip && !track.isLocked 
+                  ? 'text-gray-300 hover:bg-white/10' 
+                  : 'text-gray-600 cursor-not-allowed'
+              }`}
+            >
+              <Clipboard size={12} />
+              <span>貼上動畫</span>
+              <span className="ml-auto text-gray-500 text-[10px]">Ctrl+V</span>
             </button>
             <div className="h-px bg-white/10 my-1" />
             <button
