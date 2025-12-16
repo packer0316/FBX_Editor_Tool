@@ -63,6 +63,9 @@ export interface DirectorClip {
   /** Spine 元素 ID */
   spineElementId?: string;
   
+  /** Spine 播放時使用的 Skin 名稱（sourceType === 'spine' 時使用） */
+  spineSkin?: string;
+  
   /** 動作名稱（來自 IdentifiableClip 的 displayName） */
   sourceAnimationName: string;
   

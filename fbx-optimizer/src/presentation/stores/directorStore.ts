@@ -91,7 +91,7 @@ interface DirectorActions {
   addClip: (params: CreateClipParams) => DirectorClip | null;
   moveClip: (params: MoveClipParams) => boolean;
   removeClip: (clipId: string) => void;
-  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut'>>) => void;
+  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin'>>) => void;
   
   // 播放控制
   play: () => void;

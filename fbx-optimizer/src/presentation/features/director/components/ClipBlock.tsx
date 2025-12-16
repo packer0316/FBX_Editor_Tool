@@ -4,8 +4,9 @@
 
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Bone } from 'lucide-react';
+import { Box, Bone, Trash2, Palette, Check } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { useSpineStore } from '../../../stores/spineStore';
 import type { DirectorClip } from '../../../../domain/entities/director/director.types';
 import { snapToGrid, snapToClipEdges } from '../../../../utils/director/directorUtils';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
@@ -34,17 +35,36 @@ interface ClipBlockProps {
   models?: ModelInstance[];
 }
 
+// 右鍵選單狀態類型
+interface ContextMenuState {
+  visible: boolean;
+  x: number;
+  y: number;
+}
+
 export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   clip,
   pixelsPerFrame,
   isLocked,
   models = [],
 }) => {
-  const { ui, selectClip, removeClip, moveClip, tracks } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, tracks, updateClip } = useDirectorStore();
+  const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
   const dragStartX = useRef(0);
   const originalStartFrame = useRef(clip.startFrame);
+  
+  // 右鍵選單狀態
+  const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0 });
+  const [showSkinSubmenu, setShowSkinSubmenu] = useState(false);
+  
+  // 取得 Spine 實例的 skins 列表
+  const spineSkins = useMemo(() => {
+    if (clip.sourceType !== 'spine' || !clip.spineInstanceId) return [];
+    const instance = spineInstances.get(clip.spineInstanceId);
+    return instance?.skeletonInfo.skins ?? [];
+  }, [clip.sourceType, clip.spineInstanceId, spineInstances]);
   
   // Marker hover tooltip 狀態
   const [hoveredTooltip, setHoveredTooltip] = useState<{
@@ -193,6 +213,30 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     }
   }, [removeClip, clip.id]);
 
+  // 右鍵選單處理
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    selectClip(clip.id);
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY });
+    setShowSkinSubmenu(false);
+  }, [selectClip, clip.id]);
+  
+  const closeContextMenu = useCallback(() => {
+    setContextMenu({ visible: false, x: 0, y: 0 });
+    setShowSkinSubmenu(false);
+  }, []);
+  
+  const handleSelectSkin = useCallback((skinName: string) => {
+    updateClip(clip.id, { spineSkin: skinName });
+    closeContextMenu();
+  }, [updateClip, clip.id, closeContextMenu]);
+  
+  const handleDeleteClip = useCallback(() => {
+    removeClip(clip.id);
+    closeContextMenu();
+  }, [removeClip, clip.id, closeContextMenu]);
+
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (isLocked || e.button !== 0) return;
     
@@ -273,6 +317,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onMouseDown={handleMouseDown}
+        onContextMenu={handleContextMenu}
         className={`absolute top-1 bottom-1 rounded px-2 flex flex-col justify-center overflow-hidden select-none
           ${isSelected ? 'ring-2 ring-white/50' : ''}
           ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab'}
@@ -384,6 +429,75 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
             <div className="w-3 h-3 bg-gray-900/95 transform rotate-45 self-center -mt-1 border-r border-b border-gray-700" />
           </div>
         </div>,
+        document.body
+      )}
+      
+      {/* 右鍵選單（使用 Portal 渲染到 body） */}
+      {contextMenu.visible && createPortal(
+        <>
+          {/* 背景遮罩 */}
+          <div 
+            className="fixed inset-0 z-[500]" 
+            onClick={closeContextMenu}
+            onContextMenu={(e) => { e.preventDefault(); closeContextMenu(); }}
+          />
+          {/* 選單 */}
+          <div
+            className="fixed bg-gray-800/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl py-1 z-[501] min-w-[160px]"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            {/* Spine Skin 選擇（僅 Spine 類型顯示） */}
+            {clip.sourceType === 'spine' && spineSkins.length > 0 && (
+              <>
+                <div
+                  className="relative"
+                  onMouseEnter={() => setShowSkinSubmenu(true)}
+                  onMouseLeave={() => setShowSkinSubmenu(false)}
+                >
+                  <button
+                    className="w-full px-3 py-1.5 text-left text-xs text-gray-300 hover:bg-white/10 flex items-center gap-2 justify-between"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Palette size={12} />
+                      <span>選擇 Skin</span>
+                    </div>
+                    <span className="text-gray-500">▶</span>
+                  </button>
+                  
+                  {/* Skin 子選單 */}
+                  {showSkinSubmenu && (
+                    <div
+                      className="absolute left-full top-0 ml-1 bg-gray-800/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl py-1 min-w-[140px] max-h-[300px] overflow-y-auto"
+                    >
+                      {spineSkins.map((skin) => (
+                        <button
+                          key={skin.name}
+                          onClick={() => handleSelectSkin(skin.name)}
+                          className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center gap-2 ${
+                            clip.spineSkin === skin.name ? 'text-amber-400' : 'text-gray-300'
+                          }`}
+                        >
+                          {clip.spineSkin === skin.name && <Check size={12} />}
+                          <span className={clip.spineSkin === skin.name ? '' : 'ml-5'}>{skin.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="h-px bg-white/10 my-1" />
+              </>
+            )}
+            
+            {/* 刪除片段 */}
+            <button
+              onClick={handleDeleteClip}
+              className="w-full px-3 py-1.5 text-left text-xs text-red-400 hover:bg-red-500/10 flex items-center gap-2"
+            >
+              <Trash2 size={12} />
+              <span>刪除動畫</span>
+            </button>
+          </div>
+        </>,
         document.body
       )}
     </>

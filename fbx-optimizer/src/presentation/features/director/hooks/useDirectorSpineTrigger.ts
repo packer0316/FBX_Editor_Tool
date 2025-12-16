@@ -30,6 +30,8 @@ interface SpineClipState {
   lastLocalTime: number;
   /** 上一次的動畫名稱 */
   lastAnimation: string | null;
+  /** 上一次的 Skin 名稱 */
+  lastSkin: string | null;
 }
 
 /**
@@ -91,6 +93,7 @@ export function useDirectorSpineTrigger({
           wasPlaying: false,
           lastLocalTime: 0,
           lastAnimation: null,
+          lastSkin: null,
         };
 
         // 計算是否在 Clip 範圍內
@@ -108,6 +111,16 @@ export function useDirectorSpineTrigger({
 
         if (isInRange) {
           // 在 Clip 範圍內
+          
+          // 如果 Skin 不同，切換 Skin（優先處理 Skin，再處理動畫）
+          const targetSkin = clip.spineSkin ?? null;
+          if (clipState.lastSkin !== targetSkin && targetSkin) {
+            console.log('[SpineTrigger] Switch skin:', targetSkin);
+            adapter.setSkin(spineElement.spineInstanceId, targetSkin);
+            onUpdateRef.current(clip.spineLayerId, clip.spineElementId, {
+              currentSkin: targetSkin,
+            });
+          }
           
           // 如果動畫名稱不同，切換動畫
           if (clipState.lastAnimation !== clip.sourceAnimationId) {
@@ -151,6 +164,7 @@ export function useDirectorSpineTrigger({
             wasPlaying: isPlaying,
             lastLocalTime: localTime,
             lastAnimation: clip.sourceAnimationId,
+            lastSkin: clip.spineSkin ?? null,
           });
         } else {
           // 不在 Clip 範圍內，暫停
@@ -165,6 +179,7 @@ export function useDirectorSpineTrigger({
               wasPlaying: false,
               lastLocalTime: 0,
               lastAnimation: null,
+              lastSkin: null,
             });
           }
         }
