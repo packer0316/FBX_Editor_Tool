@@ -343,6 +343,33 @@ const Layer2DRendererComponent: React.FC<Layer2DRendererProps> = ({
     });
   }, [resizing, layer.id, layer.children, onUpdateElement]);
 
+  // 滾輪調整 Spine 元素的 scale 縮放
+  const handleWheel = useCallback((e: React.WheelEvent, element: Element2D) => {
+    // 只有 Spine 元素才有 scale 屬性
+    if (!isSpineElement(element)) return;
+    
+    // 只有選中且未鎖定的元素才能縮放
+    const isActive = isActiveLayer && element.id === activeElementId;
+    if (!isActive || element.locked || !onUpdateElement) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // 當前 scale 值
+    const currentScale = element.scale ?? 1;
+    
+    // 縮放步長：向上滾動增加，向下滾動減少
+    const step = 0.05;
+    const delta = e.deltaY < 0 ? step : -step;
+    
+    // 計算新的 scale（限制在 0.1 ~ 3 之間）
+    const newScale = Math.max(0.1, Math.min(3, currentScale + delta));
+
+    onUpdateElement(layer.id, element.id, {
+      scale: Math.round(newScale * 100) / 100,
+    });
+  }, [isActiveLayer, activeElementId, layer.id, onUpdateElement]);
+
   // 全域監聽 mousemove 和 mouseup
   useEffect(() => {
     if (dragging) {
@@ -415,6 +442,7 @@ const Layer2DRendererComponent: React.FC<Layer2DRendererProps> = ({
                 }
               }}
               onMouseDown={(e) => handleMouseDown(e, element)}
+              onWheel={(e) => handleWheel(e, element)}
             >
               {isActive && <AxisIndicator />}
               <SpineElement

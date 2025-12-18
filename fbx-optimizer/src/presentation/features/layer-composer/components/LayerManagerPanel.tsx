@@ -724,8 +724,6 @@ const LayerCard: React.FC<{
   children
 }) => (
   <div
-    draggable
-    onDragStart={() => onDragStart(direction, index)}
     onDragOver={(event) => onDragOver(event, direction, index)}
     onDrop={() => onDrop(direction, index)}
     className={`rounded-xl border px-4 py-3 mb-3 bg-black/30 transition-colors ${
@@ -735,6 +733,24 @@ const LayerCard: React.FC<{
   >
     <div className="flex items-center justify-between gap-3">
       <div className="flex-1 flex items-center gap-2">
+        {/* 拖曳把手：只有從這裡才能開始拖曳排序（避免拖拉滑桿時誤觸整張卡片拖曳） */}
+        <div
+          draggable
+          className="p-1 rounded text-gray-500 hover:text-gray-200 cursor-grab active:cursor-grabbing"
+          title="拖曳排序"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+          onDragStart={(event) => {
+            event.stopPropagation();
+            // 設置拖曳圖像為透明（避免出現整張 UI 被抓起來的殘影）
+            const img = new Image();
+            img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+            event.dataTransfer.setDragImage(img, 0, 0);
+            onDragStart(direction, index);
+          }}
+        >
+          <GripVertical size={16} />
+        </div>
         <button
           type="button"
           className="p-1 rounded transition-colors text-gray-400 hover:text-white hover:bg-white/10"
