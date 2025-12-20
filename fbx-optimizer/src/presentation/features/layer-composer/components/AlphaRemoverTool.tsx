@@ -298,3 +298,4 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
   );
 };
 
+

@@ -1,5 +1,5 @@
 {
-  "generated": "2025-12-16T07:03:03.849Z",
+  "generated": "2025-12-20T07:14:44.838Z",
   "root": {
     "efk": [
       {
@@ -8,10 +8,6 @@
       }
     ],
     "subdirs": {
-      "124": {
-        "efk": [],
-        "subdirs": {}
-      },
       "Boss": {
         "efk": [
           {
@@ -143,14 +139,6 @@
             "path": "Boss/TSTreeTurtle_BigExplosion.efk"
           }
         ],
-        "subdirs": {}
-      },
-      "DDD123": {
-        "efk": [],
-        "subdirs": {}
-      },
-      "new DT3": {
-        "efk": [],
         "subdirs": {}
       },
       "Resources": {

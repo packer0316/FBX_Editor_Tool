@@ -8,7 +8,8 @@ export type ShaderFeatureType =
     | 'dissolve'
     | 'bleach'
     | 'flash'
-    | 'alpha_test';
+    | 'alpha_test'
+    | 'set_texture';
 
 export interface ShaderFeature {
     id: string;

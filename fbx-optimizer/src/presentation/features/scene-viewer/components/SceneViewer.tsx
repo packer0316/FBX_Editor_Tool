@@ -649,8 +649,9 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 const dissolveFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'dissolve');
                 const alphaTestFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'alpha_test');
                 const normalMapFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'normal_map');
+                const setTextureFeature = shaderFeatures.find((f: ShaderFeature) => f.type === 'set_texture' && f.params.texture);
 
-                const shouldUseShader = unlitFeature || baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature;
+                const shouldUseShader = unlitFeature || baseMatcapFeature || addMatcapFeature || rimLightFeature || flashFeature || dissolveFeature || alphaTestFeature || normalMapFeature || setTextureFeature;
 
                 if (!shouldUseShader) {
                     child.material = child.userData.originalMaterial;
@@ -729,6 +730,10 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 );
                 setTextureColorSpace(flashMaskTex, 'linear'); // Set immediately if already loaded
 
+                // Set Texture（更換主貼圖）
+                const setTextureTex = loadTexture(textureLoader, setTextureFeature?.params.texture);
+                setTextureColorSpace(setTextureTex, 'sRGB'); // 主貼圖 → sRGB
+
                 // 🔧 收集所有動態載入的貼圖以便後續清理
                 const dynamicTextures = [
                     baseMatcapTex, baseMatcapMaskTex,
@@ -736,7 +741,8 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     addMatcapTex, addMatcapMaskTex,
                     addMatcapTexR, addMatcapTexG, addMatcapTexB,
                     dissolveTex, normalMapTex,
-                    flashTex, flashMaskTex
+                    flashTex, flashMaskTex,
+                    setTextureTex
                 ].filter((tex): tex is THREE.Texture => tex !== null);
                 loadedTexturesRef.current.push(...dynamicTextures);
 
@@ -782,6 +788,20 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     const mat = originalMaterial as THREE.MeshStandardMaterial;
                     baseTexture = mat.map || null;
                     baseColor = mat.color?.clone() || new THREE.Color(0xffffff);
+                }
+                
+                // 🖼️ Set Texture（更換主貼圖）：如果啟用則替換 baseTexture
+                if (setTextureTex) {
+                    baseTexture = setTextureTex;
+                    // 設置 tiling 和 offset
+                    const tilingX = setTextureFeature?.params.tilingX ?? 1.0;
+                    const tilingY = setTextureFeature?.params.tilingY ?? 1.0;
+                    const offsetX = setTextureFeature?.params.offsetX ?? 0.0;
+                    const offsetY = setTextureFeature?.params.offsetY ?? 0.0;
+                    baseTexture.repeat.set(tilingX, tilingY);
+                    baseTexture.offset.set(offsetX, offsetY);
+                    baseTexture.wrapS = THREE.RepeatWrapping;
+                    baseTexture.wrapT = THREE.RepeatWrapping;
                 }
                 
                 const isSkinnedMesh = (child as any).isSkinnedMesh;

@@ -74,6 +74,13 @@ const AVAILABLE_FEATURES: Omit<ShaderFeature, 'id' | 'expanded' | 'params'>[] = 
         description: '透明度測試 - 硬邊緣透明',
         icon: '🔲',
     },
+    {
+        type: 'set_texture',
+        name: 'Set Texture（更換主貼圖）',
+        description: '替換模型原始貼圖',
+        icon: '🖼️',
+        enabled: true,
+    },
 ];
 
 // 獲取功能的預設參數
@@ -157,6 +164,14 @@ const getDefaultParams = (type: ShaderFeatureType): Record<string, any> => {
             return {
                 threshold: 0.5,
             };
+        case 'set_texture':
+            return {
+                texture: null,      // 主貼圖
+                tilingX: 1.0,       // X 軸平鋪
+                tilingY: 1.0,       // Y 軸平鋪
+                offsetX: 0.0,       // X 軸偏移
+                offsetY: 0.0,       // Y 軸偏移
+            };
         default:
             return {};
     }
@@ -187,6 +202,10 @@ const getParamLabel = (paramName: string): string => {
         'useMaskB': '使用 B 通道',
         'textureR': 'R 通道 Matcap',
         'textureG': 'G 通道 Matcap',
+        'tilingX': 'X 軸平鋪',
+        'tilingY': 'Y 軸平鋪',
+        'offsetX': 'X 軸偏移',
+        'offsetY': 'Y 軸偏移',
         'textureB': 'B 通道 Matcap',
         'strengthR': '強度',
         'strengthG': '強度',
@@ -445,6 +464,8 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             else if (paramName === 'threshold') { min = 0; max = 1; step = 0.01; }
             else if (paramName === 'edgeWidth') { min = 0; max = 0.5; step = 0.01; }
             else if (paramName === 'rotateDelta') { min = 0; max = 6.28; step = 0.1; }
+            else if (paramName === 'tilingX' || paramName === 'tilingY') { min = 0.1; max = 10; step = 0.1; }
+            else if (paramName === 'offsetX' || paramName === 'offsetY') { min = -1; max = 1; step = 0.01; }
 
             const label = getParamLabel(paramName);
             return (
