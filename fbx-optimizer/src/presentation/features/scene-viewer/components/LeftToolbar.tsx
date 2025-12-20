@@ -55,6 +55,12 @@ interface LeftToolbarProps {
     // Performance Monitor
     showPerformanceMonitor: boolean;
     setShowPerformanceMonitor: (show: boolean) => void;
+
+    // Orthographic Camera
+    isOrthographic: boolean;
+    setIsOrthographic: (isOrtho: boolean) => void;
+    orthoZoom: number;
+    setOrthoZoom: (zoom: number) => void;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -97,7 +103,11 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     cameraMoveSpeed,
     setCameraMoveSpeed,
     showPerformanceMonitor,
-    setShowPerformanceMonitor
+    setShowPerformanceMonitor,
+    isOrthographic,
+    setIsOrthographic,
+    orthoZoom,
+    setOrthoZoom
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -311,24 +321,70 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                         </div>
                         <div className="px-4 py-4 space-y-5">
 
-                            {/* FOV Slider */}
+                            {/* Camera Type Toggle */}
                             <div>
-                                <div className="flex justify-between items-center mb-2">
-                                    <label className="text-xs text-gray-400 font-medium">FOV (視野)</label>
-                                    <span className="text-xs text-neon-blue font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">{cameraSettings.fov}°</span>
+                                <label className="text-xs text-gray-400 block mb-2 font-medium">相機類型</label>
+                                <div className="grid grid-cols-2 gap-1.5">
+                                    <button
+                                        onClick={() => setIsOrthographic(false)}
+                                        className={`py-1.5 text-[11px] rounded-md transition-all ${!isOrthographic
+                                            ? 'bg-neon-blue text-white shadow-md shadow-blue-500/20 font-medium'
+                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                                            }`}
+                                    >
+                                        透視
+                                    </button>
+                                    <button
+                                        onClick={() => setIsOrthographic(true)}
+                                        className={`py-1.5 text-[11px] rounded-md transition-all ${isOrthographic
+                                            ? 'bg-neon-blue text-white shadow-md shadow-blue-500/20 font-medium'
+                                            : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-gray-200'
+                                            }`}
+                                    >
+                                        正交
+                                    </button>
                                 </div>
-                                <input
-                                    type="range"
-                                    min="10"
-                                    max="120"
-                                    step="1"
-                                    value={cameraSettings.fov}
-                                    onChange={(e) =>
-                                        setCameraSettings({ ...cameraSettings, fov: parseFloat(e.target.value) })
-                                    }
-                                    className="w-full h-1.5 slider-blue-track appearance-none cursor-pointer rounded-full"
-                                />
                             </div>
+
+                            {/* FOV Slider (透視模式) */}
+                            {!isOrthographic && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="text-xs text-gray-400 font-medium">FOV (視野)</label>
+                                        <span className="text-xs text-neon-blue font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">{cameraSettings.fov}°</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="10"
+                                        max="120"
+                                        step="1"
+                                        value={cameraSettings.fov}
+                                        onChange={(e) =>
+                                            setCameraSettings({ ...cameraSettings, fov: parseFloat(e.target.value) })
+                                        }
+                                        className="w-full h-1.5 slider-blue-track appearance-none cursor-pointer rounded-full"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Zoom Slider (正交模式) */}
+                            {isOrthographic && (
+                                <div>
+                                    <div className="flex justify-between items-center mb-2">
+                                        <label className="text-xs text-gray-400 font-medium">縮放 (Zoom)</label>
+                                        <span className="text-xs text-neon-blue font-mono bg-blue-500/10 px-1.5 py-0.5 rounded">{orthoZoom}</span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="200"
+                                        step="1"
+                                        value={orthoZoom}
+                                        onChange={(e) => setOrthoZoom(parseFloat(e.target.value))}
+                                        className="w-full h-1.5 slider-blue-track appearance-none cursor-pointer rounded-full"
+                                    />
+                                </div>
+                            )}
 
                             {/* Near Plane Input */}
                             <div>
