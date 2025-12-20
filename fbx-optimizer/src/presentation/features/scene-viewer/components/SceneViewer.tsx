@@ -79,6 +79,8 @@ interface SceneViewerProps {
         near: number;
         far: number;
     };
+    isOrthographic?: boolean;
+    orthoZoom?: number;
     boundBone?: THREE.Bone | null;
     isCameraBound?: boolean;
     showGroundPlane?: boolean;
@@ -224,23 +226,82 @@ function EffekseerFrameBridge() {
 function CameraController({
     cameraSettings,
     boundBone,
-    isCameraBound
+    isCameraBound,
+    isOrthographic,
+    orthoZoom
 }: {
     cameraSettings?: { fov: number; near: number; far: number };
     boundBone?: THREE.Bone | null;
     isCameraBound?: boolean;
+    isOrthographic?: boolean;
+    orthoZoom?: number;
 }) {
-    const { camera } = useThree();
+    const { camera, size, set } = useThree();
 
-    // Update camera settings
+    // Update camera settings for perspective camera
     useEffect(() => {
-        if (cameraSettings && camera instanceof THREE.PerspectiveCamera) {
+        if (cameraSettings && camera instanceof THREE.PerspectiveCamera && !isOrthographic) {
             camera.fov = cameraSettings.fov;
             camera.near = cameraSettings.near;
             camera.far = cameraSettings.far;
             camera.updateProjectionMatrix();
         }
-    }, [cameraSettings, camera]);
+    }, [cameraSettings, camera, isOrthographic]);
+
+    // Update camera settings for orthographic camera
+    useEffect(() => {
+        if (camera instanceof THREE.OrthographicCamera && isOrthographic && orthoZoom !== undefined) {
+            const aspect = size.width / size.height;
+            const frustumSize = 10;
+            const zoom = orthoZoom / 10; // 轉換縮放值
+            camera.left = -frustumSize * aspect / zoom;
+            camera.right = frustumSize * aspect / zoom;
+            camera.top = frustumSize / zoom;
+            camera.bottom = -frustumSize / zoom;
+            camera.near = cameraSettings?.near ?? 0.1;
+            camera.far = cameraSettings?.far ?? 1000;
+            camera.updateProjectionMatrix();
+        }
+    }, [camera, isOrthographic, orthoZoom, size, cameraSettings]);
+
+    // 創建正交相機並在模式切換時替換
+    useEffect(() => {
+        if (isOrthographic && camera instanceof THREE.PerspectiveCamera) {
+            // 從透視切換到正交
+            const aspect = size.width / size.height;
+            const frustumSize = 10;
+            const zoom = (orthoZoom ?? 50) / 10;
+            
+            const orthoCamera = new THREE.OrthographicCamera(
+                -frustumSize * aspect / zoom,
+                frustumSize * aspect / zoom,
+                frustumSize / zoom,
+                -frustumSize / zoom,
+                cameraSettings?.near ?? 0.1,
+                cameraSettings?.far ?? 1000
+            );
+            
+            // 複製位置和旋轉
+            orthoCamera.position.copy(camera.position);
+            orthoCamera.quaternion.copy(camera.quaternion);
+            
+            set({ camera: orthoCamera });
+        } else if (!isOrthographic && camera instanceof THREE.OrthographicCamera) {
+            // 從正交切換到透視
+            const perspCamera = new THREE.PerspectiveCamera(
+                cameraSettings?.fov ?? 50,
+                size.width / size.height,
+                cameraSettings?.near ?? 0.1,
+                cameraSettings?.far ?? 1000
+            );
+            
+            // 複製位置和旋轉
+            perspCamera.position.copy(camera.position);
+            perspCamera.quaternion.copy(camera.quaternion);
+            
+            set({ camera: perspCamera });
+        }
+    }, [isOrthographic, camera, set, size, cameraSettings, orthoZoom]);
 
     // Camera bone binding - update camera position and rotation every frame
     useFrame(() => {
@@ -1839,7 +1900,9 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
         loop, 
         onFinish, 
         backgroundColor = '#111827', 
-        cameraSettings, 
+        cameraSettings,
+        isOrthographic = false,
+        orthoZoom = 50,
         boundBone, 
         isCameraBound, 
         showGroundPlane, 
@@ -2286,7 +2349,13 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                     />
                     <directionalLight position={[-10, 5, -5]} intensity={0.6} />
                     <directionalLight position={[0, -5, 0]} intensity={0.4} />
-                    <CameraController cameraSettings={cameraSettings} boundBone={boundBone} isCameraBound={isCameraBound} />
+                    <CameraController 
+                        cameraSettings={cameraSettings} 
+                        boundBone={boundBone} 
+                        isCameraBound={isCameraBound}
+                        isOrthographic={isOrthographic}
+                        orthoZoom={orthoZoom}
+                    />
                     <CameraStateBroadcaster />
                     {showGrid && <Grid args={[30, 30]} sectionColor={gridColor} cellColor={gridCellColor} side={THREE.DoubleSide} />}
 

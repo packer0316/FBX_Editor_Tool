@@ -221,6 +221,10 @@ function App() {
     far: 1000
   });
 
+  // 相機類型：透視 vs 正交
+  const [isOrthographic, setIsOrthographic] = useState(false);
+  const [orthoZoom, setOrthoZoom] = useState(50); // 正交相機縮放（1-100）
+
   // Bone Binding State
   const bones = useBoneExtraction(model);
   const [boneSearchQuery, setBoneSearchQuery] = useState('');
@@ -1362,6 +1366,10 @@ function App() {
           setCameraMoveSpeed={setCameraMoveSpeed}
           showPerformanceMonitor={showPerformanceMonitor}
           setShowPerformanceMonitor={setShowPerformanceMonitor}
+          isOrthographic={isOrthographic}
+          setIsOrthographic={setIsOrthographic}
+          orthoZoom={orthoZoom}
+          setOrthoZoom={setOrthoZoom}
         />}
 
         {/* 左側：3D 預覽區 */}
@@ -1609,6 +1617,8 @@ function App() {
                       onFinish={handleClipFinish}
                       backgroundColor={viewerBackgroundColor}
                       cameraSettings={cameraSettings}
+                      isOrthographic={isOrthographic}
+                      orthoZoom={orthoZoom}
                       boundBone={isCameraBound && selectedBoneUuid ? bones.find((b) => b.uuid === selectedBoneUuid) || null : null}
                       isCameraBound={isCameraBound}
                       keyboardControlsEnabled={keyboardControlsEnabled}
