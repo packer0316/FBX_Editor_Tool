@@ -1,5 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
 import { Palette, Plus, ChevronDown, ChevronRight, X, Image as ImageIcon, Sliders, Check, Trash2, Edit2, ToggleLeft, ToggleRight, Download, Upload, Package } from 'lucide-react';
+import { clsx, type ClassValue } from 'clsx';
+import { twMerge } from 'tailwind-merge';
+
+/**
+ * 類名合併工具
+ */
+function cn(...inputs: ClassValue[]) {
+    return twMerge(clsx(inputs));
+}
+
 import type { ShaderFeature, ShaderFeatureType, ShaderGroup } from '../../../../domain/value-objects/ShaderFeature';
 import { updateShaderGroupById, updateShaderGroupFeatureParam } from '../../../../utils/shader/shaderGroupUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
@@ -408,21 +418,23 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             );
         }
 
-        // Boolean 參數（Checkbox）- 優先檢測，避免 nonColor 被誤判為顏色參數
+        // Boolean 參數（Checkbox）
         if (typeof value === 'boolean') {
             const label = getParamLabel(paramName);
             return (
-                <div key={paramName} className="space-y-1">
-                    <label className="flex items-center gap-2 cursor-pointer group">
+                <div key={paramName} className="flex items-center justify-between py-1 group/param">
+                    <label className="text-[10px] text-gray-500 font-bold tracking-wider uppercase group-hover/param:text-gray-300 transition-colors cursor-pointer" htmlFor={`${groupId}_${feature.id}_${paramName}`}>
+                        {label}
+                    </label>
+                    <label className="relative inline-flex items-center cursor-pointer group flex-shrink-0">
                         <input
                             type="checkbox"
                             checked={value}
                             onChange={(e) => updateFeatureParam(groupId, feature.id, paramName, e.target.checked)}
-                            className="w-4 h-4 bg-black/30 border-2 border-white/20 rounded cursor-pointer checked:bg-purple-600 checked:border-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all"
+                            className="sr-only peer"
                         />
-                        <span className="text-xs text-gray-400 group-hover:text-white transition-colors">
-                            {label}
-                        </span>
+                        {/* 高階儀器開關設計 - 紫色 */}
+                        <div className="w-12 h-6 bg-black/40 border border-white/10 rounded-full peer transition-all duration-500 peer-checked:bg-purple-500/10 peer-checked:border-purple-500/50 relative after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white/10 after:rounded-full after:h-4 after:w-4 after:transition-all after:duration-500 peer-checked:after:translate-x-[24px] peer-checked:after:bg-white peer-checked:after:shadow-[0_0_20px_rgba(168,85,247,0.8),0_0_4px_rgba(168,85,247,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]"></div>
                     </label>
                 </div>
             );
@@ -495,75 +507,94 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
 
     return (
         <div className={`h-full flex flex-col ${theme.panelBg}`}>
-            {/* Header */}
-            <div className={`p-4 border-b ${theme.panelBorder} flex items-center justify-between`}>
-                <div className="flex items-center gap-2">
-                    <Palette className="text-purple-400" size={20} />
-                    <h2 className={`${theme.text} font-semibold`}>Material Shader 工具</h2>
+            {/* Header - 專業儀器感設計 (雙行佈局優化) */}
+            <div className={cn(
+                "pt-5 pb-4 border-b flex flex-col gap-4 relative overflow-hidden",
+                theme.panelBorder,
+                "bg-gradient-to-b from-white/[0.05] to-transparent"
+            )}>
+                {/* 頂部極細高光 */}
+                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
+                
+                {/* 第一排：圖標與主題字 (再縮小) */}
+                <div className="flex items-center gap-2 px-4 relative z-10">
+                    <div className="w-7 h-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.1)] flex-shrink-0">
+                        <Palette className="text-purple-400" size={14} />
+                    </div>
+                    <div className="min-w-0">
+                        <h2 className="text-white text-[10px] font-black tracking-[0.2em] uppercase leading-tight truncate">Material Shader</h2>
+                        <div className="text-[7px] text-gray-500 font-medium tracking-[0.1em] uppercase truncate">System Config</div>
+                    </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                    {/* 匯出/匯入按鈕 */}
-                    <button
-                        onClick={async () => {
-                            try {
-                                await ExportShaderConfigUseCase.execute(shaderGroups);
-                                alert('✅ Shader 配置已匯出');
-                            } catch (error) {
-                                console.error('匯出失敗:', error);
-                                alert('❌ 匯出失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
-                            }
-                        }}
-                        className="px-2 py-1 bg-blue-600/80 hover:bg-blue-500 text-white rounded text-xs flex items-center gap-1 transition-colors"
-                        title="匯出 Shader 配置（ZIP）"
-                    >
-                        <Package size={14} />
-                        <span>匯出</span>
-                    </button>
+                {/* 第二排：功能區 (Export/Import & Switch) - 與下方字卡切齊 */}
+                <div className="px-4 relative z-10">
+                    <div className="flex items-center justify-between gap-3 bg-white/[0.03] p-1.5 px-2.5 rounded-2xl border border-white/5 shadow-inner">
+                        <div className="flex items-center bg-white/5 rounded-full p-0.5 border border-white/10">
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        await ExportShaderConfigUseCase.execute(shaderGroups);
+                                        alert('✅ Shader 配置已匯出');
+                                    } catch (error) {
+                                        console.error('匯出失敗:', error);
+                                        alert('❌ 匯出失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
+                                    }
+                                }}
+                                className="px-2.5 py-1 hover:bg-white/10 text-gray-300 hover:text-white rounded-full text-[9px] font-bold tracking-wider uppercase transition-all flex items-center gap-1.5"
+                                title="Export (ZIP)"
+                            >
+                                <Package size={11} className="text-blue-400" />
+                                <span>Export</span>
+                            </button>
 
-                    <input
-                        type="file"
-                        accept=".zip"
-                        className="hidden"
-                        id="import-shader-config"
-                        onChange={async (e) => {
-                            const file = e.target.files?.[0];
-                            if (!file) return;
+                            <div className="w-px h-2.5 bg-white/10 self-center mx-0.5" />
                             
-                            try {
-                                const importedGroups = await ImportShaderConfigUseCase.execute(file);
-                                onGroupsChange(importedGroups);
-                                alert('✅ Shader 配置已匯入');
-                            } catch (error) {
-                                console.error('匯入失敗:', error);
-                                alert('❌ 匯入失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
-                            }
-                            
-                            // 清空 input 以允許重複選擇同一檔案
-                            e.target.value = '';
-                        }}
-                    />
-                    <label
-                        htmlFor="import-shader-config"
-                        className="px-2 py-1 bg-green-600/80 hover:bg-green-500 text-white rounded text-xs flex items-center gap-1 transition-colors cursor-pointer"
-                        title="匯入 Shader 配置（ZIP）"
-                    >
-                        <Upload size={14} />
-                        <span>匯入</span>
-                    </label>
-
-                    <label className="flex items-center gap-2 cursor-pointer">
-                        <div className="relative">
                             <input
-                                type="checkbox"
-                                className="sr-only peer"
-                                checked={isShaderEnabled}
-                                onChange={(e) => onToggleShaderEnabled(e.target.checked)}
+                                type="file"
+                                accept=".zip"
+                                className="hidden"
+                                id="import-shader-config"
+                                onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    if (!file) return;
+                                    
+                                    try {
+                                        const importedGroups = await ImportShaderConfigUseCase.execute(file);
+                                        onGroupsChange(importedGroups);
+                                        alert('✅ Shader 配置已匯入');
+                                    } catch (error) {
+                                        console.error('匯入失敗:', error);
+                                        alert('❌ 匯入失敗：' + (error instanceof Error ? error.message : '未知錯誤'));
+                                    }
+                                    
+                                    e.target.value = '';
+                                }}
                             />
-                            <div className="w-11 h-6 bg-black/30 border border-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-gray-400 after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600 peer-checked:after:bg-white shadow-inner"></div>
+                            <label
+                                htmlFor="import-shader-config"
+                                className="px-2.5 py-1 hover:bg-white/10 text-gray-300 hover:text-white rounded-full text-[9px] font-bold tracking-wider uppercase transition-all flex items-center gap-1.5 cursor-pointer"
+                                title="Import (ZIP)"
+                            >
+                                <Upload size={11} className="text-green-400" />
+                                <span>Import</span>
+                            </label>
                         </div>
-                        {/* <span className="text-xs text-gray-400">{isShaderEnabled ? '開啟' : '關閉'}</span> */}
-                    </label>
+
+                        {/* 主開關 */}
+                        <label className="flex items-center cursor-pointer group flex-shrink-0">
+                            <div className="relative">
+                                <input
+                                    type="checkbox"
+                                    className="sr-only peer"
+                                    checked={isShaderEnabled}
+                                    onChange={(e) => onToggleShaderEnabled(e.target.checked)}
+                                />
+                                {/* 高階儀器開關設計 - 紫色 */}
+                                <div className="w-10 h-5 bg-black/40 border border-white/10 rounded-full peer transition-all duration-500 peer-checked:bg-purple-500/10 peer-checked:border-purple-500/50 relative after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white/10 after:rounded-full after:h-3.5 after:w-3.5 after:transition-all after:duration-500 peer-checked:after:translate-x-[20px] peer-checked:after:bg-white peer-checked:after:shadow-[0_0_15px_rgba(168,85,247,0.8),0_0_4px_rgba(168,85,247,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]"></div>
+                            </div>
+                        </label>
+                    </div>
                 </div>
             </div>
 
@@ -572,13 +603,16 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                 {shaderGroups.map((group, groupIndex) => (
                     <div key={group.id} className={`glass-panel rounded-xl border border-white/5 transition-all duration-300 relative ${!group.expanded ? 'hover:bg-white/5' : ''} ${showFeatureMenu?.groupId === group.id || showMeshMenu === group.id ? 'z-20' : 'z-0'}`}>
                         {/* Group Header */}
-                        <div className={`p-3 flex items-center justify-between border-b border-white/5 ${!group.expanded ? 'border-transparent' : ''}`}>
-                            <div className="flex items-center gap-2 flex-1">
+                        <div className={cn(
+                            "p-3 flex items-center justify-between border-b border-white/5 transition-all duration-300 min-w-0 gap-2",
+                            !group.expanded ? "border-transparent" : ""
+                        )}>
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <button
                                     onClick={() => toggleGroupExpanded(group.id)}
-                                    className="text-gray-400 hover:text-white transition-colors"
+                                    className="w-8 h-8 rounded-full flex items-center justify-center bg-white/5 text-gray-400 hover:text-white hover:bg-white/10 transition-all flex-shrink-0"
                                 >
-                                    {group.expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                                    {group.expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                 </button>
 
                                 {editingGroupId === group.id ? (
@@ -592,13 +626,13 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                             if (e.key === 'Escape') setEditingGroupId(null);
                                         }}
                                         autoFocus
-                                        className="bg-black/30 text-white px-2 py-1 rounded border border-purple-500/50 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500"
+                                        className="bg-black/30 text-white px-2 py-1 rounded border border-purple-500/50 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 min-w-0 flex-1 max-w-[150px]"
                                         onClick={(e) => e.stopPropagation()}
                                     />
                                 ) : (
-                                    <div className="flex items-center gap-2 group/name">
+                                    <div className="flex items-center gap-2 min-w-0 overflow-hidden">
                                         <span
-                                            className="text-white font-medium cursor-pointer hover:text-purple-300 transition-colors"
+                                            className="text-white font-medium cursor-pointer hover:text-purple-300 transition-colors truncate whitespace-nowrap block"
                                             onDoubleClick={() => {
                                                 setEditingGroupId(group.id);
                                                 setEditingName(group.name);
@@ -607,45 +641,49 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                         >
                                             {group.name}
                                         </span>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setEditingGroupId(group.id);
-                                                setEditingName(group.name);
-                                            }}
-                                            className="text-gray-500 hover:text-purple-400 transition-colors"
-                                            title="修改名稱"
-                                        >
-                                            <Edit2 size={14} />
-                                        </button>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                try {
-                                                    downloadShaderFile(group, group.name);
-                                                } catch (err) {
-                                                    console.error('匯出失敗:', err);
-                                                    alert('匯出失敗：' + (err instanceof Error ? err.message : '未知錯誤'));
-                                                }
-                                            }}
-                                            className="text-gray-500 hover:text-green-400 transition-colors"
-                                            title="匯出 Cocos Creator Shader (.effect)"
-                                        >
-                                            <Download size={14} />
-                                        </button>
+                                        <div className="flex items-center gap-1 flex-shrink-0">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingGroupId(group.id);
+                                                    setEditingName(group.name);
+                                                }}
+                                                className="text-gray-500 hover:text-purple-400 transition-colors"
+                                                title="修改名稱"
+                                            >
+                                                <Edit2 size={12} />
+                                            </button>
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    try {
+                                                        downloadShaderFile(group, group.name);
+                                                    } catch (err) {
+                                                        console.error('匯出失敗:', err);
+                                                        alert('匯出失敗：' + (err instanceof Error ? err.message : '未知錯誤'));
+                                                    }
+                                                }}
+                                                className="text-gray-500 hover:text-green-400 transition-colors"
+                                                title="匯出 Cocos Creator Shader (.effect)"
+                                            >
+                                                <Download size={12} />
+                                            </button>
+                                        </div>
                                     </div>
                                 )}
-                                <span className="text-xs text-gray-400">({group.selectedMeshes.length} meshes)</span>
+                                <span className="text-[10px] text-gray-500 flex-shrink-0 hidden xs:inline whitespace-nowrap">
+                                    ({group.selectedMeshes.length} meshes)
+                                </span>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 flex-shrink-0">
                                 {/* Mesh Selection Dropdown */}
                                 <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
                                     <button
                                         onClick={() => setShowMeshMenu(showMeshMenu === group.id ? null : group.id)}
-                                        className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs rounded-full transition-colors backdrop-blur-sm"
+                                        className="px-2.5 py-1 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] sm:text-xs rounded-full transition-colors backdrop-blur-sm whitespace-nowrap"
                                     >
-                                        Mesh 選單 ▼
+                                        <span className="hidden sm:inline">Mesh 選單 </span>▼
                                     </button>
                                     {showMeshMenu === group.id && (
                                         <div className="absolute right-0 top-full mt-2 w-64 glass-panel border border-white/10 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto animate-slide-up">
@@ -713,13 +751,18 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                             <span className="text-lg">{feature.icon}</span>
                                             <span className={`flex-1 ${theme.text} text-sm font-medium`}>{feature.name}</span>
                                             {/* 開關按鈕 */}
-                                            <button
-                                                onClick={() => toggleFeatureEnabled(group.id, feature.id)}
-                                                className={`p-1 transition-colors ${feature.enabled !== false ? 'text-green-400 hover:text-green-300' : 'text-gray-500 hover:text-gray-400'}`}
-                                                title={feature.enabled !== false ? '點擊停用' : '點擊啟用'}
-                                            >
-                                                {feature.enabled !== false ? <ToggleRight size={20} /> : <ToggleLeft size={20} />}
-                                            </button>
+                                            <div className="flex items-center">
+                                                <label className="relative inline-flex items-center cursor-pointer group flex-shrink-0">
+                                                    <input
+                                                        type="checkbox"
+                                                        className="sr-only peer"
+                                                        checked={feature.enabled !== false}
+                                                        onChange={() => toggleFeatureEnabled(group.id, feature.id)}
+                                                    />
+                                                    {/* 高階儀器開關設計 - 綠色 */}
+                                                    <div className="w-12 h-6 bg-black/40 border border-white/10 rounded-full peer transition-all duration-500 peer-checked:bg-emerald-500/10 peer-checked:border-emerald-500/50 relative after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white/10 after:rounded-full after:h-4 after:w-4 after:transition-all after:duration-500 peer-checked:after:translate-x-[24px] peer-checked:after:bg-emerald-400 peer-checked:after:shadow-[0_0_20px_rgba(52,211,153,0.7),0_0_4px_rgba(52,211,153,0.4)] shadow-[inset_0_2px_4px_rgba(0,0,0,0.6)]"></div>
+                                                </label>
+                                            </div>
                                             <button
                                                 onClick={() => removeFeatureFromGroup(group.id, feature.id)}
                                                 className="p-1 text-red-400 hover:text-red-300 transition-colors"
@@ -846,14 +889,33 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                 ))}
             </div>
 
-            {/* Add Group Button */}
-            <div className={`p-4 border-t ${theme.panelBorder}`}>
+            {/* Add Group Button - 未來主義霓虹設計 */}
+            <div className={cn("p-5 border-t bg-gradient-to-t from-white/[0.03] to-transparent", theme.panelBorder)}>
                 <button
                     onClick={addGroup}
-                    className="w-full py-3.5 bg-gradient-to-r from-purple-600 to-purple-500 hover:from-purple-500 hover:to-purple-400 text-white font-medium rounded-xl transition-all shadow-lg shadow-purple-900/20 hover:shadow-purple-500/30 hover:scale-[1.01] flex items-center justify-center gap-2"
+                    className="group relative w-full flex items-center justify-center gap-3 py-4 px-6 rounded-2xl cursor-pointer transition-all duration-500 overflow-hidden border border-purple-500/30 bg-purple-600/10 hover:border-purple-400 hover:shadow-[0_0_30px_rgba(168,85,247,0.2)] hover:-translate-y-0.5"
                 >
-                    <Plus size={20} />
-                    添加組合
+                    {/* 動態掃光效果 */}
+                    <div className="absolute inset-0 w-[200%] h-full bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-sweep pointer-events-none" />
+                    
+                    <div className="flex items-center gap-3 relative z-10">
+                        <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center border border-purple-500/30 group-hover:border-purple-400 group-hover:bg-purple-500/30 transition-all duration-500">
+                            <Plus size={18} className="text-purple-300 group-hover:text-white" />
+                        </div>
+                        <div className="text-left">
+                            <div className="text-xs font-black tracking-[0.4em] uppercase text-purple-100 group-hover:text-white transition-colors duration-500">
+                                Create Group
+                            </div>
+                            <div className="text-[9px] font-medium tracking-[0.1em] uppercase text-purple-400/60 group-hover:text-purple-300 transition-colors duration-500">
+                                Add New Shader Configuration
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 右側裝飾小點 */}
+                    <div className="absolute right-6 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-2 group-hover:translate-x-0">
+                        <div className="w-1.5 h-1.5 rounded-full bg-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.8)]" />
+                    </div>
                 </button>
             </div>
         </div>
