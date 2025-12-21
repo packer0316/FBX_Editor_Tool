@@ -173,6 +173,7 @@ export class LoadModelUseCase {
       cameraOrbitSpeed: 30,
       isModelRotating: false,
       modelRotationSpeed: 30,
+      viewSnapshots: [],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };

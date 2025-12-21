@@ -3,6 +3,7 @@ import type { IdentifiableClip } from '../../../utils/clip/clipIdentifierUtils';
 import type { ShaderGroup } from './ShaderFeature';
 import type { AudioTrack } from './AudioTrack';
 import type { EffectItem } from '../../../presentation/features/effect-panel/components/EffectTestPanel';
+import type { ViewSnapshot } from './ViewSnapshot';
 
 /**
  * 模型實例介面
@@ -96,6 +97,10 @@ export interface ModelInstance {
   isModelRotating: boolean;
   /** 模型自轉速度（度/秒） */
   modelRotationSpeed: number;
+  
+  // 視圖快照
+  /** 視圖快照列表 */
+  viewSnapshots: ViewSnapshot[];
   
   // 元資料
   /** 建立時間戳 */

@@ -27,6 +27,7 @@ import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
 import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
+import { createViewSnapshot, type ViewSnapshot } from './domain/value-objects/ViewSnapshot';
 import LeftToolbar from './presentation/features/scene-viewer/components/LeftToolbar';
 import type { Layer } from './domain/value-objects/Layer';
 import type { Element2D, SpineElement2D } from './domain/value-objects/Element2D';
@@ -1923,6 +1924,92 @@ function App() {
                 onFocusModel={(id) => {
                   sceneViewerRef.current?.focusOnModel(id);
                 }}
+                onSaveSnapshot={(modelId, name) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  const cameraState = sceneViewerRef.current?.getCameraState();
+                  if (!cameraState) {
+                    console.warn('無法獲取相機狀態');
+                    return;
+                  }
+                  
+                  const snapshot = createViewSnapshot(
+                    name,
+                    {
+                      position: cameraState.position,
+                      target: cameraState.target,
+                      fov: cameraState.fov,
+                      isOrthographic: cameraState.isOrthographic,
+                      orthoZoom: cameraState.orthoZoom,
+                    },
+                    {
+                      position: model.position,
+                      rotation: model.rotation,
+                      scale: model.scale,
+                      animationTime: model.currentTime,
+                    }
+                  );
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: [...model.viewSnapshots, snapshot],
+                  });
+                  
+                  console.log('已保存視圖快照:', snapshot.name);
+                }}
+                onApplySnapshot={(modelId, snapshot) => {
+                  // 1. 更新相機設定（isOrthographic 和 orthoZoom 透過 state 更新，會觸發 CameraController 切換相機）
+                  setIsOrthographic(snapshot.cameraIsOrthographic);
+                  setOrthoZoom(snapshot.cameraOrthoZoom);
+                  setCameraSettings(prev => ({ ...prev, fov: snapshot.cameraFov }));
+                  
+                  // 2. 設置模型狀態並暫停播放
+                  updateModel(modelId, {
+                    position: snapshot.modelPosition,
+                    rotation: snapshot.modelRotation,
+                    scale: snapshot.modelScale,
+                    currentTime: snapshot.animationTime,
+                    isPlaying: false, // 暫停動畫
+                  });
+                  
+                  // 3. 跳轉動畫時間
+                  sceneViewerRef.current?.seekTo(snapshot.animationTime);
+                  
+                  // 4. 延遲設置相機位置，等待相機類型切換完成（如果需要切換的話）
+                  // 使用 requestAnimationFrame 確保在下一幀設置，此時 CameraController 已完成相機切換
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      sceneViewerRef.current?.setCameraState({
+                        position: snapshot.cameraPosition,
+                        target: snapshot.cameraTarget,
+                        fov: snapshot.cameraFov,
+                        isOrthographic: snapshot.cameraIsOrthographic,
+                        orthoZoom: snapshot.cameraOrthoZoom,
+                      });
+                    });
+                  });
+                  
+                  console.log('已套用視圖快照:', snapshot.name);
+                }}
+                onDeleteSnapshot={(modelId, snapshotId) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: model.viewSnapshots.filter(s => s.id !== snapshotId),
+                  });
+                }}
+                onRenameSnapshot={(modelId, snapshotId, newName) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: model.viewSnapshots.map(s => 
+                      s.id === snapshotId ? { ...s, name: newName } : s
+                    ),
+                  });
+                }}
+                isDirectorMode={isDirectorMode}
                 isLoading={isLoading}
                 toneMappingExposure={toneMappingExposure}
                 environmentIntensity={environmentIntensity}

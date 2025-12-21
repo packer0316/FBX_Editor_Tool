@@ -1,8 +1,10 @@
-import { useState, useMemo } from 'react';
-import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d, Grid3x3, Focus } from 'lucide-react';
+import { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { Trash2, Edit2, Check, X, Package, Eye, EyeOff, ChevronDown, ChevronRight, Sliders, RotateCw, Orbit, Image, Info, Move3d, Grid3x3, Focus, Bookmark, Plus } from 'lucide-react';
 import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
+import type { ViewSnapshot } from '../../../../domain/value-objects/ViewSnapshot';
 import TextureManagerModal from './TextureManagerModal';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
@@ -95,6 +97,16 @@ interface ModelCardProps {
   }) => void;
   /** 聚焦相機到此模型 */
   onFocusModel?: () => void;
+  /** 保存視圖快照 */
+  onSaveSnapshot?: (name: string) => void;
+  /** 套用視圖快照 */
+  onApplySnapshot?: (snapshot: ViewSnapshot) => void;
+  /** 刪除視圖快照 */
+  onDeleteSnapshot?: (snapshotId: string) => void;
+  /** 重命名視圖快照 */
+  onRenameSnapshot?: (snapshotId: string, newName: string) => void;
+  /** 是否為導演模式 */
+  isDirectorMode?: boolean;
   // 場景設置參數
   toneMappingExposure?: number;
   environmentIntensity?: number;
@@ -110,6 +122,11 @@ export default function ModelCard({
   onRename,
   onUpdateTransform,
   onFocusModel,
+  onSaveSnapshot,
+  onApplySnapshot,
+  onDeleteSnapshot,
+  onRenameSnapshot,
+  isDirectorMode = false,
   toneMappingExposure,
   environmentIntensity,
   hdriUrl,
@@ -120,6 +137,36 @@ export default function ModelCard({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showTextureManager, setShowTextureManager] = useState(false);
   const [showModelInfo, setShowModelInfo] = useState(false);
+  
+  // 視圖快照相關狀態
+  const [showSnapshotDropdown, setShowSnapshotDropdown] = useState(false);
+  const [editingSnapshotId, setEditingSnapshotId] = useState<string | null>(null);
+  const [editingSnapshotName, setEditingSnapshotName] = useState('');
+  const snapshotDropdownRef = useRef<HTMLDivElement>(null);
+  
+  // Tooltip 狀態
+  const [hoveredSnapshotId, setHoveredSnapshotId] = useState<string | null>(null);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
+  
+  // 點擊外部關閉下拉選單
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (snapshotDropdownRef.current && !snapshotDropdownRef.current.contains(event.target as Node)) {
+        setShowSnapshotDropdown(false);
+        setEditingSnapshotId(null);
+        setHoveredSnapshotId(null);
+        setTooltipPosition(null);
+      }
+    };
+    
+    if (showSnapshotDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showSnapshotDropdown]);
   
   // 計算模型資訊
   const modelInfo = useMemo(() => calculateModelInfo(modelInstance.model), [modelInstance.model]);
@@ -310,8 +357,8 @@ export default function ModelCard({
       {/* Transform 控制面板（展開時顯示） */}
       {isExpanded && (
         <div className="px-3 pb-3 pt-3 space-y-3" onClick={(e) => e.stopPropagation()}>
-          {/* 貼圖管理按鈕 */}
-          <div className="flex justify-start">
+          {/* 貼圖管理 & 視圖快照按鈕 */}
+          <div className="flex justify-start gap-2">
             <button
               onClick={(e) => {
                 e.stopPropagation();
@@ -323,6 +370,166 @@ export default function ModelCard({
               <Image className="w-3 h-3" />
               <span className="text-[10px]">貼圖管理</span>
             </button>
+            
+            {/* 視圖快照下拉選單 */}
+            <div className="relative" ref={snapshotDropdownRef}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!isDirectorMode) {
+                    setShowSnapshotDropdown(!showSnapshotDropdown);
+                  }
+                }}
+                disabled={isDirectorMode}
+                className={`p-1.5 rounded transition-all flex items-center gap-1 ${
+                  isDirectorMode 
+                    ? 'bg-gray-500/20 text-gray-500 cursor-not-allowed' 
+                    : showSnapshotDropdown
+                      ? 'bg-amber-500/50 text-white'
+                      : 'bg-amber-500/30 text-amber-300 hover:bg-amber-500/50 hover:text-white'
+                }`}
+                title={isDirectorMode ? '導演模式下無法使用視圖快照' : '視圖快照'}
+              >
+                <Bookmark className="w-3 h-3" />
+                <span className="text-[10px]">視圖快照</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showSnapshotDropdown ? 'rotate-180' : ''}`} />
+                {modelInstance.viewSnapshots.length > 0 && (
+                  <span className="ml-0.5 text-[9px] bg-amber-500/50 px-1 rounded">
+                    {modelInstance.viewSnapshots.length}
+                  </span>
+                )}
+              </button>
+              
+              {/* 下拉選單內容 */}
+              {showSnapshotDropdown && !isDirectorMode && (
+                <div className={`absolute top-full left-0 mt-1 w-56 ${theme.panelBg} border ${theme.panelBorder} rounded-lg shadow-xl z-50 overflow-hidden`}>
+                  {/* 新增快照按鈕 */}
+                  <button
+                    onClick={() => {
+                      // 直接拍下快照，使用預設名稱「幀數: xxxx」
+                      const frameNumber = Math.round(modelInstance.currentTime * 30);
+                      onSaveSnapshot?.(`幀數: ${frameNumber}`);
+                      setHoveredSnapshotId(null);
+                      setTooltipPosition(null);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-amber-300 hover:bg-amber-500/20 flex items-center gap-2 border-b border-gray-700/50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    新增快照
+                  </button>
+                  
+                  {/* 快照列表 */}
+                  <div 
+                    className="max-h-48 overflow-y-auto custom-scrollbar"
+                    onClick={() => {
+                      // 點擊列表區域時關閉 tooltip（Info 按鈕有 stopPropagation 所以不會觸發這個）
+                      setHoveredSnapshotId(null);
+                      setTooltipPosition(null);
+                    }}
+                  >
+                    {modelInstance.viewSnapshots.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-gray-500">
+                        尚無儲存的快照
+                      </div>
+                    ) : (
+                      modelInstance.viewSnapshots.map((snapshot) => (
+                        <div
+                          key={snapshot.id}
+                          className="group flex items-center gap-1 px-2 py-1.5 hover:bg-gray-700/50"
+                        >
+                          {editingSnapshotId === snapshot.id ? (
+                            // 編輯模式
+                            <div className="flex-1 flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={editingSnapshotName}
+                                onChange={(e) => setEditingSnapshotName(e.target.value)}
+                                className="flex-1 px-2 py-0.5 text-xs bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:border-amber-500"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && editingSnapshotName.trim()) {
+                                    onRenameSnapshot?.(snapshot.id, editingSnapshotName.trim());
+                                    setEditingSnapshotId(null);
+                                  } else if (e.key === 'Escape') {
+                                    setEditingSnapshotId(null);
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  if (editingSnapshotName.trim()) {
+                                    onRenameSnapshot?.(snapshot.id, editingSnapshotName.trim());
+                                    setEditingSnapshotId(null);
+                                  }
+                                }}
+                                className="p-0.5 text-green-400 hover:text-green-300"
+                              >
+                                <Check className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => setEditingSnapshotId(null)}
+                                className="p-0.5 text-gray-400 hover:text-gray-300"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : (
+                            // 顯示模式
+                            <>
+                              <button
+                                onClick={() => onApplySnapshot?.(snapshot)}
+                                className="flex-1 text-left text-xs text-gray-200 hover:text-white truncate flex items-center gap-1.5"
+                                title={`套用快照：${snapshot.name}`}
+                              >
+                                <Bookmark className="w-3 h-3 text-amber-400 flex-shrink-0" />
+                                <span className="truncate">{snapshot.name}</span>
+                              </button>
+                              <button
+                                className="p-1 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-400/20 rounded transition-colors"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  e.preventDefault();
+                                  if (hoveredSnapshotId === snapshot.id) {
+                                    // 已經顯示，點擊關閉
+                                    setHoveredSnapshotId(null);
+                                    setTooltipPosition(null);
+                                  } else {
+                                    // 顯示 tooltip
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setTooltipPosition({ x: rect.left + rect.width / 2, y: rect.top });
+                                    setHoveredSnapshotId(snapshot.id);
+                                  }
+                                }}
+                                title="查看幀數資訊"
+                              >
+                                <Info className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setEditingSnapshotId(snapshot.id);
+                                  setEditingSnapshotName(snapshot.name);
+                                }}
+                                className="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
+                                title="重命名"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => onDeleteSnapshot?.(snapshot.id)}
+                                className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                                title="刪除"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Position */}
@@ -585,6 +792,40 @@ export default function ModelCard({
           onClose={() => setShowTextureManager(false)}
           theme={theme}
         />
+      )}
+
+      {/* 視圖快照 Tooltip（使用 Portal 渲染到 body，完全避免被裁切） */}
+      {hoveredSnapshotId && tooltipPosition && createPortal(
+        <div
+          className="fixed z-[99999] pointer-events-none"
+          style={{
+            left: tooltipPosition.x,
+            top: tooltipPosition.y - 8,
+            transform: 'translate(-50%, -100%)',
+          }}
+        >
+          <div className="px-3 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-cyan-500/40 rounded-lg shadow-xl shadow-cyan-500/20">
+            {(() => {
+              const snapshot = modelInstance.viewSnapshots.find(s => s.id === hoveredSnapshotId);
+              if (!snapshot) return null;
+              return (
+                <div className="flex items-center gap-2.5 text-[11px]">
+                  <span className="text-gray-400">幀數</span>
+                  <span className="font-mono text-cyan-300 font-semibold text-xs">
+                    {Math.round(snapshot.animationTime * 30)}
+                  </span>
+                  <span className="text-gray-600">|</span>
+                  <span className="font-mono text-gray-300">
+                    {snapshot.animationTime.toFixed(2)}s
+                  </span>
+                </div>
+              );
+            })()}
+          </div>
+          {/* 小箭頭 */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-[6px] border-transparent border-t-gray-800" />
+        </div>,
+        document.body
       )}
 
       {/* 模型資訊彈出視窗 */}

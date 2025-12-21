@@ -1,6 +1,7 @@
 import React, { useRef } from 'react';
 import { Upload, Package, Loader2 } from 'lucide-react';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
+import type { ViewSnapshot } from '../../../../domain/value-objects/ViewSnapshot';
 import ModelCard from './ModelCard';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
@@ -27,6 +28,16 @@ interface ModelManagerPanelProps {
   ) => void;
   /** 聚焦相機到指定模型 */
   onFocusModel?: (id: string) => void;
+  /** 保存視圖快照 */
+  onSaveSnapshot?: (modelId: string, name: string) => void;
+  /** 套用視圖快照 */
+  onApplySnapshot?: (modelId: string, snapshot: ViewSnapshot) => void;
+  /** 刪除視圖快照 */
+  onDeleteSnapshot?: (modelId: string, snapshotId: string) => void;
+  /** 重命名視圖快照 */
+  onRenameSnapshot?: (modelId: string, snapshotId: string, newName: string) => void;
+  /** 是否為導演模式 */
+  isDirectorMode?: boolean;
   isLoading?: boolean;
   // 場景設置參數
   toneMappingExposure?: number;
@@ -44,6 +55,11 @@ export default function ModelManagerPanel({
   onRenameModel,
   onUpdateModelTransform,
   onFocusModel,
+  onSaveSnapshot,
+  onApplySnapshot,
+  onDeleteSnapshot,
+  onRenameSnapshot,
+  isDirectorMode = false,
   isLoading = false,
   toneMappingExposure,
   environmentIntensity,
@@ -142,6 +158,11 @@ export default function ModelManagerPanel({
               onRename={(newName) => onRenameModel(modelInstance.id, newName)}
               onUpdateTransform={(updates) => onUpdateModelTransform(modelInstance.id, updates)}
               onFocusModel={onFocusModel ? () => onFocusModel(modelInstance.id) : undefined}
+              onSaveSnapshot={onSaveSnapshot ? (name) => onSaveSnapshot(modelInstance.id, name) : undefined}
+              onApplySnapshot={onApplySnapshot ? (snapshot) => onApplySnapshot(modelInstance.id, snapshot) : undefined}
+              onDeleteSnapshot={onDeleteSnapshot ? (snapshotId) => onDeleteSnapshot(modelInstance.id, snapshotId) : undefined}
+              onRenameSnapshot={onRenameSnapshot ? (snapshotId, newName) => onRenameSnapshot(modelInstance.id, snapshotId, newName) : undefined}
+              isDirectorMode={isDirectorMode}
               toneMappingExposure={toneMappingExposure}
               environmentIntensity={environmentIntensity}
               hdriUrl={hdriUrl}
