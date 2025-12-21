@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { ArrowUp, ArrowDown, Monitor, ChevronRight, ChevronLeft } from 'lucide-react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { type ThemeStyle } from '../../../hooks/useTheme';
 
 /**
  * 類名合併工具
@@ -17,6 +18,7 @@ interface PreviewModeToggleProps {
   onToggle2DFront: () => void;
   onToggle2DBack: () => void;
   onToggle3D: () => void;
+  theme: ThemeStyle;
 }
 
 /**
@@ -28,24 +30,27 @@ export const PreviewModeToggle: React.FC<PreviewModeToggleProps> = ({
   show3D,
   onToggle2DFront,
   onToggle2DBack,
-  onToggle3D
+  onToggle3D,
+  theme
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   // 統一的高級感按鈕基礎樣式
-  const baseBtnClass = "relative flex items-center gap-1.5 text-[10px] uppercase tracking-wider font-bold px-3.5 py-1.5 rounded-full transition-all duration-500 hover:scale-105 active:scale-95 z-10 border";
+  const baseBtnClass = "relative flex items-center gap-1 text-[10px] uppercase tracking-wider font-bold px-3 py-1.5 rounded-full transition-all duration-300 hover:scale-105 active:scale-95 z-10 border";
 
-  // 啟用狀態樣式（統一使用 neon-blue 質感）
-  const activeClass = "bg-neon-blue/20 text-white border-neon-blue/50 shadow-[0_0_15px_rgba(59,130,246,0.25)] ring-1 ring-neon-blue/30";
+  // 啟用狀態樣式（統一使用主題 activeButton）
+  const activeClass = theme.activeButton;
   
   // 未啟用狀態樣式
-  const inactiveClass = "bg-white/5 text-gray-500 border-transparent hover:bg-white/10 hover:text-gray-300";
+  const inactiveClass = cn(theme.button, "border-transparent bg-white/5", theme.itemHover);
 
   return (
     <div 
       className={cn(
-        "absolute top-6 right-6 z-[500] flex items-center transition-all duration-500 ease-in-out bg-[#0a0a0c]/60 backdrop-blur-2xl rounded-full shadow-[0_20px_50px_rgba(0,0,0,0.5)] border border-white/10 overflow-hidden h-[44px]",
-        isCollapsed ? "px-1.5" : "px-2 gap-2"
+        "absolute top-6 right-6 z-[500] flex items-center transition-all duration-500 ease-in-out backdrop-blur-2xl rounded-full shadow-2xl border overflow-hidden h-[40px]",
+        theme.toolbarBg,
+        theme.toolbarBorder,
+        isCollapsed ? "px-1" : "px-1.5 gap-1"
       )}
     >
       {/* 頂部微弱光暈，增加材質感 */}
@@ -53,7 +58,7 @@ export const PreviewModeToggle: React.FC<PreviewModeToggleProps> = ({
 
       {/* 內容區塊 - 帶有動畫 */}
       <div className={cn(
-        "flex items-center gap-2 transition-all duration-500 ease-in-out origin-right",
+        "flex items-center gap-1 transition-all duration-500 ease-in-out origin-right",
         isCollapsed ? "w-0 opacity-0 pointer-events-none -translate-x-4" : "w-auto opacity-100"
       )}>
         {/* 2D 前景層 (Upper) */}
@@ -62,12 +67,12 @@ export const PreviewModeToggle: React.FC<PreviewModeToggleProps> = ({
           onClick={onToggle2DFront}
           className={cn(baseBtnClass, show2DFront ? activeClass : inactiveClass)}
         >
-          <ArrowUp size={12} className={show2DFront ? "text-neon-blue" : "text-gray-600"} />
-          <span>2D Front</span>
+          <ArrowUp size={12} className={show2DFront ? "text-white" : "text-gray-500"} />
+          <span>Front</span>
         </button>
         
-        {/* 分隔點（視覺裝飾，增加專業感） */}
-        <div className="w-1 h-1 rounded-full bg-white/10 mx-0.5 shrink-0" />
+        {/* 微細分隔線 */}
+        {!show2DFront && !show3D && <div className="w-px h-3 bg-white/10 mx-px" />}
 
         {/* 3D */}
         <button
@@ -75,28 +80,28 @@ export const PreviewModeToggle: React.FC<PreviewModeToggleProps> = ({
           onClick={onToggle3D}
           className={cn(baseBtnClass, show3D ? activeClass : inactiveClass)}
         >
-          <Monitor size={12} className={show3D ? "text-neon-blue" : "text-gray-600"} />
-          <span>3D Scene</span>
+          <Monitor size={12} className={show3D ? "text-white" : "text-gray-500"} />
+          <span>3D</span>
         </button>
 
-        {/* 分隔點 */}
-        <div className="w-1 h-1 rounded-full bg-white/10 mx-0.5 shrink-0" />
-        
+        {/* 微細分隔線 */}
+        {!show3D && !show2DBack && <div className="w-px h-3 bg-white/10 mx-px" />}
+
         {/* 2D 背景層 (Down) */}
         <button
           type="button"
           onClick={onToggle2DBack}
           className={cn(baseBtnClass, show2DBack ? activeClass : inactiveClass)}
         >
-          <ArrowDown size={12} className={show2DBack ? "text-neon-blue" : "text-gray-600"} />
-          <span>2D Back</span>
+          <ArrowDown size={12} className={show2DBack ? "text-white" : "text-gray-500"} />
+          <span>Back</span>
         </button>
       </div>
 
       {/* 收縮/展開切換按鈕 */}
       <button
         onClick={() => setIsCollapsed(!isCollapsed)}
-        className="p-1.5 rounded-full bg-white/5 text-gray-400 hover:bg-white/10 hover:text-neon-blue transition-all duration-300 z-20"
+        className={cn("p-1.5 rounded-full transition-all duration-300 z-20", theme.button, theme.itemHover)}
         title={isCollapsed ? "展開" : "收起"}
       >
         {isCollapsed ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}

@@ -533,7 +533,7 @@ function App() {
 
   // Click outside to close popovers
   useClickOutside(
-    [cameraSettingsRef as React.RefObject<HTMLElement>, groundSettingsRef as React.RefObject<HTMLElement>, themeMenuRef as React.RefObject<HTMLElement>],
+    [cameraSettingsRef, groundSettingsRef, themeMenuRef] as React.RefObject<HTMLElement>[],
     () => {
       setActiveSidebarPanel('none');
     },
@@ -1549,6 +1549,7 @@ function App() {
                     onToggle2DFront={handleToggle2DFront}
                     onToggle2DBack={handleToggle2DBack}
                     onToggle3D={handleToggle3D}
+                    theme={currentTheme}
                   />
                 )}
                 <div
@@ -1700,10 +1701,10 @@ function App() {
               <>
                 {/* 拖拉調整高度的把手 */}
                 <div
-                  className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
+                  className={`absolute top-0 left-0 right-0 h-1 bg-gray-700/30 hover:${currentTheme.accent.replace('bg-', 'bg-')} cursor-ns-resize transition-colors z-10`}
                   onMouseDown={handleMouseDown}
                 >
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500/50 rounded-full"></div>
                 </div>
                 
                 {/* 根據選中的元素類型顯示不同的面板 */}
@@ -1874,6 +1875,8 @@ function App() {
                   onReorderElement={handleReorderElement}
                   onUpdateElement={handleUpdateElementById}
                   onRemoveElement={handleRemoveElementById}
+                  currentTheme={currentTheme}
+                  themeMode={themeMode}
                 />
               </div>
             )}
@@ -2080,9 +2083,9 @@ function App() {
           </div>
 
           {/* 底部標籤 */}
-          <div className="p-4 text-center opacity-30 hover:opacity-100 transition-opacity border-t border-gray-700">
-            <p className="text-[10px] text-gray-400">
-              Designed for Game Developers · <span className="text-gray-500">v{__APP_VERSION__}</span>
+          <div className={`p-4 text-center opacity-40 hover:opacity-100 transition-opacity border-t ${currentTheme.dividerBorder}`}>
+            <p className={`text-[10px] ${currentTheme.text} opacity-70`}>
+              Designed for Game Developers · <span className="opacity-50 font-mono">v{__APP_VERSION__}</span>
             </p>
           </div>
         </div>

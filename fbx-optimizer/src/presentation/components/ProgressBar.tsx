@@ -2,6 +2,7 @@ import { useMemo, useState, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import type { AudioTrack } from '../../domain/value-objects/AudioTrack';
 import type { EffectItem } from '../features/effect-panel/components/EffectTestPanel';
+import type { ThemeStyle } from '../hooks/useTheme';
 
 /**
  * 進度條狀態類型
@@ -69,16 +70,26 @@ interface ProgressBarProps {
   
   /** 自訂 className */
   className?: string;
+
+  /** 主題樣式 */
+  theme?: ThemeStyle;
 }
 
 /**
  * 統一的色彩語意定義
  */
-const PROGRESS_COLORS: Record<ProgressBarState, string> = {
-  completed: 'bg-green-500',   // 已完成：綠色
-  playing: 'bg-blue-500',      // 播放中：藍色
-  pending: 'bg-gray-600',      // 待播放：深灰色
-  inactive: 'bg-gray-700',     // 未啟動：更深灰色
+const getProgressColor = (state: ProgressBarState, theme?: ThemeStyle): string => {
+  if (state === 'playing' && theme) {
+    return theme.accent;
+  }
+  
+  const colors: Record<ProgressBarState, string> = {
+    completed: 'bg-green-500',   // 已完成：綠色
+    playing: 'bg-blue-500',      // 播放中：藍色
+    pending: 'bg-gray-600',      // 待播放：深灰色
+    inactive: 'bg-gray-700',     // 未啟動：更深灰色
+  };
+  return colors[state];
 };
 
 /**
@@ -99,6 +110,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   effectMarkers = [],
   clipDuration = 0,
   className = '',
+  theme,
 }) => {
   const [hoveredTooltip, setHoveredTooltip] = useState<{
     x: number;
@@ -190,12 +202,12 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
       {/* 進度條容器 */}
       <div className={`flex-1 relative ${SIZE_CLASSES[size]}`}>
         {/* 背景層 */}
-        <div className="absolute inset-0 bg-gray-700/50 rounded-full border border-gray-600/30" />
+        <div className={`absolute inset-0 ${theme ? theme.dividerBg : 'bg-gray-700/50'} rounded-full border border-gray-600/30`} />
 
         {/* 進度填充層（保持裁切以符合圓角） */}
         <div className="absolute inset-0 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-transform duration-100 ease-linear ${PROGRESS_COLORS[state]}`}
+            className={`h-full rounded-full transition-transform duration-100 ease-linear ${getProgressColor(state, theme)}`}
             style={{
               width: '100%',
               transform: `scaleX(${clampedProgress / 100})`,
@@ -244,7 +256,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
                   return (
                     <div
                       key={`audio-${audioTrack.id || audioTrack.name}-${trigger.id}`}
-                      className="bg-gray-900/95 text-white text-xs px-3 py-2 rounded-md border border-gray-700 shadow-2xl min-w-[200px]"
+                      className={`${theme?.panelBg || 'bg-gray-900/95'} ${theme?.text || 'text-white'} text-xs px-3 py-2 rounded-md border ${theme?.panelBorder || 'border-gray-700'} shadow-2xl min-w-[200px]`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span
@@ -268,7 +280,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
                   return (
                     <div
                       key={`effect-${effectItem.id || effectItem.name}-${trigger.id}`}
-                      className="bg-gray-900/95 text-white text-xs px-3 py-2 rounded-md border border-gray-700 shadow-2xl min-w-[200px]"
+                      className={`${theme?.panelBg || 'bg-gray-900/95'} ${theme?.text || 'text-white'} text-xs px-3 py-2 rounded-md border ${theme?.panelBorder || 'border-gray-700'} shadow-2xl min-w-[200px]`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <span
@@ -288,7 +300,7 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
                   );
                 }
               })}
-              <div className="w-3 h-3 bg-gray-900/95 transform rotate-45 self-center -mt-1 border-r border-b border-gray-700" />
+              <div className={`w-3 h-3 ${theme?.panelBg || 'bg-gray-900/95'} transform rotate-45 self-center -mt-1 border-r border-b ${theme?.panelBorder || 'border-gray-700'}`} />
             </div>
           </div>,
           document.body

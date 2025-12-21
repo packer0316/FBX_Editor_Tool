@@ -5,12 +5,14 @@ interface NumberInputProps extends Omit<React.InputHTMLAttributes<HTMLInputEleme
     value: string | number;
     onChange: (value: string) => void;
     className?: string;
+    textColor?: string;
 }
 
 export const NumberInput: React.FC<NumberInputProps> = ({
     value,
     onChange,
     className = '',
+    textColor = 'text-white',
     min,
     max,
     step = 1,
@@ -57,7 +59,7 @@ export const NumberInput: React.FC<NumberInputProps> = ({
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}
-                className={`w-full bg-transparent border-none text-center text-sm text-white placeholder-gray-600 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                className={`w-full bg-transparent border-none text-center text-sm ${textColor} placeholder-gray-600 focus:outline-none focus:ring-0 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                 min={min}
                 max={max}
                 step={step}

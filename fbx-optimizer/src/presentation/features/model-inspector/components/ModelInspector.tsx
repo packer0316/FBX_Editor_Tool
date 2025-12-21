@@ -39,7 +39,7 @@ interface ModelInspectorProps {
 }
 
 // 遞迴渲染骨架樹狀圖
-const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?: number; expandAll?: boolean }) => {
+const BoneTree = ({ bone, depth = 0, expandAll, theme }: { bone: THREE.Object3D; depth?: number; expandAll?: boolean; theme: ThemeStyle }) => {
     const [expanded, setExpanded] = useState(expandAll ?? true);
     const [visible, setVisible] = useState(bone.visible);
 
@@ -68,7 +68,7 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
     return (
         <div className="select-none">
             <div
-                className="flex items-center hover:bg-white/5 p-1 rounded-md cursor-pointer text-[11px] font-medium transition-colors group"
+                className={`flex items-center ${theme.itemHover} p-1 rounded-md cursor-pointer text-[11px] font-medium transition-colors group`}
                 style={{ paddingLeft: `${depth * 12 + 4}px` }}
                 onClick={() => setExpanded(!expanded)}
             >
@@ -76,7 +76,7 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
                     {hasChildren && (expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />)}
                 </button>
 
-                <span className="flex-1 truncate text-gray-400 group-hover:text-gray-200">{bone.name}</span>
+                <span className={`flex-1 truncate ${!visible ? 'text-gray-500' : 'text-gray-400'} group-hover:text-gray-200`}>{bone.name}</span>
 
                 <button onClick={toggleVisibility} className="ml-2 text-gray-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
                     {visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -86,7 +86,7 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
             {expanded && hasChildren && (
                 <div>
                     {bone.children.map(child => (
-                        isHierarchyNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
+                        isHierarchyNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} theme={theme} />
                     ))}
                 </div>
             )}
@@ -435,9 +435,9 @@ export default function ModelInspector({
     };
 
     return (
-        <div className={`bg-[#0f172a]/95 rounded-xl flex flex-col h-full border border-white/10 shadow-2xl overflow-hidden backdrop-blur-sm`}>
+        <div className={`${theme.panelBg} rounded-xl flex flex-col h-full border ${theme.panelBorder} shadow-2xl overflow-hidden backdrop-blur-sm`}>
             {/* 上半部：列表切換 - Professional DCC Style Tab Design */}
-            <div className="flex items-center px-4 h-12 bg-white/[0.02] border-b border-white/10 overflow-x-auto no-scrollbar">
+            <div className={`flex items-center px-4 h-12 ${theme.toolbarBg} border-b ${theme.panelBorder} overflow-x-auto no-scrollbar`}>
                 {[
                     { id: 'mesh', label: 'Mesh', count: meshes.length > 0 ? meshes.length : 0 },
                     { id: 'bone', label: '骨架', count: boneCount },
@@ -450,7 +450,7 @@ export default function ModelInspector({
                         onClick={() => setActiveTab(tab.id as any)}
                     >
                         <span className={`text-[11px] font-bold tracking-widest transition-colors ${
-                            activeTab === tab.id ? 'text-white' : 'text-gray-500 group-hover:text-gray-300'
+                            activeTab === tab.id ? theme.text : 'text-gray-500 group-hover:text-gray-300'
                         }`}>
                             {tab.label.toUpperCase()}
                         </span>
@@ -458,7 +458,7 @@ export default function ModelInspector({
                         {tab.count > 0 && (
                             <span className={`flex items-center justify-center h-4 min-w-[1.25rem] px-1.5 rounded-full text-[9px] font-black transition-all ${
                                 activeTab === tab.id 
-                                    ? 'bg-blue-600 text-white shadow-[0_0_12px_rgba(37,99,235,0.4)]' 
+                                    ? `${theme.accentActive} text-white ${theme.accentShadow}` 
                                     : 'bg-white/5 text-gray-700 group-hover:bg-white/10 group-hover:text-gray-500'
                             }`}>
                                 {tab.count}
@@ -467,7 +467,7 @@ export default function ModelInspector({
 
                         {/* 選中狀態指示條 */}
                         {activeTab === tab.id && (
-                            <div className="absolute bottom-0 left-4 right-4 h-[2px] bg-blue-500 rounded-t-full shadow-[0_-2px_10px_rgba(59,130,246,0.6)]" />
+                            <div className={`absolute bottom-0 left-4 right-4 h-[2px] ${theme.accent} rounded-t-full ${theme.accentShadow}`} />
                         )}
                     </button>
                 ))}
@@ -484,14 +484,14 @@ export default function ModelInspector({
                                 const isVisible = mesh.visible;
                                 return (
                                     <div key={mesh.uuid}
-                                        className="flex items-center justify-between hover:bg-white/5 px-3 py-2 rounded-lg transition-colors cursor-pointer group"
+                                        className={`flex items-center justify-between ${theme.itemHover} px-3 py-2 rounded-lg transition-colors cursor-pointer group`}
                                         onClick={() => toggleMeshVisibility(mesh)}
                                     >
                                         <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isVisible ? 'bg-blue-500/20 text-blue-400' : 'bg-white/5 text-gray-600'}`}>
+                                            <div className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isVisible ? `${theme.accent}/20 text-blue-400` : 'bg-white/5 text-gray-600'}`}>
                                                 {isVisible ? <CheckSquare size={14} /> : <Square size={14} />}
                                             </div>
-                                            <span className={`text-xs font-medium truncate ${!isVisible ? 'text-gray-500' : 'text-gray-200'}`} title={mesh.name}>
+                                            <span className={`text-xs font-medium truncate ${!isVisible ? 'text-gray-500' : theme.text}`} title={mesh.name}>
                                                 {mesh.name || 'Unnamed Mesh'}
                                             </span>
                                         </div>
@@ -514,7 +514,7 @@ export default function ModelInspector({
                                     </span>
                                     <button
                                         onClick={() => setExpandAll(!expandAll)}
-                                        className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors flex items-center gap-1"
+                                        className={`px-3 py-1 text-xs ${theme.button} hover:bg-white/10 rounded transition-colors flex items-center gap-1`}
                                     >
                                         {expandAll ? (
                                             <>
@@ -531,7 +531,7 @@ export default function ModelInspector({
                                 </div>
                                 {rootBones.map((rootBone) => (
                                     <div key={rootBone.uuid} className="mb-2">
-                                        <BoneTree bone={rootBone} expandAll={expandAll} />
+                                        <BoneTree bone={rootBone} expandAll={expandAll} theme={theme} />
                                     </div>
                                 ))}
                             </>
@@ -548,13 +548,13 @@ export default function ModelInspector({
                                 onDragLeave={handleIniDragLeave}
                                 onDrop={handleIniDrop}
                                 className={`relative border-2 border-dashed rounded-lg p-8 text-center mt-4 transition-all ${isDraggingIni
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-gray-700 bg-gray-800/30'
+                                    ? `border-blue-500 ${theme.accent}/10`
+                                    : `${theme.panelBorder} bg-white/[0.01]`
                                     }`}
                             >
                                 {isDraggingIni ? (
                                     <div className="flex flex-col items-center">
-                                        <FileUp className="w-10 h-10 text-blue-400 mb-3" />
+                                        <FileUp className={`w-10 h-10 text-blue-400 mb-3`} />
                                         <p className="text-sm text-blue-300 font-medium mb-1">放開以導入 INI 檔案</p>
                                         <p className="text-xs text-gray-400">自動創建所有動畫片段</p>
                                     </div>
@@ -595,10 +595,10 @@ export default function ModelInspector({
                                 return (
                                     <div
                                         key={clipIndex}
-                                        className={`flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-200 overflow-visible ${
+                                        className={`flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-300 overflow-visible ${
                                             isCurrentClip
-                                                ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_4px_15px_rgba(0,0,0,0.1)]'
-                                                : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
+                                                ? `${theme.panelBg} border-blue-500/50 shadow-[0_8px_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20`
+                                                : `bg-white/[0.02] ${theme.panelBorder} ${theme.itemHover}`
                                             }`}
                                     >
                                         {/* Top row: clip info and buttons */}
@@ -609,7 +609,7 @@ export default function ModelInspector({
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <Film size={12} className={isCurrentClip ? 'text-blue-400' : 'text-gray-500 transition-colors group-hover/clipinfo:text-gray-300'} />
-                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? 'text-blue-100' : 'text-gray-400 group-hover/clipinfo:text-gray-200'}`}>
+                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? theme.text : 'text-gray-400 group-hover/clipinfo:text-gray-200'}`}>
                                                         {getClipDisplayName(animationClip)}
                                                     </span>
                                                 </div>
@@ -624,7 +624,7 @@ export default function ModelInspector({
                                                 <span className="text-[10px] font-bold text-gray-500 font-mono mr-2">{animationClip.duration.toFixed(2)}S</span>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onAddToPlaylist(animationClip); }}
-                                                    className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-400/10 rounded transition-all"
+                                                    className={`w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-400/10 rounded transition-all`}
                                                     title="加入動作序列"
                                                 >
                                                     <Plus size={14} />
@@ -634,7 +634,7 @@ export default function ModelInspector({
                                                         e.stopPropagation();
                                                         onDeleteCreatedClip(clipIndex);
                                                     }}
-                                                    className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all"
+                                                    className={`w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all`}
                                                     title="刪除動作"
                                                 >
                                                     <Trash2 size={14} />
@@ -651,6 +651,7 @@ export default function ModelInspector({
                                             effectMarkers={effectMarkers}
                                             clipDuration={animationClip.duration}
                                             className="mt-2"
+                                            theme={theme}
                                         />
                                     </div>
                                 );
@@ -663,7 +664,7 @@ export default function ModelInspector({
                     <div className="space-y-2">
                         <div className="flex justify-between items-center mb-3 px-1">
                             <div className="flex items-center gap-2">
-                                <div className="w-1 h-3 bg-blue-500/50 rounded-full" />
+                                <div className={`w-1 h-3 ${theme.accent}/50 rounded-full`} />
                                 <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase">Sequence Order</span>
                             </div>
                             <button
@@ -680,7 +681,7 @@ export default function ModelInspector({
                         </div>
 
                         {playlist.length === 0 ? (
-                            <div className="text-gray-500 text-[11px] font-medium text-center py-12 border-2 border-dashed border-white/5 rounded-xl bg-white/[0.01]">
+                            <div className={`text-gray-500 text-[11px] font-medium text-center py-12 border-2 border-dashed ${theme.panelBorder} rounded-xl bg-white/[0.01]`}>
                                 <Film className="w-8 h-8 mx-auto mb-3 opacity-10" />
                                 <p>No actions in sequence</p>
                                 <p className="text-[10px] text-gray-600 mt-1 uppercase tracking-widest">Add from "動作" tab</p>
@@ -715,16 +716,16 @@ export default function ModelInspector({
                                         onDragStart={(e) => handleDragStart(e, playlistIndex)}
                                         onDragOver={(e) => handleDragOver(e, playlistIndex)}
                                         onDragEnd={handleDragEnd}
-                                        className={`relative flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-200 overflow-visible ${isCurrentClip
-                                            ? 'bg-blue-600/10 border-blue-500/40 shadow-[0_4px_15px_rgba(0,0,0,0.1)]'
-                                            : 'bg-white/[0.02] border-white/5 hover:bg-white/5 hover:border-white/10'
+                                        className={`relative flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-300 overflow-visible ${isCurrentClip
+                                            ? `${theme.panelBg} border-blue-500/50 shadow-[0_8px_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20`
+                                            : `bg-white/[0.02] ${theme.panelBorder} ${theme.itemHover}`
                                             } ${draggedItemIndex === playlistIndex ? 'opacity-50 shadow-none border-dashed' : ''} cursor-grab active:cursor-grabbing`}
                                     >
                                         <div className="flex items-center justify-between mb-2">
                                             <div className="flex flex-col gap-0.5">
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-[10px] font-bold text-gray-600 font-mono w-4">{String(playlistIndex + 1).padStart(2, '0')}</span>
-                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? 'text-blue-100' : 'text-gray-300'}`}>
+                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? theme.text : 'text-gray-300'}`}>
                                                         {getClipDisplayName(playlistClip)}
                                                     </span>
                                                 </div>
@@ -738,7 +739,7 @@ export default function ModelInspector({
                                             <div className="flex items-center gap-2">
                                                 <span className="text-[10px] font-bold text-gray-500 mr-1">{playlistClip.duration.toFixed(1)}S</span>
                                                 {isCurrentClip && (
-                                                    <span className="text-[10px] text-blue-400 font-bold font-mono">{Math.round(clipProgress)}%</span>
+                                                    <span className={`text-[10px] text-blue-400 font-bold font-mono`}>{Math.round(clipProgress)}%</span>
                                                 )}
                                                 <button
                                                     onClick={() => onRemoveFromPlaylist(playlistIndex)}
@@ -756,6 +757,7 @@ export default function ModelInspector({
                                             size="sm"
                                             audioMarkers={audioMarkers}
                                             clipDuration={playlistClip.duration}
+                                            theme={theme}
                                         />
                                     </div>
                                 );
@@ -766,7 +768,7 @@ export default function ModelInspector({
             </div>
 
             {/* 下半部：動畫控制與剪輯 - Professional Redesign */}
-            <div className={`mt-auto border-t border-white/10 bg-[#0f172a]/80 backdrop-blur-md p-4 space-y-4 relative z-10`}>
+            <div className={`mt-auto border-t ${theme.panelBorder} bg-black/10 backdrop-blur-md p-4 space-y-4 relative z-10`}>
                 {/* 播放控制 */}
                 <div className="flex items-center gap-6">
                     <div className="flex items-center gap-3">
@@ -778,8 +780,8 @@ export default function ModelInspector({
                                 !model || !clip
                                     ? 'bg-white/5 cursor-not-allowed opacity-30'
                                     : isPlaying
-                                        ? 'bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-500/20'
-                                        : 'bg-white/10 hover:bg-white/20 text-white border border-white/5'
+                                        ? `${theme.accentActive} hover:opacity-90 ${theme.accentShadow}`
+                                        : `${theme.button} hover:bg-white/20 text-white border border-white/5`
                             }`}
                         >
                             {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="ml-0.5 fill-current" />}
@@ -796,8 +798,8 @@ export default function ModelInspector({
                                 !model || !clip
                                     ? 'bg-white/5 border-white/5 text-gray-600 cursor-not-allowed opacity-30'
                                     : isLoopEnabled
-                                        ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)]'
-                                        : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                                        ? `${theme.accent}/20 border-blue-500/40 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)]`
+                                        : `${theme.button} border-white/10 text-gray-400 hover:bg-white/10 hover:text-white`
                             }`}
                             title={isLoopEnabled ? '循環播放：開啟' : '循環播放：關閉'}
                         >
@@ -808,7 +810,7 @@ export default function ModelInspector({
                     {/* Timeline Slider */}
                     <div className="flex-1 flex flex-col justify-center gap-1.5">
                         <div className="flex justify-between items-end text-[10px] font-bold tracking-widest text-gray-500 uppercase">
-                            <span ref={frameDisplayRef} className="text-blue-400/80">{currentFrame} FRAME</span>
+                            <span ref={frameDisplayRef} className={`text-blue-400/80`}>{currentFrame} FRAME</span>
                             <span className="opacity-50">{totalFrames} FRAME</span>
                         </div>
                         <div className="relative h-5 flex items-center group">
@@ -822,7 +824,7 @@ export default function ModelInspector({
                             {/* Progress Fill */}
                             <div
                                 ref={progressFillRef}
-                                className="absolute h-1 bg-blue-500 rounded-full pointer-events-none shadow-[0_0_8px_rgba(59,130,246,0.4)]"
+                                className={`absolute h-1 ${theme.accent} rounded-full pointer-events-none ${theme.accentShadow}`}
                                 style={{ width: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%` }}
                             />
 
@@ -854,7 +856,7 @@ export default function ModelInspector({
                             {/* Custom Thumb (Visual Only) */}
                             <div
                                 ref={progressThumbRef}
-                                className="absolute w-3 h-3 bg-white rounded-full shadow-xl pointer-events-none scale-0 group-hover:scale-100 transition-transform duration-150"
+                                className={`absolute w-3 h-3 bg-white rounded-full shadow-xl pointer-events-none scale-0 group-hover:scale-100 transition-transform duration-150`}
                                 style={{
                                     left: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%`,
                                     transform: 'translateX(-50%)'
@@ -867,8 +869,8 @@ export default function ModelInspector({
                     <button
                         onClick={() => setIsClipFormExpanded(!isClipFormExpanded)}
                         className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 ${isClipFormExpanded
-                            ? 'bg-white/10 text-white rotate-0'
-                            : 'bg-transparent text-gray-500 hover:bg-white/5 hover:text-white rotate-180'
+                            ? `${theme.button} text-white rotate-0`
+                            : `bg-transparent text-gray-500 hover:bg-white/5 hover:text-white rotate-180`
                             }`}
                         title={isClipFormExpanded ? '收起剪輯工具' : '展開剪輯工具'}
                     >
@@ -884,13 +886,13 @@ export default function ModelInspector({
                         onDragLeave={handleIniDragLeave}
                         onDrop={handleIniDrop}
                         className={`relative group rounded-lg border transition-all duration-300 ${isDraggingIni
-                            ? 'border-blue-500 bg-blue-500/5'
-                            : 'border-white/5 bg-white/[0.03] hover:bg-white/[0.06]'
+                            ? `border-blue-500 ${theme.accent}/5`
+                            : `border-white/5 bg-white/[0.03] hover:bg-white/[0.06]`
                             }`}
                     >
                         <div className="p-3 flex items-center gap-4">
                             <div className="flex items-center gap-2 shrink-0">
-                                <div className="w-1 h-3 bg-blue-500/50 rounded-full" />
+                                <div className={`w-1 h-3 ${theme.accent}/50 rounded-full`} />
                                 <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase">New Clip</span>
                             </div>
 
@@ -901,7 +903,7 @@ export default function ModelInspector({
                                         placeholder="Action Name..."
                                         value={newClipName}
                                         onChange={(e) => setNewClipName(e.target.value)}
-                                        className="w-full bg-white/5 border border-white/5 rounded px-3 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/30 transition-all"
+                                        className={`w-full bg-white/5 border border-white/5 rounded px-3 py-1.5 text-xs ${theme.text} placeholder-gray-600 focus:outline-none focus:border-blue-500/30 transition-all`}
                                     />
                                 </div>
 
@@ -911,6 +913,7 @@ export default function ModelInspector({
                                         value={startFrame}
                                         onChange={(val) => setStartFrame(val)}
                                         className="w-10"
+                                        textColor={theme.text}
                                     />
                                     <span className="text-gray-700 text-xs">/</span>
                                     <NumberInput
@@ -918,13 +921,14 @@ export default function ModelInspector({
                                         value={endFrame}
                                         onChange={(val) => setEndFrame(val)}
                                         className="w-10"
+                                        textColor={theme.text}
                                     />
                                 </div>
 
                                 <div className="flex items-center gap-2">
                                     <button
                                         onClick={handleCreateClip}
-                                        className="flex items-center justify-center w-8 h-8 bg-blue-600 hover:bg-blue-500 text-white rounded transition-all duration-200 shadow-lg shadow-blue-900/20"
+                                        className={`flex items-center justify-center w-8 h-8 ${theme.accentActive} hover:opacity-90 text-white rounded transition-all duration-200 shadow-lg shadow-blue-900/20`}
                                         title="新增片段"
                                     >
                                         <Plus size={16} />
@@ -934,7 +938,7 @@ export default function ModelInspector({
 
                                     <button
                                         onClick={() => iniFileInputRef.current?.click()}
-                                        className="flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 rounded transition-all"
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${theme.button} hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 rounded transition-all`}
                                     >
                                         <Upload size={12} />
                                         <span>INI</span>
@@ -945,7 +949,7 @@ export default function ModelInspector({
 
                         {/* 拖曳提示覆蓋層 */}
                         {isDraggingIni && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-blue-600/20 backdrop-blur-sm rounded-lg z-20 pointer-events-none">
+                            <div className={`absolute inset-0 flex items-center justify-center ${theme.accent}/20 backdrop-blur-sm rounded-lg z-20 pointer-events-none`}>
                                 <div className="flex flex-col items-center">
                                     <FileUp className="w-6 h-6 text-white mb-1" />
                                     <p className="text-[10px] text-white font-bold uppercase tracking-tighter">Drop INI Here</p>
