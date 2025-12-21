@@ -61,6 +61,11 @@ interface LeftToolbarProps {
     setIsOrthographic: (isOrtho: boolean) => void;
     orthoZoom: number;
     setOrthoZoom: (zoom: number) => void;
+
+    // Scene Background Color
+    sceneBgColor: string;
+    setSceneBgColor: (color: string | null) => void;
+    defaultSceneBgColor: string;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -107,7 +112,10 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     isOrthographic,
     setIsOrthographic,
     orthoZoom,
-    setOrthoZoom
+    setOrthoZoom,
+    sceneBgColor,
+    setSceneBgColor,
+    defaultSceneBgColor
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -425,6 +433,39 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                             >
                                 重置預設值
                             </button>
+
+                            {/* Scene Background Color */}
+                            <div className="pt-4 border-t border-white/10">
+                                <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">預覽視窗底色</h4>
+                                <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                        <input
+                                            type="color"
+                                            value={sceneBgColor}
+                                            onChange={(e) => setSceneBgColor(e.target.value)}
+                                            className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white/10 hover:border-white/30 transition-colors"
+                                            style={{ backgroundColor: sceneBgColor }}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            value={sceneBgColor}
+                                            onChange={(e) => setSceneBgColor(e.target.value)}
+                                            placeholder="#000000"
+                                            className={`w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg ${currentTheme.text} text-xs font-mono focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
+                                        />
+                                    </div>
+                                </div>
+                                {sceneBgColor !== defaultSceneBgColor && (
+                                    <button
+                                        onClick={() => setSceneBgColor(null)}
+                                        className="mt-2 w-full py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-white/5 hover:border-white/20"
+                                    >
+                                        重置為主題預設
+                                    </button>
+                                )}
+                            </div>
 
                             {/* Tone Mapping & Exposure Section */}
                             <div className="pt-4 border-t border-white/10">

@@ -235,6 +235,7 @@ function App() {
   const [groundPlaneColor, setGroundPlaneColor] = useState('#444444');
   const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
   const [enableShadows, setEnableShadows] = useState(false);
+  const [customSceneBgColor, setCustomSceneBgColor] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(true);
 
   // Performance Monitor
@@ -1039,7 +1040,9 @@ function App() {
     [visibleBackLayers]
   );
 
-  const viewerBackgroundColor = is2DBackEnabled && hasBackContent ? 'transparent' : currentTheme.sceneBg;
+  const viewerBackgroundColor = is2DBackEnabled && hasBackContent 
+    ? 'transparent' 
+    : (customSceneBgColor ?? currentTheme.sceneBg);
   const isPointerEditing = activeTab === 'layer';
 
   // 切換分頁時，如果離開 layer 分頁，取消選定的 2D 元素
@@ -1353,6 +1356,9 @@ function App() {
           setIsOrthographic={setIsOrthographic}
           orthoZoom={orthoZoom}
           setOrthoZoom={setOrthoZoom}
+          sceneBgColor={customSceneBgColor ?? currentTheme.sceneBg}
+          setSceneBgColor={setCustomSceneBgColor}
+          defaultSceneBgColor={currentTheme.sceneBg}
         />}
 
         {/* 左側：3D 預覽區 */}
