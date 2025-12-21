@@ -326,7 +326,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                         ) : (
                                             <div className="flex items-center gap-2 group/name truncate">
                                                 <span
-                                                    className="text-white text-[11px] font-black tracking-widest uppercase cursor-pointer hover:text-blue-300 transition-colors truncate block"
+                                                    className="text-white text-[11px] font-black tracking-widest cursor-pointer hover:text-blue-300 transition-colors truncate block"
                                                     onClick={() => startEditingName(track)}
                                                     title="Click to rename"
                                                 >
@@ -451,7 +451,7 @@ export default function AudioPanel({ audioTracks, setAudioTracks, createdClips, 
                                                     <div key={trigger.id} className="group/trigger flex items-center justify-between bg-white/[0.02] hover:bg-white/[0.05] rounded-xl px-3 py-2 border border-white/5 transition-all">
                                                         <div className="flex items-center gap-3 text-[10px] font-bold">
                                                             <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: track.color, boxShadow: `0 0 8px ${track.color}80` }} />
-                                                            <span className="text-gray-300 tracking-wider uppercase">{displayName}</span>
+                                                            <span className="text-gray-300 tracking-wider">{displayName}</span>
                                                             <div className="w-px h-3 bg-white/10" />
                                                             <span className="text-gray-500">幀</span>
                                                             <span className="text-white bg-white/5 px-2 py-0.5 rounded-full" style={{ color: track.color }}>{trigger.frame}</span>
