@@ -79,18 +79,26 @@ export default function ModelManagerPanel({
   };
 
   return (
-    <div className="flex flex-col gap-4 h-full">
+    <div className="flex flex-col gap-5 h-full">
       {/* 標題 */}
-      <div className="flex items-center justify-between px-1">
-        <h2 className={`text-lg font-bold ${theme.text} flex items-center gap-2`}>
-          <Package className="w-5 h-5" />
-          模型管理
-        </h2>
-        <span className="text-xs text-gray-400">{models.length} 個模型</span>
+      <div className="flex items-center justify-between px-2 pt-1">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <Package className={`w-5 h-5 ${theme.text} relative z-10`} />
+            <div className="absolute inset-0 blur-lg bg-blue-500/20" />
+          </div>
+          <h2 className={`text-sm font-black tracking-[0.2em] uppercase ${theme.text}`}>
+            Model Assets
+          </h2>
+        </div>
+        <div className="flex items-center gap-2 px-2 py-0.5 rounded-full bg-white/5 border border-white/10">
+          <span className="text-[10px] font-mono text-gray-400">{models.length}</span>
+          <span className="text-[9px] uppercase tracking-tighter text-gray-500">Units</span>
+        </div>
       </div>
 
       {/* 上傳按鈕 */}
-      <div className="flex flex-col gap-2 px-1">
+      <div className="flex flex-col gap-2.5 px-1">
         <input
           ref={fileInputRef}
           type="file"
@@ -102,62 +110,65 @@ export default function ModelManagerPanel({
         />
         <label
           htmlFor="model-file-upload"
-          className={`group relative flex items-center justify-between py-3.5 px-5 rounded-2xl cursor-pointer transition-all duration-700 overflow-hidden border border-white/10 ${isLoading
-            ? 'bg-gray-900/40 text-gray-600 cursor-not-allowed'
-            : 'bg-gradient-to-r from-white/[0.08] to-transparent hover:from-white/[0.12] hover:to-white/[0.02] hover:shadow-[0_15px_30px_rgba(0,0,0,0.3),0_0_15px_rgba(59,130,246,0.1)] hover:-translate-y-0.5'
+          className={`group relative flex items-center justify-between py-4 px-6 rounded-2xl cursor-pointer transition-all duration-700 overflow-hidden border-2 backdrop-blur-xl shadow-2xl ${isLoading
+            ? 'bg-gray-900/40 text-gray-600 border-white/5 cursor-not-allowed'
+            : 'bg-gradient-to-br from-white/[0.08] via-white/[0.03] to-transparent border-blue-500/20 hover:border-blue-400/50 hover:shadow-[0_20px_40px_rgba(0,0,0,0.4),0_0_20px_rgba(59,130,246,0.2)] hover:-translate-y-0.5'
             }`}
         >
-          {/* 背景層次與光影 - 調整為橫向漸變 */}
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(59,130,246,0.1),transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+          {/* 背景層次與光影 */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(59,130,246,0.15),transparent_70%)] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
           
           {/* 極細邊框高光 */}
-          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
+          <div className="absolute inset-x-0 top-0 h-[1.5px] bg-gradient-to-r from-transparent via-blue-400/40 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
 
           {isLoading ? (
             <div className="flex items-center gap-3 relative z-10 w-full justify-center">
               <div className="relative">
-                <div className="absolute inset-0 blur-md bg-blue-500/20 animate-pulse" />
+                <div className="absolute inset-0 blur-md bg-blue-500/30 animate-pulse" />
                 <Loader2 className="w-5 h-5 animate-spin text-blue-400 relative z-10" />
               </div>
-              <span className="text-[9px] font-medium tracking-[0.3em] uppercase text-blue-400/60 animate-pulse">Initializing System</span>
+              <span className="text-[10px] font-bold tracking-[0.4em] uppercase text-blue-400/70 animate-pulse">Synchronizing</span>
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-4 relative z-10">
-                {/* 圖示組合 - 縮小尺寸 */}
+              <div className="flex items-center gap-5 relative z-10">
+                {/* 圖示組合 */}
                 <div className="relative">
-                  <div className="absolute inset-0 blur-lg bg-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                  <div className="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center bg-white/5 group-hover:border-blue-500/30 group-hover:bg-blue-500/5 transition-all duration-500">
-                    <Upload className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors duration-500" />
+                  <div className="absolute inset-0 blur-xl bg-blue-500/30 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-11 h-11 rounded-2xl border border-white/10 flex items-center justify-center bg-white/5 group-hover:border-blue-500/40 group-hover:bg-blue-500/10 transition-all duration-500">
+                    <Upload className="w-5 h-5 text-gray-400 group-hover:text-blue-400 transition-all duration-500" />
                   </div>
                 </div>
 
-                {/* 文字排版 - 橫向對齊 */}
-                <div className="flex flex-col">
-                  <div className="text-[11px] font-black tracking-[0.3em] uppercase text-gray-200 group-hover:text-white transition-colors duration-500">
-                    Import Model
+                {/* 文字排版 */}
+                <div className="flex flex-col gap-0.5">
+                  <div className="text-[12px] font-black tracking-[0.25em] uppercase text-gray-200 group-hover:text-white transition-colors duration-500">
+                    Import Engine
                   </div>
-                  <div className="text-[8px] font-medium tracking-[0.1em] uppercase text-gray-500 group-hover:text-blue-400/60 transition-colors duration-500">
-                    FBX & Textures
+                  <div className="text-[9px] font-medium tracking-[0.15em] uppercase text-gray-500 group-hover:text-blue-400/70 transition-colors duration-500">
+                    FBX / Texture Pipeline
                   </div>
                 </div>
               </div>
 
-              {/* 裝飾性右側箭頭或裝飾 */}
-              <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-2 group-hover:translate-x-0">
-                <div className="w-5 h-5 rounded-full border border-blue-500/20 flex items-center justify-center bg-blue-500/5">
-                  <div className="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+              {/* 裝飾性右側指示器 */}
+              <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-all duration-700 -translate-x-4 group-hover:translate-x-0">
+                <div className="w-6 h-6 rounded-full border border-blue-500/30 flex items-center justify-center bg-blue-500/10">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_10px_rgba(59,130,246,1)]" />
                 </div>
               </div>
             </>
           )}
 
-          {/* 底部裝飾線 */}
-          <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500/10 to-transparent translate-y-1 group-hover:translate-y-0 transition-transform duration-500" />
+          {/* 底部亮線裝飾 */}
+          <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500/20 to-transparent translate-y-1 group-hover:translate-y-0 transition-transform duration-500" />
         </label>
-        <p className="text-[10px] text-gray-500">
-          *若模型有外部貼圖，請同時選取 FBX 與貼圖檔
-        </p>
+        <div className="flex items-center gap-1.5 px-1 opacity-60">
+          <div className="w-1 h-1 rounded-full bg-blue-400/50" />
+          <p className="text-[9px] text-gray-500 tracking-wider">
+            Supports multi-file asset injection for FBX & associated textures
+          </p>
+        </div>
       </div>
 
       {/* 模型列表 */}
