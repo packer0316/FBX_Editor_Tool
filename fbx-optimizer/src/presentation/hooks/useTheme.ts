@@ -60,7 +60,7 @@ const themeStyles: Record<ThemeMode, ThemeStyle> = {
     inputBorder: 'border-white/10',
     cardBg: 'bg-black/30',
     dividerBorder: 'border-white/10',
-    dividerBg: 'bg-white/10'
+    dividerBg: 'bg-white/20'
   },
   light: {
     bg: 'bg-slate-50',
@@ -112,7 +112,7 @@ const themeStyles: Record<ThemeMode, ThemeStyle> = {
     cardBorder: 'border-neon-purple/20',
     sectionLabel: 'text-neon-purple/60',
     dividerBorder: 'border-neon-blue/10',
-    dividerBg: 'bg-neon-blue/10'
+    dividerBg: 'bg-neon-blue/20'
   },
   nord: {
     bg: 'bg-[#2e3440]',

@@ -226,7 +226,7 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose, cur
               <span className={`text-xs ${currentTheme.text} font-mono`}>{threshold}</span>
             </div>
             <div className="relative h-6 flex items-center">
-              <div className="absolute w-full h-2 bg-gray-600/20 rounded-full" />
+              <div className={`absolute w-full h-2 ${currentTheme.dividerBg} rounded-full`} />
               <div 
                 className="absolute h-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full" 
                 style={{ width: `${(threshold / 255) * 100}%` }}

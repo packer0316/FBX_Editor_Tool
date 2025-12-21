@@ -392,18 +392,25 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
             </div>
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>透明度 {Math.round(element.opacity * 100)}%</label>
-              <div className="flex items-center h-[30px]">
-                <input
-                  type="range"
-                  min={0}
-                  max={1}
-                  step={0.05}
-                  className={`w-full h-2 rounded-full cursor-pointer appearance-none bg-gray-600/30
-                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md
-                    [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full`}
-                  value={element.opacity}
-                  onChange={(e) => onUpdate({ opacity: numberValue(e.target.value, element.opacity) })}
-                />
+              <div className="flex items-center h-[30px] mt-1">
+                <div className="flex-1 relative h-4 flex items-center">
+                  <div className={`absolute w-full h-1.5 ${currentTheme.dividerBg} rounded-full`} />
+                  <div 
+                    className="absolute h-1.5 bg-blue-500/60 rounded-full" 
+                    style={{ width: `${element.opacity * 100}%` }}
+                  />
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    className="absolute w-full h-4 cursor-pointer appearance-none bg-transparent
+                      [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:bg-blue-500 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:shadow-md
+                      [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full"
+                    value={element.opacity}
+                    onChange={(e) => onUpdate({ opacity: numberValue(e.target.value, element.opacity) })}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -614,7 +621,7 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
                 </label>
                 <div className="flex items-center gap-2 mt-1">
                   <div className="flex-1 relative h-4 flex items-center">
-                    <div className="absolute w-full h-1.5 bg-gray-600/30 rounded-full" />
+                    <div className={`absolute w-full h-1.5 ${currentTheme.dividerBg} rounded-full`} />
                     <div 
                       className="absolute h-1.5 bg-purple-500/60 rounded-full" 
                       style={{ width: `${(((element as SpineElement2D).scale ?? 1) - 0.1) / 2.9 * 100}%` }}
@@ -864,7 +871,7 @@ const LayerCard: React.FC<{
         <span className={`${currentTheme.sectionLabel}`}>透明</span>
         <div className="flex-1 relative h-4 flex items-center">
           {/* 底色軌道 */}
-          <div className="absolute w-full h-1.5 bg-gray-600/20 rounded-full" />
+          <div className={`absolute w-full h-1.5 ${currentTheme.dividerBg} rounded-full`} />
           {/* 進度軌道 */}
           <div 
             className="absolute h-1.5 bg-blue-500/60 rounded-full" 
