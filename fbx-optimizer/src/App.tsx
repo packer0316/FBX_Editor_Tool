@@ -1303,26 +1303,8 @@ function App() {
   return (
     <div
       className={`h-screen overflow-hidden ${currentTheme.bg} ${currentTheme.text} flex flex-col`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
-      {/* 拖放覆蓋層 */}
-      {isFileDragging && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
-          <div className="bg-gray-900/90 border-2 border-neon-blue border-dashed rounded-2xl p-12 shadow-[0_0_50px_rgba(59,130,246,0.3)] text-center transform transition-all duration-300 scale-100">
-            <div className="mb-6 flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-neon-blue/20 flex items-center justify-center animate-pulse-slow">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-neon-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-2">釋放滑鼠以上傳檔案</h3>
-            <p className="text-gray-400">支援 FBX 模型與貼圖檔案</p>
-          </div>
-        </div>
-      )}
+      {/* FBX 拖放覆蓋層已移至預覽區內 */}
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar (Floating Glass) - 可隱藏 */}
@@ -1528,7 +1510,26 @@ function App() {
             <div
               ref={aspectRatioContainerRef}
               className="absolute inset-0 bg-black flex items-center justify-center p-0 z-0"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
+              {/* FBX 拖放覆蓋層 - 僅覆蓋預覽區 */}
+              {isFileDragging && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center animate-fade-in">
+                  <div className="bg-gray-900/90 border-2 border-neon-blue border-dashed rounded-2xl p-12 shadow-[0_0_50px_rgba(59,130,246,0.3)] text-center transform transition-all duration-300 scale-100">
+                    <div className="mb-6 flex justify-center">
+                      <div className="w-20 h-20 rounded-full bg-neon-blue/20 flex items-center justify-center animate-pulse-slow">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-neon-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">釋放滑鼠以上傳檔案</h3>
+                    <p className="text-gray-400">支援 FBX 模型與貼圖檔案</p>
+                  </div>
+                </div>
+              )}
               <div
                 style={getAspectRatioStyle()}
                 className="relative z-[10]"
@@ -1547,9 +1548,6 @@ function App() {
                 <div
                   ref={previewContainerRef}
                   className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/80"
-                  onDragOver={(e) => e.stopPropagation()}
-                  onDragLeave={(e) => e.stopPropagation()}
-                  onDrop={(e) => e.stopPropagation()}
                   onClick={() => {
                     // 點擊預覽區空白處時，取消選定的 2D 元素
                     if (isPointerEditing && activeElementId) {

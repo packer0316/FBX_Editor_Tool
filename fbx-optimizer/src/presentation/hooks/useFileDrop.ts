@@ -37,7 +37,12 @@ export function useFileDrop(onDrop: (files: FileList) => void) {
     // 只有拖曳外部檔案時才顯示拖放區域，忽略內部拖曳（如 Director Mode 的動作拖曳）
     const hasFiles = e.dataTransfer.types.includes('Files');
     const isInternalDrag = e.dataTransfer.types.includes('application/json');
-    if (hasFiles && !isInternalDrag) {
+    
+    // 檢查是否在專屬拖放區域內（如 INI 區域），若是則不顯示全域覆蓋層
+    const target = e.target as HTMLElement;
+    const isInExcludedZone = target.closest('[data-drop-zone]') !== null;
+    
+    if (hasFiles && !isInternalDrag && !isInExcludedZone) {
       setIsFileDragging(true);
     }
   };

@@ -186,6 +186,7 @@ export default function ModelManagerPanel({
             <Package className="w-12 h-12 mb-2 opacity-50" />
             <p className="text-sm">尚無模型</p>
             <p className="text-xs mt-1">點擊上方按鈕新增模型</p>
+            <p className="text-xs mt-1 text-gray-600">可直接拖曳至預覽視窗</p>
           </div>
         ) : (
           models.map((modelInstance) => (

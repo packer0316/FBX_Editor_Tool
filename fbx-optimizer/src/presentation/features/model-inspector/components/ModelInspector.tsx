@@ -543,6 +543,7 @@ export default function ModelInspector({
                     <div className="space-y-1">
                         {createdClips.length === 0 ? (
                             <div
+                                data-drop-zone="ini"
                                 onDragOver={handleIniDragOver}
                                 onDragLeave={handleIniDragLeave}
                                 onDrop={handleIniDrop}
@@ -878,6 +879,7 @@ export default function ModelInspector({
                 {/* 剪輯建立 - Professional Style */}
                 <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isClipFormExpanded ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}>
                     <div
+                        data-drop-zone="ini"
                         onDragOver={handleIniDragOver}
                         onDragLeave={handleIniDragLeave}
                         onDrop={handleIniDrop}
