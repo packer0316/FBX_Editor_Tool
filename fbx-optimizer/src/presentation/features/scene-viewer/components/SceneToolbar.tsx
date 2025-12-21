@@ -238,9 +238,9 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                 {/* Director Mode 按鈕 */}
                 <button
                     onClick={toggleDirectorMode}
-                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${
+                    className={`p-2.5 rounded-full transition-all duration-150 group relative ${
                         isDirectorMode
-                            ? 'bg-gradient-to-b from-amber-400 to-amber-600 text-white shadow-[0_0_20px_rgba(245,158,11,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] border-t border-white/20'
+                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-[0_0_0_3px_rgba(251,191,36,0.08),0_0_16px_-2px_rgba(251,191,36,0.25)] backdrop-blur-sm active:scale-90 active:bg-amber-400/30 active:shadow-[0_0_0_2px_rgba(251,191,36,0.2),0_0_12px_-2px_rgba(251,191,36,0.4)]'
                             : `${theme.button} ${theme.itemHover} hover:scale-110`
                     }`}
                     title="Director Mode"
