@@ -79,6 +79,7 @@ import { isSpineElement } from './domain/value-objects/Element2D';
 
 // Toast 通知
 import { ToastContainer } from './presentation/components/Toast';
+import { VersionModal } from './presentation/components/VersionModal';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
@@ -180,6 +181,7 @@ function App() {
   // Camera Settings
   type SidebarPanel = 'none' | 'theme' | 'camera' | 'ground';
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>('none');
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
 
   const cameraSettingsRef = useRef<HTMLDivElement>(null);
   const groundSettingsRef = useRef<HTMLDivElement>(null);
@@ -2083,14 +2085,33 @@ function App() {
           </div>
 
           {/* 底部標籤 */}
-          <div className={`p-4 text-center opacity-40 hover:opacity-100 transition-opacity border-t ${currentTheme.dividerBorder}`}>
-            <p className={`text-[10px] ${currentTheme.text} opacity-70`}>
-              Designed for Game Developers · <span className="opacity-50 font-mono">v{__APP_VERSION__}</span>
-            </p>
+          <div className={`p-4 text-center group transition-all border-t ${currentTheme.dividerBorder} relative`}>
+            <div className="flex flex-col items-center justify-center gap-2">
+              <p className={`text-[10px] ${currentTheme.text} opacity-40 group-hover:opacity-70 transition-opacity`}>
+                Designed for Game Developers · <span className="opacity-50 font-mono">v{__APP_VERSION__}</span>
+              </p>
+              
+              <button
+                onClick={() => setIsVersionModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-200 
+                  ${currentTheme.button} border border-transparent hover:border-blue-500/30 hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] 
+                  group-hover:translate-y-[-2px] opacity-40 group-hover:opacity-100`}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <span>What's New</span>
+              </button>
+            </div>
           </div>
         </div>
       </div >
       
+      {/* 版本更新 Modal */}
+      <VersionModal 
+        isOpen={isVersionModalOpen} 
+        onClose={() => setIsVersionModalOpen(false)} 
+        theme={currentTheme}
+      />
+
       {/* Toast 通知容器 */}
       <ToastContainer />
     </div >
