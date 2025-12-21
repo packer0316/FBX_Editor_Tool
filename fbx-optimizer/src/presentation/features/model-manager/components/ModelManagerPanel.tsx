@@ -102,22 +102,58 @@ export default function ModelManagerPanel({
         />
         <label
           htmlFor="model-file-upload"
-          className={`flex items-center justify-center gap-2 py-3 px-4 rounded-xl cursor-pointer transition-all shadow-lg font-medium border-2 border-dashed ${isLoading
-            ? 'bg-gray-600 text-gray-400 cursor-not-allowed border-gray-600'
-            : `${theme.activeButton} border-blue-500/50 hover:border-blue-400 hover:shadow-blue-500/30`
+          className={`group relative flex items-center justify-between py-3.5 px-5 rounded-2xl cursor-pointer transition-all duration-700 overflow-hidden border border-white/10 ${isLoading
+            ? 'bg-gray-900/40 text-gray-600 cursor-not-allowed'
+            : 'bg-gradient-to-r from-white/[0.08] to-transparent hover:from-white/[0.12] hover:to-white/[0.02] hover:shadow-[0_15px_30px_rgba(0,0,0,0.3),0_0_15px_rgba(59,130,246,0.1)] hover:-translate-y-0.5'
             }`}
         >
+          {/* 背景層次與光影 - 調整為橫向漸變 */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_50%,rgba(59,130,246,0.1),transparent_60%)] opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+          
+          {/* 極細邊框高光 */}
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent scale-x-0 group-hover:scale-x-100 transition-transform duration-700" />
+
           {isLoading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              載入中...
-            </>
+            <div className="flex items-center gap-3 relative z-10 w-full justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 blur-md bg-blue-500/20 animate-pulse" />
+                <Loader2 className="w-5 h-5 animate-spin text-blue-400 relative z-10" />
+              </div>
+              <span className="text-[9px] font-medium tracking-[0.3em] uppercase text-blue-400/60 animate-pulse">Initializing System</span>
+            </div>
           ) : (
             <>
-              <Upload className="w-4 h-4" />
-              新增模型
+              <div className="flex items-center gap-4 relative z-10">
+                {/* 圖示組合 - 縮小尺寸 */}
+                <div className="relative">
+                  <div className="absolute inset-0 blur-lg bg-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                  <div className="w-9 h-9 rounded-xl border border-white/10 flex items-center justify-center bg-white/5 group-hover:border-blue-500/30 group-hover:bg-blue-500/5 transition-all duration-500">
+                    <Upload className="w-4 h-4 text-gray-400 group-hover:text-blue-400 transition-colors duration-500" />
+                  </div>
+                </div>
+
+                {/* 文字排版 - 橫向對齊 */}
+                <div className="flex flex-col">
+                  <div className="text-[11px] font-black tracking-[0.3em] uppercase text-gray-200 group-hover:text-white transition-colors duration-500">
+                    Import Model
+                  </div>
+                  <div className="text-[8px] font-medium tracking-[0.1em] uppercase text-gray-500 group-hover:text-blue-400/60 transition-colors duration-500">
+                    FBX & Textures
+                  </div>
+                </div>
+              </div>
+
+              {/* 裝飾性右側箭頭或裝飾 */}
+              <div className="relative z-10 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-x-2 group-hover:translate-x-0">
+                <div className="w-5 h-5 rounded-full border border-blue-500/20 flex items-center justify-center bg-blue-500/5">
+                  <div className="w-1 h-1 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
+                </div>
+              </div>
             </>
           )}
+
+          {/* 底部裝飾線 */}
+          <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-transparent via-blue-500/10 to-transparent translate-y-1 group-hover:translate-y-0 transition-transform duration-500" />
         </label>
         <p className="text-[10px] text-gray-500">
           *若模型有外部貼圖，請同時選取 FBX 與貼圖檔
