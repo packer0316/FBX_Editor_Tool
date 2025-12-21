@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronRight, ChevronsDownUp, Eye, EyeOff, GripVertical, HelpCircle, ImageIcon, Layers, Lock, PlusCircle, Trash2, Type, Unlock, X, Bone, Wand2 } from 'lucide-react';
 import { ImageToolsPanel } from './ImageToolsPanel';
+import { DeferredInput } from '../../../../components/ui/DeferredInput';
 import type { Layer } from '../../../../domain/value-objects/Layer';
 import type { Element2D, ImageElement2D, ShapeElement2D, TextElement2D, SpineElement2D, SpineFitMode } from '../../../../domain/value-objects/Element2D';
 import { isImageElement, isShapeElement, isTextElement, isSpineElement } from '../../../../domain/value-objects/Element2D';
@@ -382,11 +383,11 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
           <div className="grid grid-cols-2 gap-2">
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>Z-Index</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.zIndex}
-                onChange={(e) => onUpdate({ zIndex: numberValue(e.target.value, element.zIndex) })}
+                onChange={(val) => onUpdate({ zIndex: numberValue(val, element.zIndex) })}
               />
             </div>
             <div>
@@ -411,20 +412,20 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>X</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.position.x}
-                onChange={(e) => updatePosition('x', numberValue(e.target.value, element.position.x))}
+                onChange={(val) => updatePosition('x', numberValue(val, element.position.x))}
               />
             </div>
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>Y</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.position.y}
-                onChange={(e) => updatePosition('y', numberValue(e.target.value, element.position.y))}
+                onChange={(val) => updatePosition('y', numberValue(val, element.position.y))}
               />
             </div>
             <div>
@@ -444,29 +445,29 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
           <div className="grid grid-cols-3 gap-2">
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>寬</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.size.width}
-                onChange={(e) => updateSize('width', numberValue(e.target.value, element.size.width))}
+                onChange={(val) => updateSize('width', numberValue(val, element.size.width))}
               />
             </div>
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>高</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.size.height}
-                onChange={(e) => updateSize('height', numberValue(e.target.value, element.size.height))}
+                onChange={(val) => updateSize('height', numberValue(val, element.size.height))}
               />
             </div>
             <div>
               <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>旋轉</label>
-              <input
-                type="number"
+              <DeferredInput
+                numeric
                 className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                 value={element.rotation}
-                onChange={(e) => onUpdate({ rotation: numberValue(e.target.value, element.rotation) })}
+                onChange={(val) => onUpdate({ rotation: numberValue(val, element.rotation) })}
               />
             </div>
           </div>
@@ -484,11 +485,11 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
               <div className="grid grid-cols-3 gap-2">
                 <div>
                   <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>字體大小</label>
-                  <input
-                    type="number"
+                  <DeferredInput
+                    numeric
                     className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                     value={element.fontSize}
-                    onChange={(e) => updateTextElement({ fontSize: numberValue(e.target.value, element.fontSize) })}
+                    onChange={(val) => updateTextElement({ fontSize: numberValue(val, element.fontSize) })}
                   />
                 </div>
                 <div>
@@ -557,11 +558,11 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
                 </div>
                 <div>
                   <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>圓角</label>
-                  <input
-                    type="number"
+                  <DeferredInput
+                    numeric
                     className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                     value={element.borderRadius}
-                    onChange={(e) => updateImageElement({ borderRadius: numberValue(e.target.value, element.borderRadius) })}
+                    onChange={(val) => updateImageElement({ borderRadius: numberValue(val, element.borderRadius) })}
                   />
                 </div>
               </div>
@@ -592,11 +593,11 @@ const ElementBadge: React.FC<ElementBadgeProps> = ({
                 </div>
                 <div>
                   <label className={`text-[10px] ${currentTheme.sectionLabel} uppercase`}>邊框寬</label>
-                  <input
-                    type="number"
+                  <DeferredInput
+                    numeric
                     className={`w-full mt-1 px-2 py-1.5 ${currentTheme.inputBg} rounded border ${currentTheme.inputBorder} focus:outline-none ${currentTheme.text} text-xs`}
                     value={element.strokeWidth}
-                    onChange={(e) => updateShapeElement({ strokeWidth: numberValue(e.target.value, element.strokeWidth) })}
+                    onChange={(val) => updateShapeElement({ strokeWidth: numberValue(val, element.strokeWidth) })}
                   />
                 </div>
               </div>

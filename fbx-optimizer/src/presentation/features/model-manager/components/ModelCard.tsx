@@ -547,10 +547,12 @@ export default function ModelCard({
                       <NumberInput
                         value={modelInstance.position[idx].toFixed(2)}
                         onChange={(val) => {
-                          const value = parseFloat(val) || 0;
-                          const newPosition: [number, number, number] = [...modelInstance.position];
-                          newPosition[idx] = value;
-                          onUpdateTransform({ position: newPosition });
+                          const value = parseFloat(val);
+                          if (!isNaN(value)) {
+                            const newPosition: [number, number, number] = [...modelInstance.position];
+                            newPosition[idx] = value;
+                            onUpdateTransform({ position: newPosition });
+                          }
                         }}
                         className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
                         step={0.1}
@@ -619,10 +621,12 @@ export default function ModelCard({
                       <NumberInput
                         value={modelInstance.rotation[idx].toFixed(1)}
                         onChange={(val) => {
-                          const value = parseFloat(val) || 0;
-                          const newRotation: [number, number, number] = [...modelInstance.rotation];
-                          newRotation[idx] = value;
-                          onUpdateTransform({ rotation: newRotation });
+                          const value = parseFloat(val);
+                          if (!isNaN(value)) {
+                            const newRotation: [number, number, number] = [...modelInstance.rotation];
+                            newRotation[idx] = value;
+                            onUpdateTransform({ rotation: newRotation });
+                          }
                         }}
                         className="flex-1 bg-black/40 rounded border border-white/15 focus-within:border-blue-500"
                         step={1}
