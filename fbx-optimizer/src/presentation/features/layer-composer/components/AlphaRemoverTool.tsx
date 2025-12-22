@@ -1,8 +1,11 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Upload, Download, RotateCcw, X } from 'lucide-react';
+import type { ThemeStyle, ThemeMode } from '../../../hooks/useTheme';
 
 interface AlphaRemoverToolProps {
   onClose?: () => void;
+  currentTheme: ThemeStyle;
+  themeMode: ThemeMode;
 }
 
 interface ImageData {
@@ -25,7 +28,7 @@ const checkerboardStyle: React.CSSProperties = {
   backgroundColor: '#1f2937'
 };
 
-export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) => {
+export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose, currentTheme, themeMode }) => {
   const [sourceImage, setSourceImage] = useState<ImageData | null>(null);
   const [threshold, setThreshold] = useState(10);
   const [processedDataUrl, setProcessedDataUrl] = useState<string | null>(null);
@@ -33,6 +36,19 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  /** 棋盤格背景 CSS - 用於顯示透明區域 */
+  const checkerboardStyle: React.CSSProperties = {
+    backgroundImage: `
+      linear-gradient(45deg, ${themeMode === 'light' ? '#e2e8f0' : '#374151'} 25%, transparent 25%),
+      linear-gradient(-45deg, ${themeMode === 'light' ? '#e2e8f0' : '#374151'} 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, ${themeMode === 'light' ? '#e2e8f0' : '#374151'} 75%),
+      linear-gradient(-45deg, transparent 75%, ${themeMode === 'light' ? '#e2e8f0' : '#374151'} 75%)
+    `,
+    backgroundSize: '16px 16px',
+    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+    backgroundColor: themeMode === 'light' ? '#f8fafc' : '#1f2937'
+  };
 
   // 處理圖片上傳
   const handleFileSelect = useCallback((file: File) => {
@@ -151,12 +167,12 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
     <div className="space-y-4">
       {/* 標題列 */}
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium text-white">Alpha 去背工具</h4>
+        <h4 className={`text-sm font-medium ${currentTheme.text}`}>Alpha 去背工具</h4>
         {onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
+            className={`p-1 rounded ${currentTheme.itemHover} text-gray-400 hover:text-red-500 transition-colors`}
           >
             <X size={14} />
           </button>
@@ -174,7 +190,7 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
             transition-colors duration-200
             ${isDragging 
               ? 'border-blue-400 bg-blue-500/10' 
-              : 'border-white/20 hover:border-white/40 hover:bg-white/5'
+              : `${currentTheme.cardBorder} hover:border-blue-400/40 hover:${currentTheme.itemHover}`
             }
           `}
           onClick={() => fileInputRef.current?.click()}
@@ -183,8 +199,8 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
           onDrop={handleDrop}
         >
           <Upload size={32} className="mx-auto mb-3 text-gray-400" />
-          <p className="text-sm text-gray-300">拖放圖片或點擊上傳</p>
-          <p className="text-xs text-gray-500 mt-1">支援 PNG、JPG、WebP 等格式</p>
+          <p className={`text-sm ${currentTheme.text} opacity-60`}>拖放圖片或點擊上傳</p>
+          <p className={`text-xs ${currentTheme.text} opacity-40 mt-1`}>支援 PNG、JPG、WebP 等格式</p>
           <input
             ref={fileInputRef}
             type="file"
@@ -196,21 +212,21 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
       ) : (
         <>
           {/* 圖片資訊 */}
-          <div className="flex items-center justify-between text-xs text-gray-400 bg-black/30 rounded-lg px-3 py-2">
+          <div className={`flex items-center justify-between text-xs ${currentTheme.text} opacity-60 ${currentTheme.inputBg} rounded-lg px-3 py-2 border ${currentTheme.inputBorder}`}>
             <span className="truncate flex-1 mr-2">{sourceImage.file.name}</span>
-            <span>{sourceImage.width} × {sourceImage.height}</span>
+            <span className="font-mono">{sourceImage.width} × {sourceImage.height}</span>
           </div>
 
           {/* Alpha 閾值控制 */}
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="text-xs text-gray-400 uppercase">
+              <label className={`text-xs ${currentTheme.sectionLabel} uppercase`}>
                 Alpha 閾值
               </label>
-              <span className="text-xs text-white font-mono">{threshold}</span>
+              <span className={`text-xs ${currentTheme.text} font-mono`}>{threshold}</span>
             </div>
             <div className="relative h-6 flex items-center">
-              <div className="absolute w-full h-2 bg-gray-600/80 rounded-full" />
+              <div className={`absolute w-full h-2 ${currentTheme.dividerBg} rounded-full`} />
               <div 
                 className="absolute h-2 bg-gradient-to-r from-cyan-500 to-blue-500 rounded-full" 
                 style={{ width: `${(threshold / 255) * 100}%` }}
@@ -227,7 +243,7 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
                   [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:cursor-pointer"
               />
             </div>
-            <p className="text-[10px] text-gray-500">
+            <p className={`text-[10px] ${currentTheme.text} opacity-40`}>
               Alpha 值低於 {threshold} 的像素將變為全透明
             </p>
           </div>
@@ -236,9 +252,9 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
           <div className="grid grid-cols-2 gap-3">
             {/* 原圖 */}
             <div className="space-y-1">
-              <p className="text-[10px] text-gray-500 uppercase text-center">原圖</p>
+              <p className={`text-[10px] ${currentTheme.sectionLabel} uppercase text-center`}>原圖</p>
               <div 
-                className="relative rounded-lg overflow-hidden border border-white/10"
+                className={`relative rounded-lg overflow-hidden border ${currentTheme.dividerBorder}`}
                 style={checkerboardStyle}
               >
                 <img 
@@ -252,9 +268,9 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
             
             {/* 處理後 */}
             <div className="space-y-1">
-              <p className="text-[10px] text-gray-500 uppercase text-center">處理後</p>
+              <p className={`text-[10px] ${currentTheme.sectionLabel} uppercase text-center`}>處理後</p>
               <div 
-                className="relative rounded-lg overflow-hidden border border-white/10"
+                className={`relative rounded-lg overflow-hidden border ${currentTheme.dividerBorder}`}
                 style={checkerboardStyle}
               >
                 {processedDataUrl && (
@@ -274,8 +290,8 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
             <button
               type="button"
               onClick={handleReset}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                bg-white/5 hover:bg-white/10 text-gray-300 text-sm transition-colors"
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                ${currentTheme.inputBg} ${currentTheme.itemHover} ${currentTheme.text} opacity-80 text-sm transition-colors border ${currentTheme.inputBorder}`}
             >
               <RotateCcw size={14} />
               重新選擇
@@ -284,9 +300,9 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
               type="button"
               onClick={handleDownload}
               disabled={!processedDataUrl}
-              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg
-                bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-200 border border-cyan-400/40
-                text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg
+                bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-200 border border-cyan-500/30
+                text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium`}
             >
               <Download size={14} />
               下載 PNG
@@ -297,5 +313,9 @@ export const AlphaRemoverTool: React.FC<AlphaRemoverToolProps> = ({ onClose }) =
     </div>
   );
 };
+
+
+
+
 
 

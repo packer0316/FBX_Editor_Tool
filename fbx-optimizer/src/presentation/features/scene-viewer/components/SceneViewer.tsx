@@ -36,6 +36,15 @@ export interface RendererInfo {
     programs: number | null;
 }
 
+/** 相機狀態（用於視圖快照） */
+export interface CameraState {
+    position: [number, number, number];
+    target: [number, number, number];
+    fov: number;
+    isOrthographic: boolean;
+    orthoZoom: number;
+}
+
 export interface SceneViewerRef extends ModelRef {
     resetCamera: () => void;
     takeScreenshot: () => void;
@@ -45,6 +54,10 @@ export interface SceneViewerRef extends ModelRef {
     getRendererInfo: () => RendererInfo | null;
     /** 聚焦到指定模型，相機以 45 度俯角看向模型 */
     focusOnModel: (modelId: string) => void;
+    /** 獲取當前相機狀態（用於視圖快照） */
+    getCameraState: () => CameraState | null;
+    /** 設置相機狀態（用於套用視圖快照） */
+    setCameraState: (state: CameraState) => void;
 }
 
 interface ModelInstanceForRender {
@@ -318,6 +331,20 @@ function CameraController({
         }
     });
 
+    return null;
+}
+
+// Camera Ref Sync - 同步外部 cameraRef 以便快照功能正常工作
+function CameraRefSync({ cameraRef }: { cameraRef: React.MutableRefObject<THREE.Camera | null> }) {
+    const { camera } = useThree();
+    
+    useEffect(() => {
+        // 當 R3F 的 camera 改變時，同步更新外部的 cameraRef
+        if (camera && cameraRef.current !== camera) {
+            cameraRef.current = camera;
+        }
+    }, [camera, cameraRef]);
+    
     return null;
 }
 
@@ -2284,6 +2311,44 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                 controls.update();
 
                 console.log(`[focusOnModel] Focused on model: ${modelId}, center:`, worldCenter, 'distance:', distance);
+            },
+            getCameraState: (): CameraState | null => {
+                const camera = cameraRef.current;
+                const controls = orbitControlsRef.current;
+                
+                if (!camera || !controls) {
+                    return null;
+                }
+                
+                const isOrtho = camera instanceof THREE.OrthographicCamera;
+                
+                return {
+                    position: camera.position.toArray() as [number, number, number],
+                    target: controls.target.toArray() as [number, number, number],
+                    fov: isOrtho ? 50 : (camera as THREE.PerspectiveCamera).fov,
+                    isOrthographic: isOrtho,
+                    orthoZoom: isOrtho ? orthoZoom : 50,
+                };
+            },
+            setCameraState: (state: CameraState) => {
+                const camera = cameraRef.current;
+                const controls = orbitControlsRef.current;
+                
+                if (!camera || !controls) {
+                    console.warn('[setCameraState] Camera or controls not available');
+                    return;
+                }
+                
+                // 設置相機位置
+                camera.position.set(state.position[0], state.position[1], state.position[2]);
+                
+                // 設置 OrbitControls 的 target
+                controls.target.set(state.target[0], state.target[1], state.target[2]);
+                controls.update();
+                
+                // 注意：isOrthographic 和 orthoZoom 需要透過 props 更新，
+                // 這裡只處理相機位置和 target
+                console.log('[setCameraState] Camera state applied:', state);
             }
         }));
 
@@ -2356,6 +2421,7 @@ const SceneViewer = forwardRef<SceneViewerRef, SceneViewerProps>(
                         isOrthographic={isOrthographic}
                         orthoZoom={orthoZoom}
                     />
+                    <CameraRefSync cameraRef={cameraRef} />
                     <CameraStateBroadcaster />
                     {showGrid && <Grid args={[30, 30]} sectionColor={gridColor} cellColor={gridCellColor} side={THREE.DoubleSide} />}
 

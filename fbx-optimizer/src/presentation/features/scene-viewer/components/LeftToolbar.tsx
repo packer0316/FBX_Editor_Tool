@@ -61,6 +61,11 @@ interface LeftToolbarProps {
     setIsOrthographic: (isOrtho: boolean) => void;
     orthoZoom: number;
     setOrthoZoom: (zoom: number) => void;
+
+    // Scene Background Color
+    sceneBgColor: string;
+    setSceneBgColor: (color: string | null) => void;
+    defaultSceneBgColor: string;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -107,7 +112,10 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     isOrthographic,
     setIsOrthographic,
     orthoZoom,
-    setOrthoZoom
+    setOrthoZoom,
+    sceneBgColor,
+    setSceneBgColor,
+    defaultSceneBgColor
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -162,7 +170,7 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
 
     // 點擊外部關閉面板
     useClickOutside(
-        [toolbarRef, themeMenuRef, cameraSettingsRef, groundSettingsRef],
+        [toolbarRef, themeMenuRef, cameraSettingsRef, groundSettingsRef] as React.RefObject<HTMLElement>[],
         () => {
             toggleSidebarPanel('none');
         },
@@ -172,7 +180,7 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     return (
         <div
             ref={toolbarRef}
-            className={`absolute left-4 w-14 ${currentTheme.toolbarBg} ${currentTheme.toolbarBorder} rounded-2xl flex flex-col items-center py-4 space-y-4 z-[400] shadow-[0_8px_32px_rgba(0,0,0,0.3)] backdrop-blur-2xl border border-white/10 transition-colors duration-300`}
+            className={`absolute left-4 w-14 ${currentTheme.toolbarBg} ${currentTheme.toolbarBorder} rounded-2xl flex flex-col items-center py-4 space-y-4 z-[400] shadow-2xl backdrop-blur-2xl border transition-colors duration-300`}
             style={{
                 top: `${positionY}%`,
                 transform: 'translateY(-50%)'
@@ -180,12 +188,12 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
         >
             {/* Tool: Select / Move */}
             <div className="group relative">
-                <button className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${currentTheme.button} hover:bg-white/10`}>
+                <button className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${currentTheme.button} ${currentTheme.itemHover}`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" /><path d="M13 13l6 6" /></svg>
                 </button>
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                     選取工具 (V)
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>
 
@@ -194,9 +202,9 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                 <button disabled className={`p-3 rounded-xl transition-all duration-300 ${currentTheme.button} opacity-30 cursor-not-allowed`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
                 </button>
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                     旋轉工具 (未實作)
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>
 
@@ -205,9 +213,9 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                 <button disabled className={`p-3 rounded-xl transition-all duration-300 ${currentTheme.button} opacity-30 cursor-not-allowed`}>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 3l-6 6" /><path d="M21 3v6" /><path d="M21 3h-6" /><path d="M3 21l6-6" /><path d="M3 21v-6" /><path d="M3 21h6" /><path d="M14.5 9.5L9.5 14.5" /></svg>
                 </button>
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                     縮放工具 (未實作)
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>
 
@@ -215,13 +223,13 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
             <div className="group relative">
                 <button
                     onClick={() => setShowGrid(!showGrid)}
-                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showGrid ? 'bg-neon-blue text-white shadow-lg shadow-blue-500/30' : `${currentTheme.button} hover:bg-white/10`}`}
+                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showGrid ? currentTheme.activeButton : `${currentTheme.button} ${currentTheme.itemHover}`}`}
                 >
                     <Grid size={20} />
                 </button>
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                     {showGrid ? '隱藏網格' : '顯示網格'}
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>
 
@@ -229,22 +237,22 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
             <div className="group relative">
                 <button
                     onClick={() => setShowPerformanceMonitor(!showPerformanceMonitor)}
-                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showPerformanceMonitor ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/30' : `${currentTheme.button} hover:bg-white/10`}`}
+                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showPerformanceMonitor ? 'bg-gradient-to-b from-emerald-400 to-emerald-600 text-white shadow-[0_0_20px_rgba(16,185,129,0.4)] border-t border-white/20' : `${currentTheme.button} ${currentTheme.itemHover}`}`}
                 >
                     <Activity size={20} />
                 </button>
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                     {showPerformanceMonitor ? '隱藏效能監控' : '顯示效能監控'}
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>
 
-            <div className="w-8 h-px bg-white/10 my-1"></div>
+            <div className={`w-8 h-px ${currentTheme.toolbarBorder} bg-opacity-20 my-1`}></div>
 
             {/* Tool: Theme Toggle */}
             <div className="group relative" ref={themeMenuRef}>
                 <button
-                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${activeSidebarPanel === 'theme' ? 'bg-neon-blue text-white shadow-lg shadow-blue-500/30' : `${currentTheme.button} hover:bg-white/10`}`}
+                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${activeSidebarPanel === 'theme' ? currentTheme.activeButton : `${currentTheme.button} ${currentTheme.itemHover}`}`}
                     onClick={() => toggleSidebarPanel('theme')}
                 >
                     {(() => {
@@ -256,9 +264,9 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
 
                 {/* Tooltip (only show when menu is closed) */}
                 {activeSidebarPanel !== 'theme' && (
-                    <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                         切換模式
-                        <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                        <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                     </div>
                 )}
 
@@ -298,16 +306,16 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
             <div className="group relative" ref={cameraSettingsRef}>
                 <button
                     className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${activeSidebarPanel === 'camera'
-                        ? 'bg-neon-blue text-white shadow-lg shadow-blue-500/30'
-                        : `${currentTheme.button} hover:bg-white/10`
+                        ? currentTheme.activeButton
+                        : `${currentTheme.button} ${currentTheme.itemHover}`
                         }`}
                     onClick={() => toggleSidebarPanel('camera')}
                 >
                     <Camera size={20} />
                 </button>
-                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200 ${activeSidebarPanel !== 'camera' ? 'group-hover:opacity-100' : ''}`}>
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200 ${activeSidebarPanel !== 'camera' ? 'group-hover:opacity-100' : ''}`}>
                     相機參數
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
 
                 {/* Camera Settings Popover */}
@@ -425,6 +433,39 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                             >
                                 重置預設值
                             </button>
+
+                            {/* Scene Background Color */}
+                            <div className="pt-4 border-t border-white/10">
+                                <h4 className="text-xs font-bold text-gray-400 mb-3 uppercase tracking-wider">預覽視窗底色</h4>
+                                <div className="flex items-center gap-3">
+                                    <div className="relative">
+                                        <input
+                                            type="color"
+                                            value={sceneBgColor}
+                                            onChange={(e) => setSceneBgColor(e.target.value)}
+                                            className="w-10 h-10 rounded-lg cursor-pointer border-2 border-white/10 hover:border-white/30 transition-colors"
+                                            style={{ backgroundColor: sceneBgColor }}
+                                        />
+                                    </div>
+                                    <div className="flex-1">
+                                        <input
+                                            type="text"
+                                            value={sceneBgColor}
+                                            onChange={(e) => setSceneBgColor(e.target.value)}
+                                            placeholder="#000000"
+                                            className={`w-full px-3 py-2 bg-black/30 border border-white/10 rounded-lg ${currentTheme.text} text-xs font-mono focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
+                                        />
+                                    </div>
+                                </div>
+                                {sceneBgColor !== defaultSceneBgColor && (
+                                    <button
+                                        onClick={() => setSceneBgColor(null)}
+                                        className="mt-2 w-full py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors border border-white/5 hover:border-white/20"
+                                    >
+                                        重置為主題預設
+                                    </button>
+                                )}
+                            </div>
 
                             {/* Tone Mapping & Exposure Section */}
                             <div className="pt-4 border-t border-white/10">
@@ -671,16 +712,16 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
             <div className="group relative" ref={groundSettingsRef}>
                 <button
                     className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${showGroundPlane || activeSidebarPanel === 'ground'
-                        ? 'bg-neon-blue text-white shadow-lg shadow-blue-500/30'
-                        : `${currentTheme.button} hover:bg-white/10`
+                        ? currentTheme.activeButton
+                        : `${currentTheme.button} ${currentTheme.itemHover}`
                         }`}
                     onClick={() => toggleSidebarPanel('ground')}
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
                 </button>
-                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200 ${activeSidebarPanel !== 'ground' ? 'group-hover:opacity-100' : ''}`}>
+                <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200 ${activeSidebarPanel !== 'ground' ? 'group-hover:opacity-100' : ''}`}>
                     地面設定
-                    <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-b border-l border-white/10"></div>
+                    <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
 
                 {/* Ground Settings Popover */}
@@ -775,7 +816,7 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                 onMouseDown={handleMouseDown}
                 title="拖曳調整位置"
             >
-                <div className="w-8 h-1 bg-white/20 rounded-full"></div>
+                <div className={`w-8 h-1 ${currentTheme.accent} opacity-50 rounded-full`}></div>
             </div>
         </div>
     );

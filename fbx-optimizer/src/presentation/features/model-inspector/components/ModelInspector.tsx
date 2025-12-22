@@ -39,7 +39,7 @@ interface ModelInspectorProps {
 }
 
 // 遞迴渲染骨架樹狀圖
-const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?: number; expandAll?: boolean }) => {
+const BoneTree = ({ bone, depth = 0, expandAll, theme }: { bone: THREE.Object3D; depth?: number; expandAll?: boolean; theme: ThemeStyle }) => {
     const [expanded, setExpanded] = useState(expandAll ?? true);
     const [visible, setVisible] = useState(bone.visible);
 
@@ -68,25 +68,25 @@ const BoneTree = ({ bone, depth = 0, expandAll }: { bone: THREE.Object3D; depth?
     return (
         <div className="select-none">
             <div
-                className="flex items-center hover:bg-gray-700 p-1 rounded cursor-pointer text-sm"
+                className={`flex items-center ${theme.itemHover} p-1 rounded-md cursor-pointer text-[11px] font-medium transition-colors group`}
                 style={{ paddingLeft: `${depth * 12 + 4}px` }}
                 onClick={() => setExpanded(!expanded)}
             >
-                <button className="mr-1 w-4 h-4 flex items-center justify-center text-gray-400">
-                    {hasChildren && (expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />)}
+                <button className="mr-1 w-4 h-4 flex items-center justify-center text-gray-500 group-hover:text-gray-300">
+                    {hasChildren && (expanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />)}
                 </button>
 
-                <span className="flex-1 truncate text-gray-300">{bone.name}</span>
+                <span className={`flex-1 truncate ${!visible ? 'text-gray-500' : 'text-gray-400'} group-hover:text-gray-200`}>{bone.name}</span>
 
-                <button onClick={toggleVisibility} className="ml-2 text-gray-400 hover:text-white">
-                    {visible ? <Eye size={14} /> : <EyeOff size={14} />}
+                <button onClick={toggleVisibility} className="ml-2 text-gray-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity">
+                    {visible ? <Eye size={12} /> : <EyeOff size={12} />}
                 </button>
             </div>
 
             {expanded && hasChildren && (
                 <div>
                     {bone.children.map(child => (
-                        isHierarchyNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} />
+                        isHierarchyNode(child) && <BoneTree key={child.uuid} bone={child} depth={depth + 1} expandAll={expandAll} theme={theme} />
                     ))}
                 </div>
             )}
@@ -435,37 +435,46 @@ export default function ModelInspector({
     };
 
     return (
-        <div className={`${theme.panelBg} rounded-lg p-4 pt-6 flex flex-col h-full border ${theme.panelBorder}`}>
-            {/* 上半部：列表切換 */}
-            <div className={`flex space-x-2 mb-3 border-b ${theme.panelBorder} pb-2 overflow-x-auto`}>
-                <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'mesh' ? theme.activeButton : theme.button}`}
-                    onClick={() => setActiveTab('mesh')}
-                >
-                    Mesh
-                </button>
-                <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'bone' ? theme.activeButton : theme.button}`}
-                    onClick={() => setActiveTab('bone')}
-                >
-                    骨架 ({boneCount})
-                </button>
-                <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'clip' ? theme.activeButton : theme.button}`}
-                    onClick={() => setActiveTab('clip')}
-                >
-                    動作 ({createdClips.length})
-                </button>
-                <button
-                    className={`px-3 py-1 rounded text-sm font-medium transition-colors whitespace-nowrap ${activeTab === 'playlist' ? theme.activeButton : theme.button}`}
-                    onClick={() => setActiveTab('playlist')}
-                >
-                    動作序列播放 ({playlist.length})
-                </button>
+        <div className={`${theme.panelBg} rounded-xl flex flex-col h-full border ${theme.panelBorder} shadow-2xl overflow-hidden backdrop-blur-sm`}>
+            {/* 上半部：列表切換 - Professional DCC Style Tab Design */}
+            <div className={`flex items-center px-4 h-12 ${theme.toolbarBg} border-b ${theme.panelBorder} overflow-x-auto no-scrollbar`}>
+                {[
+                    { id: 'mesh', label: 'Mesh', count: meshes.length > 0 ? meshes.length : 0 },
+                    { id: 'bone', label: '骨架', count: boneCount },
+                    { id: 'clip', label: '動作', count: createdClips.length },
+                    { id: 'playlist', label: '動作序列', count: playlist.length }
+                ].map((tab) => (
+                    <button
+                        key={tab.id}
+                        className="group relative flex items-center gap-2.5 px-5 h-full transition-all duration-200 whitespace-nowrap"
+                        onClick={() => setActiveTab(tab.id as any)}
+                    >
+                        <span className={`text-[11px] font-bold tracking-widest transition-colors ${
+                            activeTab === tab.id ? theme.text : 'text-gray-500 group-hover:text-gray-300'
+                        }`}>
+                            {tab.label.toUpperCase()}
+                        </span>
+                        
+                        {tab.count > 0 && (
+                            <span className={`flex items-center justify-center h-4 min-w-[1.25rem] px-1.5 rounded-full text-[9px] font-black transition-all ${
+                                activeTab === tab.id 
+                                    ? `${theme.accentActive} text-white ${theme.accentShadow}` 
+                                    : 'bg-white/5 text-gray-700 group-hover:bg-white/10 group-hover:text-gray-500'
+                            }`}>
+                                {tab.count}
+                            </span>
+                        )}
+
+                        {/* 選中狀態指示條 */}
+                        {activeTab === tab.id && (
+                            <div className={`absolute bottom-0 left-4 right-4 h-[2px] ${theme.accent} rounded-t-full ${theme.accentShadow}`} />
+                        )}
+                    </button>
+                ))}
             </div>
 
             {/* 列表內容區 (可捲動) */}
-            <div className="flex-1 overflow-y-auto mb-4 pr-2 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
                 {activeTab === 'mesh' && (
                     <div className="space-y-1" key={updateCounter}>
                         {meshes.length === 0 ? (
@@ -475,14 +484,14 @@ export default function ModelInspector({
                                 const isVisible = mesh.visible;
                                 return (
                                     <div key={mesh.uuid}
-                                        className="flex items-center justify-between hover:bg-gray-700 p-2 rounded cursor-pointer"
+                                        className={`flex items-center justify-between ${theme.itemHover} px-3 py-2 rounded-lg transition-colors cursor-pointer group`}
                                         onClick={() => toggleMeshVisibility(mesh)}
                                     >
-                                        <div className="flex items-center gap-2 overflow-hidden">
-                                            <button className={`text-gray-400 hover:text-white ${isVisible ? 'text-blue-400' : ''}`}>
-                                                {isVisible ? <CheckSquare size={16} /> : <Square size={16} />}
-                                            </button>
-                                            <span className={`text-sm truncate ${!isVisible ? 'text-gray-500' : 'text-gray-300'}`} title={mesh.name}>
+                                        <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className={`w-5 h-5 flex items-center justify-center rounded transition-colors ${isVisible ? `${theme.accent}/20 text-blue-400` : 'bg-white/5 text-gray-600'}`}>
+                                                {isVisible ? <CheckSquare size={14} /> : <Square size={14} />}
+                                            </div>
+                                            <span className={`text-xs font-medium truncate ${!isVisible ? 'text-gray-500' : theme.text}`} title={mesh.name}>
                                                 {mesh.name || 'Unnamed Mesh'}
                                             </span>
                                         </div>
@@ -505,7 +514,7 @@ export default function ModelInspector({
                                     </span>
                                     <button
                                         onClick={() => setExpandAll(!expandAll)}
-                                        className="px-3 py-1 text-xs bg-gray-700 hover:bg-gray-600 rounded transition-colors flex items-center gap-1"
+                                        className={`px-3 py-1 text-xs ${theme.button} hover:bg-white/10 rounded transition-colors flex items-center gap-1`}
                                     >
                                         {expandAll ? (
                                             <>
@@ -522,7 +531,7 @@ export default function ModelInspector({
                                 </div>
                                 {rootBones.map((rootBone) => (
                                     <div key={rootBone.uuid} className="mb-2">
-                                        <BoneTree bone={rootBone} expandAll={expandAll} />
+                                        <BoneTree bone={rootBone} expandAll={expandAll} theme={theme} />
                                     </div>
                                 ))}
                             </>
@@ -534,17 +543,18 @@ export default function ModelInspector({
                     <div className="space-y-1">
                         {createdClips.length === 0 ? (
                             <div
+                                data-drop-zone="ini"
                                 onDragOver={handleIniDragOver}
                                 onDragLeave={handleIniDragLeave}
                                 onDrop={handleIniDrop}
                                 className={`relative border-2 border-dashed rounded-lg p-8 text-center mt-4 transition-all ${isDraggingIni
-                                    ? 'border-blue-500 bg-blue-500/10'
-                                    : 'border-gray-700 bg-gray-800/30'
+                                    ? `border-blue-500 ${theme.accent}/10`
+                                    : `${theme.panelBorder} bg-white/[0.01]`
                                     }`}
                             >
                                 {isDraggingIni ? (
                                     <div className="flex flex-col items-center">
-                                        <FileUp className="w-10 h-10 text-blue-400 mb-3" />
+                                        <FileUp className={`w-10 h-10 text-blue-400 mb-3`} />
                                         <p className="text-sm text-blue-300 font-medium mb-1">放開以導入 INI 檔案</p>
                                         <p className="text-xs text-gray-400">自動創建所有動畫片段</p>
                                     </div>
@@ -585,35 +595,36 @@ export default function ModelInspector({
                                 return (
                                     <div
                                         key={clipIndex}
-                                        className={`flex flex-col p-2 rounded border transition-colors overflow-visible ${(isCurrentClip && isPlaying)
-                                            ? 'bg-blue-900/70 border-blue-500'
-                                            : isCurrentClip
-                                                ? 'bg-gray-800 border-blue-600'
-                                                : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
+                                        className={`flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-300 overflow-visible ${
+                                            isCurrentClip
+                                                ? `${theme.panelBg} border-blue-500/50 shadow-[0_8px_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20`
+                                                : `bg-white/[0.02] ${theme.panelBorder} ${theme.itemHover}`
                                             }`}
                                     >
                                         {/* Top row: clip info and buttons */}
                                         <div className="flex items-center justify-between mb-2">
                                             <div
-                                                className="flex flex-col gap-0.5 flex-1 cursor-pointer"
+                                                className="flex flex-col gap-0.5 flex-1 cursor-pointer group/clipinfo"
                                                 onClick={() => onSelectClip(animationClip)}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <Film size={14} className={isCurrentClip ? 'text-blue-400' : 'text-gray-500'} />
-                                                    <span className={`text-sm ${isCurrentClip ? 'text-blue-200 font-medium' : 'text-gray-300'}`}>{getClipDisplayName(animationClip)}</span>
+                                                    <Film size={12} className={isCurrentClip ? 'text-blue-400' : 'text-gray-500 transition-colors group-hover/clipinfo:text-gray-300'} />
+                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? theme.text : 'text-gray-400 group-hover/clipinfo:text-gray-200'}`}>
+                                                        {getClipDisplayName(animationClip)}
+                                                    </span>
                                                 </div>
                                                 {/* Display frame range if available */}
                                                 {(animationClip as any).startFrame !== undefined && (animationClip as any).endFrame !== undefined && (
-                                                    <span className="text-xs text-gray-500 ml-5">
-                                                        {(animationClip as any).startFrame}-{(animationClip as any).endFrame}幀
+                                                    <span className="text-[10px] font-bold text-gray-600 ml-5 tracking-widest">
+                                                        {(animationClip as any).startFrame} — {(animationClip as any).endFrame} F
                                                     </span>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500 font-mono">{animationClip.duration.toFixed(2)}s</span>
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[10px] font-bold text-gray-500 font-mono mr-2">{animationClip.duration.toFixed(2)}S</span>
                                                 <button
                                                     onClick={(e) => { e.stopPropagation(); onAddToPlaylist(animationClip); }}
-                                                    className="text-gray-400 hover:text-green-400 p-1"
+                                                    className={`w-7 h-7 flex items-center justify-center text-gray-500 hover:text-green-400 hover:bg-green-400/10 rounded transition-all`}
                                                     title="加入動作序列"
                                                 >
                                                     <Plus size={14} />
@@ -623,7 +634,7 @@ export default function ModelInspector({
                                                         e.stopPropagation();
                                                         onDeleteCreatedClip(clipIndex);
                                                     }}
-                                                    className="text-gray-400 hover:text-red-400 p-1"
+                                                    className={`w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all`}
                                                     title="刪除動作"
                                                 >
                                                     <Trash2 size={14} />
@@ -640,6 +651,7 @@ export default function ModelInspector({
                                             effectMarkers={effectMarkers}
                                             clipDuration={animationClip.duration}
                                             className="mt-2"
+                                            theme={theme}
                                         />
                                     </div>
                                 );
@@ -650,26 +662,29 @@ export default function ModelInspector({
 
                 {activeTab === 'playlist' && (
                     <div className="space-y-2">
-                        <div className="flex justify-between items-center mb-2">
-                            <span className="text-xs text-gray-400">拖拉可排序</span>
+                        <div className="flex justify-between items-center mb-3 px-1">
+                            <div className="flex items-center gap-2">
+                                <div className={`w-1 h-3 ${theme.accent}/50 rounded-full`} />
+                                <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase">Sequence Order</span>
+                            </div>
                             <button
                                 onClick={isPlaylistPlaying ? onPausePlaylist : onPlayPlaylist}
-                                className={`flex items-center gap-1 px-3 py-1 rounded text-xs font-bold transition-colors ${isPlaylistPlaying
-                                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                                    : 'bg-green-600 hover:bg-green-500 text-white'
+                                className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all duration-200 ${isPlaylistPlaying
+                                    ? 'bg-amber-500 hover:bg-amber-400 text-white shadow-lg shadow-amber-900/20'
+                                    : 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-lg shadow-emerald-900/20'
                                     }`}
                                 disabled={playlist.length === 0}
                             >
-                                {isPlaylistPlaying ? <Pause size={12} /> : <Play size={12} />}
-                                {isPlaylistPlaying ? '暫停播放' : '全部播放'}
+                                {isPlaylistPlaying ? <Pause size={12} className="fill-current" /> : <Play size={12} className="fill-current" />}
+                                <span>{isPlaylistPlaying ? 'PAUSE' : 'PLAY ALL'}</span>
                             </button>
                         </div>
 
                         {playlist.length === 0 ? (
-                            <div className="text-gray-500 text-sm text-center mt-4 border-2 border-dashed border-gray-700 rounded p-4">
-                                尚未加入任何動作
-                                <br />
-                                <span className="text-xs">請從「動作」分頁加入</span>
+                            <div className={`text-gray-500 text-[11px] font-medium text-center py-12 border-2 border-dashed ${theme.panelBorder} rounded-xl bg-white/[0.01]`}>
+                                <Film className="w-8 h-8 mx-auto mb-3 opacity-10" />
+                                <p>No actions in sequence</p>
+                                <p className="text-[10px] text-gray-600 mt-1 uppercase tracking-widest">Add from "動作" tab</p>
                             </div>
                         ) : (
                             playlist.map((playlistClip, playlistIndex) => {
@@ -701,34 +716,34 @@ export default function ModelInspector({
                                         onDragStart={(e) => handleDragStart(e, playlistIndex)}
                                         onDragOver={(e) => handleDragOver(e, playlistIndex)}
                                         onDragEnd={handleDragEnd}
-                                        className={`relative flex flex-col p-2 rounded border transition-colors overflow-visible ${isCurrentClip
-                                            ? 'bg-blue-900/30 border-blue-500'
-                                            : 'bg-gray-800 border-gray-700 hover:bg-gray-700'
-                                            } ${draggedItemIndex === playlistIndex ? 'opacity-50' : ''}`}
+                                        className={`relative flex flex-col px-3 py-2.5 rounded-lg border transition-all duration-300 overflow-visible ${isCurrentClip
+                                            ? `${theme.panelBg} border-blue-500/50 shadow-[0_8px_20px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20`
+                                            : `bg-white/[0.02] ${theme.panelBorder} ${theme.itemHover}`
+                                            } ${draggedItemIndex === playlistIndex ? 'opacity-50 shadow-none border-dashed' : ''} cursor-grab active:cursor-grabbing`}
                                     >
-                                        <div className="flex items-center justify-between mb-1">
+                                        <div className="flex items-center justify-between mb-2">
                                             <div className="flex flex-col gap-0.5">
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-xs text-gray-500 font-mono w-4">{playlistIndex + 1}.</span>
-                                                    <span className={`text-sm font-medium ${isCurrentClip ? 'text-blue-300' : 'text-gray-300'}`}>
+                                                    <span className="text-[10px] font-bold text-gray-600 font-mono w-4">{String(playlistIndex + 1).padStart(2, '0')}</span>
+                                                    <span className={`text-xs font-bold tracking-tight ${isCurrentClip ? theme.text : 'text-gray-300'}`}>
                                                         {getClipDisplayName(playlistClip)}
                                                     </span>
                                                 </div>
                                                 {/* Display frame range if available */}
                                                 {(playlistClip as any).startFrame !== undefined && (playlistClip as any).endFrame !== undefined && (
-                                                    <span className="text-xs text-gray-500 ml-6">
-                                                        {(playlistClip as any).startFrame}-{(playlistClip as any).endFrame}幀
+                                                    <span className="text-[10px] font-bold text-gray-600 ml-6 tracking-widest">
+                                                        {(playlistClip as any).startFrame} — {(playlistClip as any).endFrame} F
                                                     </span>
                                                 )}
                                             </div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-xs text-gray-500">{playlistClip.duration.toFixed(1)}s</span>
+                                                <span className="text-[10px] font-bold text-gray-500 mr-1">{playlistClip.duration.toFixed(1)}S</span>
                                                 {isCurrentClip && (
-                                                    <span className="text-xs text-blue-400 font-mono">{Math.round(clipProgress)}%</span>
+                                                    <span className={`text-[10px] text-blue-400 font-bold font-mono`}>{Math.round(clipProgress)}%</span>
                                                 )}
                                                 <button
                                                     onClick={() => onRemoveFromPlaylist(playlistIndex)}
-                                                    className="text-gray-500 hover:text-red-400 p-1"
+                                                    className="w-7 h-7 flex items-center justify-center text-gray-500 hover:text-red-400 hover:bg-red-400/10 rounded transition-all"
                                                 >
                                                     <Plus size={14} className="rotate-45" />
                                                 </button>
@@ -742,6 +757,7 @@ export default function ModelInspector({
                                             size="sm"
                                             audioMarkers={audioMarkers}
                                             clipDuration={playlistClip.duration}
+                                            theme={theme}
                                         />
                                     </div>
                                 );
@@ -751,63 +767,64 @@ export default function ModelInspector({
                 )}
             </div>
 
-            {/* 下半部：動畫控制與剪輯 - Premium Redesign */}
-            <div className={`mt-auto border-t ${theme.panelBorder} bg-gradient-to-b from-gray-900/50 to-black/80 backdrop-blur-md p-4 space-y-4`}>
+            {/* 下半部：動畫控制與剪輯 - Professional Redesign */}
+            <div className={`mt-auto border-t ${theme.panelBorder} bg-black/10 backdrop-blur-md p-4 space-y-4 relative z-10`}>
                 {/* 播放控制 */}
-                <div className="flex items-center gap-4">
-                    {/* Play/Pause Button */}
-                    <button
-                        onClick={onPlayPause}
-                        disabled={!model || !clip}
-                        className={`group relative w-12 h-12 flex items-center justify-center rounded-full transition-all duration-300 shadow-lg ${
-                            !model || !clip
-                                ? 'bg-gray-700 cursor-not-allowed opacity-50'
-                                : isPlaying
-                                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 hover:shadow-blue-500/30 hover:scale-105 active:scale-95'
-                                    : 'bg-gradient-to-br from-blue-600 to-indigo-700 hover:shadow-blue-500/30 hover:scale-105 active:scale-95'
-                        }`}
-                    >
-                        {model && clip && <div className="absolute inset-0 rounded-full bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                        {isPlaying ? <Pause size={24} className="text-white fill-current" /> : <Play size={24} className="text-white fill-current" />}
-                    </button>
+                <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-3">
+                        {/* Play/Pause Button */}
+                        <button
+                            onClick={onPlayPause}
+                            disabled={!model || !clip}
+                            className={`group relative w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 ${
+                                !model || !clip
+                                    ? 'bg-white/5 cursor-not-allowed opacity-30'
+                                    : isPlaying
+                                        ? `${theme.accentActive} hover:opacity-90 ${theme.accentShadow}`
+                                        : `${theme.button} hover:bg-white/20 text-white border border-white/5`
+                            }`}
+                        >
+                            {isPlaying ? <Pause size={20} className="fill-current" /> : <Play size={20} className="ml-0.5 fill-current" />}
+                        </button>
 
-                    {/* Loop Toggle Button */}
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleLoop();
-                        }}
-                        disabled={!model || !clip}
-                        className={`w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 border ${
-                            !model || !clip
-                                ? 'bg-gray-700 border-gray-600 text-gray-500 cursor-not-allowed opacity-50'
-                                : isLoopEnabled
-                                    ? 'bg-green-500/20 border-green-500/50 text-green-400 shadow-[0_0_10px_rgba(74,222,128,0.2)]'
-                                    : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
-                        }`}
-                        title={isLoopEnabled ? '循環播放：開啟' : '循環播放：關閉'}
-                    >
-                        <Repeat size={18} />
-                    </button>
+                        {/* Loop Toggle Button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onToggleLoop();
+                            }}
+                            disabled={!model || !clip}
+                            className={`w-10 h-10 flex items-center justify-center rounded-lg transition-all duration-200 border ${
+                                !model || !clip
+                                    ? 'bg-white/5 border-white/5 text-gray-600 cursor-not-allowed opacity-30'
+                                    : isLoopEnabled
+                                        ? `${theme.accent}/20 border-blue-500/40 text-blue-400 shadow-[0_0_15px_rgba(59,130,246,0.15)]`
+                                        : `${theme.button} border-white/10 text-gray-400 hover:bg-white/10 hover:text-white`
+                            }`}
+                            title={isLoopEnabled ? '循環播放：開啟' : '循環播放：關閉'}
+                        >
+                            <Repeat size={18} />
+                        </button>
+                    </div>
 
                     {/* Timeline Slider */}
-                    <div className="flex-1 flex flex-col justify-center gap-1">
-                        <div className="flex justify-between text-[10px] font-medium tracking-wider text-gray-400 uppercase">
-                            <span ref={frameDisplayRef}>{currentFrame} Frame</span>
-                            <span>{totalFrames} Frame</span>
+                    <div className="flex-1 flex flex-col justify-center gap-1.5">
+                        <div className="flex justify-between items-end text-[10px] font-bold tracking-widest text-gray-500 uppercase">
+                            <span ref={frameDisplayRef} className={`text-blue-400/80`}>{currentFrame} FRAME</span>
+                            <span className="opacity-50">{totalFrames} FRAME</span>
                         </div>
-                        <div className="relative h-6 flex items-center group">
+                        <div className="relative h-5 flex items-center group">
                             {/* Custom Track Background */}
-                            <div className="absolute w-full h-1.5 bg-gray-700/50 rounded-full overflow-hidden pointer-events-none">
+                            <div className="absolute w-full h-1 bg-white/10 rounded-full overflow-hidden pointer-events-none">
                                 <div
-                                    className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 opacity-30"
+                                    className="h-full bg-white/5"
                                     style={{ width: '100%' }}
                                 />
                             </div>
                             {/* Progress Fill */}
                             <div
                                 ref={progressFillRef}
-                                className="absolute h-1.5 bg-gradient-to-r from-blue-400 to-indigo-400 rounded-full pointer-events-none"
+                                className={`absolute h-1 ${theme.accent} rounded-full pointer-events-none ${theme.accentShadow}`}
                                 style={{ width: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%` }}
                             />
 
@@ -825,7 +842,7 @@ export default function ModelInspector({
                                     WebkitAppearance: 'none',
                                     appearance: 'none',
                                     width: '100%',
-                                    height: '24px',
+                                    height: '20px',
                                     background: 'transparent',
                                     cursor: 'pointer',
                                     position: 'absolute',
@@ -839,7 +856,7 @@ export default function ModelInspector({
                             {/* Custom Thumb (Visual Only) */}
                             <div
                                 ref={progressThumbRef}
-                                className="absolute w-3 h-3 bg-white rounded-full shadow-[0_0_10px_rgba(255,255,255,0.5)] pointer-events-none group-hover:scale-125"
+                                className={`absolute w-3 h-3 bg-white rounded-full shadow-xl pointer-events-none scale-0 group-hover:scale-100 transition-transform duration-150`}
                                 style={{
                                     left: `${duration > 0 ? (sliderValue / duration) * 100 : 0}%`,
                                     transform: 'translateX(-50%)'
@@ -851,98 +868,104 @@ export default function ModelInspector({
                     {/* Expand/Collapse Button */}
                     <button
                         onClick={() => setIsClipFormExpanded(!isClipFormExpanded)}
-                        className={`w-8 h-8 flex items-center justify-center rounded-full transition-all duration-300 ${isClipFormExpanded
-                            ? 'bg-white/10 text-white rotate-180'
-                            : 'bg-transparent text-gray-500 hover:bg-white/5 hover:text-white'
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg transition-all duration-200 ${isClipFormExpanded
+                            ? `${theme.button} text-white rotate-0`
+                            : `bg-transparent text-gray-500 hover:bg-white/5 hover:text-white rotate-180`
                             }`}
-                        title={isClipFormExpanded ? '縮起' : '展開'}
+                        title={isClipFormExpanded ? '收起剪輯工具' : '展開剪輯工具'}
                     >
                         <ChevronDown size={18} />
                     </button>
                 </div>
 
-                {/* 剪輯建立 - Premium Style */}
-                <div className={`overflow-hidden transition-all duration-500 ease-in-out ${isClipFormExpanded ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}>
+                {/* 剪輯建立 - Professional Style */}
+                <div className={`overflow-hidden transition-all duration-300 ease-in-out ${isClipFormExpanded ? 'max-h-48 opacity-100' : 'max-h-0 opacity-0'}`}>
                     <div
+                        data-drop-zone="ini"
                         onDragOver={handleIniDragOver}
                         onDragLeave={handleIniDragLeave}
                         onDrop={handleIniDrop}
-                        className={`relative group rounded-xl border transition-all duration-300 ${isDraggingIni
-                            ? 'border-blue-500 bg-blue-500/10 shadow-[0_0_20px_rgba(59,130,246,0.2)]'
-                            : 'border-white/10 bg-white/5 hover:bg-white/[0.07] hover:border-white/20'
+                        className={`relative group rounded-lg border transition-all duration-300 ${isDraggingIni
+                            ? `border-blue-500 ${theme.accent}/5`
+                            : `border-white/5 bg-white/[0.03] hover:bg-white/[0.06]`
                             }`}
                     >
-                        {/* 拖曳提示覆蓋層 */}
-                        {isDraggingIni && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm rounded-xl z-20 pointer-events-none">
-                                <div className="flex flex-col items-center animate-bounce">
-                                    <FileUp className="w-8 h-8 text-blue-400 mb-2" />
-                                    <p className="text-sm text-blue-300 font-medium">放開以導入 INI 檔案</p>
-                                </div>
-                            </div>
-                        )}
-
-                        <div className="p-3 space-y-3">
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-1 h-4 bg-blue-500 rounded-full" />
-                                    <span className="text-xs font-bold text-gray-300 tracking-wide uppercase">New Action Clip</span>
-                                </div>
-                                <button
-                                    onClick={() => iniFileInputRef.current?.click()}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/30 rounded-lg transition-all hover:shadow-[0_0_10px_rgba(59,130,246,0.15)]"
-                                >
-                                    <Upload size={12} />
-                                    <span>Import INI</span>
-                                </button>
+                        <div className="p-3 flex items-center gap-4">
+                            <div className="flex items-center gap-2 shrink-0">
+                                <div className={`w-1 h-3 ${theme.accent}/50 rounded-full`} />
+                                <span className="text-[10px] font-bold text-gray-500 tracking-wider uppercase">New Clip</span>
                             </div>
 
-                            <input
-                                ref={iniFileInputRef}
-                                type="file"
-                                accept=".ini"
-                                onChange={handleIniFileSelect}
-                                className="hidden"
-                            />
-
-                            <div className="flex items-center gap-3">
-                                <div className="flex-1 relative group/input">
+                            <div className="flex-1 flex items-center gap-3">
+                                <div className="flex-1 relative">
                                     <input
                                         type="text"
-                                        placeholder="動作名稱 (Action Name)"
+                                        placeholder="Action Name..."
                                         value={newClipName}
                                         onChange={(e) => setNewClipName(e.target.value)}
-                                        className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-blue-500/50 focus:bg-black/40 transition-all"
+                                        className={`w-full bg-white/5 border border-white/5 rounded px-3 py-1.5 text-xs ${theme.text} placeholder-gray-600 focus:outline-none focus:border-blue-500/30 transition-all`}
                                     />
                                 </div>
 
-                                <div className="flex items-center bg-black/20 border border-white/10 rounded-lg p-1 gap-1">
+                                <div className="flex items-center bg-white/5 border border-white/5 rounded px-2 py-1 gap-2">
                                     <NumberInput
                                         placeholder="Start"
                                         value={startFrame}
                                         onChange={(val) => setStartFrame(val)}
-                                        className="w-12"
+                                        className="w-10"
+                                        textColor={theme.text}
                                     />
-                                    <span className="text-gray-600">/</span>
+                                    <span className="text-gray-700 text-xs">/</span>
                                     <NumberInput
                                         placeholder="End"
                                         value={endFrame}
                                         onChange={(val) => setEndFrame(val)}
-                                        className="w-12"
+                                        className="w-10"
+                                        textColor={theme.text}
                                     />
                                 </div>
 
-                                <button
-                                    onClick={handleCreateClip}
-                                    className="flex items-center justify-center w-9 h-9 bg-gradient-to-br from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white rounded-lg shadow-lg shadow-green-900/20 hover:shadow-green-500/30 hover:scale-105 active:scale-95 transition-all duration-200"
-                                    title="新增片段"
-                                >
-                                    <Plus size={18} />
-                                </button>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        onClick={handleCreateClip}
+                                        className={`flex items-center justify-center w-8 h-8 ${theme.accentActive} hover:opacity-90 text-white rounded transition-all duration-200 shadow-lg shadow-blue-900/20`}
+                                        title="新增片段"
+                                    >
+                                        <Plus size={16} />
+                                    </button>
+
+                                    <div className="w-px h-4 bg-white/10 mx-1" />
+
+                                    <button
+                                        onClick={() => iniFileInputRef.current?.click()}
+                                        className={`flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${theme.button} hover:bg-white/10 text-gray-400 hover:text-white border border-white/5 rounded transition-all`}
+                                    >
+                                        <Upload size={12} />
+                                        <span>INI</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
+
+                        {/* 拖曳提示覆蓋層 */}
+                        {isDraggingIni && (
+                            <div className={`absolute inset-0 flex items-center justify-center ${theme.accent}/20 backdrop-blur-sm rounded-lg z-20 pointer-events-none`}>
+                                <div className="flex flex-col items-center">
+                                    <FileUp className="w-6 h-6 text-white mb-1" />
+                                    <p className="text-[10px] text-white font-bold uppercase tracking-tighter">Drop INI Here</p>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </div>
+                
+                <input
+                    ref={iniFileInputRef}
+                    type="file"
+                    accept=".ini"
+                    onChange={handleIniFileSelect}
+                    className="hidden"
+                />
             </div>
         </div>
     );

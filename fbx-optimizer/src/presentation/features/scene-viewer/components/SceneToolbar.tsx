@@ -111,48 +111,48 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                 isUIHidden ? 'opacity-0 hover:opacity-100' : 'opacity-100'
             }`}
         >
-            <div className={`glass rounded-full px-2 py-1.5 flex items-center gap-1 transition-all duration-300 hover:shadow-[0_0_20px_rgba(255,255,255,0.1)]`}>
+            <div className={`${theme.toolbarBg} ${theme.toolbarBorder} border rounded-full px-2 py-1.5 flex items-center gap-1 transition-all duration-300 shadow-xl backdrop-blur-2xl`}>
                 <button
                     onClick={onResetCamera}
-                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} ${theme.itemHover} hover:scale-110`}
                     title="Reset Camera"
                 >
                     <RotateCcw size={18} />
                     <span className="sr-only">Reset Camera</span>
 
                     {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                         重置相機
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-5 bg-white/10 mx-1"></div>
+                <div className={`w-px h-5 ${theme.toolbarBorder} bg-opacity-20 mx-1`}></div>
 
                 <button
                     onClick={onTakeScreenshot}
-                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
+                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} ${theme.itemHover} hover:scale-110`}
                     title="Take Screenshot"
                 >
                     <Camera size={18} />
                     <span className="sr-only">Take Screenshot</span>
 
                     {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                         拍照下載
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-5 bg-white/10 mx-1"></div>
+                <div className={`w-px h-5 ${theme.toolbarBorder} bg-opacity-20 mx-1`}></div>
 
                 <button
                     onClick={isRecording ? onStopRecording : onStartRecording}
                     className={`p-2.5 rounded-full transition-all duration-300 group relative ${isRecording
-                        ? 'text-red-500 hover:text-red-400 bg-red-500/10 animate-pulse'
-                        : `${theme.button} hover:scale-110`
+                        ? 'bg-gradient-to-b from-red-500 to-red-700 text-white shadow-[0_0_20px_rgba(239,68,68,0.4),inset_0_1px_0_rgba(255,255,255,0.3)] border-t border-white/20 animate-pulse'
+                        : `${theme.button} ${theme.itemHover} hover:scale-110`
                         }`}
                     title={isRecording ? "Stop Recording" : "Start Recording"}
                 >
@@ -160,28 +160,28 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                     <span className="sr-only">{isRecording ? 'Stop Recording' : 'Start Recording'}</span>
 
                     {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                         {isRecording ? '停止錄影' : '開始錄影'}
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                     </div>
                 </button>
 
                 {/* 分隔線 */}
-                <div className="w-px h-5 bg-white/10 mx-1"></div>
+                <div className={`w-px h-5 ${theme.toolbarBorder} bg-opacity-20 mx-1`}></div>
 
                 {/* 比例選擇器 */}
                 <div className="relative" ref={aspectMenuRef}>
                     <button
                         onClick={() => setShowAspectMenu(!showAspectMenu)}
-                        className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} hover:scale-110`}
+                        className={`p-2.5 rounded-full transition-all duration-300 group relative ${theme.button} ${theme.itemHover} hover:scale-110`}
                         title="調整比例"
                     >
                         <Monitor size={18} />
 
                         {/* Tooltip */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                             {getAspectRatioLabel()}
-                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                            <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                         </div>
                     </button>
 
@@ -192,14 +192,14 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                                 <button
                                     key={option.value}
                                     onClick={() => handleAspectRatioSelect(option.value)}
-                                    className={`w-full px-4 py-2.5 text-sm transition-all flex items-center justify-between gap-4 ${aspectRatio === option.value
+                                    className={`w-full px-4 py-2.5 text-sm transition-all flex items-center justify-between gap-4 mx-1 rounded-lg ${aspectRatio === option.value
                                         ? theme.activeButton
-                                        : `${theme.text} hover:bg-white/5`
+                                        : `${theme.text} ${theme.itemHover}`
                                         }`}
                                 >
                                     <span>{option.label}</span>
                                     {option.pixels && (
-                                        <span className="text-xs text-gray-400 font-mono">{option.pixels}</span>
+                                        <span className={`text-xs ${theme.text} opacity-40 font-mono`}>{option.pixels}</span>
                                     )}
                                 </button>
                             ))}
@@ -208,7 +208,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                 </div>
 
                 {/* 分隔線 */}
-                <div className="w-px h-5 bg-white/10 mx-1"></div>
+                <div className={`w-px h-5 ${theme.toolbarBorder} bg-opacity-20 mx-1`}></div>
 
                 {/* UI 顯示/隱藏按鈕 */}
                 {onToggleUIVisibility && (
@@ -217,7 +217,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                         className={`p-2.5 rounded-full transition-all duration-300 group relative ${
                             isUIHidden
                                 ? 'text-gray-500 bg-gray-500/20'
-                                : `${theme.button} hover:scale-110`
+                                : `${theme.button} ${theme.itemHover} hover:scale-110`
                         }`}
                         title={isUIHidden ? '顯示介面' : '隱藏介面'}
                     >
@@ -225,23 +225,23 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                         <span className="sr-only">{isUIHidden ? '顯示介面' : '隱藏介面'}</span>
 
                         {/* Tooltip */}
-                        <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                        <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                             {isUIHidden ? '顯示介面' : '隱藏介面'}
-                            <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                            <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                         </div>
                     </button>
                 )}
 
                 {/* 分隔線 */}
-                <div className="w-px h-5 bg-white/10 mx-1"></div>
+                <div className={`w-px h-5 ${theme.toolbarBorder} bg-opacity-20 mx-1`}></div>
 
                 {/* Director Mode 按鈕 */}
                 <button
                     onClick={toggleDirectorMode}
-                    className={`p-2.5 rounded-full transition-all duration-300 group relative ${
+                    className={`p-2.5 rounded-full transition-all duration-150 group relative ${
                         isDirectorMode
-                            ? 'text-amber-400 bg-amber-500/20 ring-1 ring-amber-500/50'
-                            : `${theme.button} hover:scale-110`
+                            ? 'bg-amber-400/20 text-amber-300 border border-amber-400/40 shadow-[0_0_0_3px_rgba(251,191,36,0.08),0_0_16px_-2px_rgba(251,191,36,0.25)] backdrop-blur-sm active:scale-90 active:bg-amber-400/30 active:shadow-[0_0_0_2px_rgba(251,191,36,0.2),0_0_12px_-2px_rgba(251,191,36,0.4)]'
+                            : `${theme.button} ${theme.itemHover} hover:scale-110`
                     }`}
                     title="Director Mode"
                 >
@@ -249,9 +249,9 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                     <span className="sr-only">Director Mode</span>
 
                     {/* Tooltip */}
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 bg-gray-900/90 backdrop-blur-md border border-white/10 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200">
+                    <div className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 px-3 py-1.5 ${theme.tooltipBg} backdrop-blur-md border ${theme.toolbarBorder} ${theme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
                         {isDirectorMode ? '關閉導演模式' : '導演模式'}
-                        <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900/90 rotate-45 border-t border-l border-white/10"></div>
+                        <div className={`absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 ${theme.tooltipBg} rotate-45 border-t border-l ${theme.toolbarBorder}`}></div>
                     </div>
                 </button>
             </div>
@@ -259,7 +259,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
             {/* 自訂尺寸對話框 */}
             {showCustomDialog && (
                 <div 
-                    className="bg-black/60 backdrop-blur-sm z-[99999] animate-fade-in"
+                    className="bg-black/40 backdrop-blur-sm z-[99999] animate-fade-in"
                     style={{ 
                         position: 'fixed', 
                         top: 0, 
@@ -270,12 +270,12 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                     onClick={() => setShowCustomDialog(false)}
                 >
                     <div 
-                        className="glass-panel rounded-2xl shadow-2xl p-8 w-[360px]"
+                        className={`${theme.panelBg} ${theme.panelBorder} border rounded-2xl shadow-2xl p-8 w-[360px]`}
                         style={{
                             position: 'absolute',
                             top: '50%',
                             left: '50%',
-                            marginTop: '400px',
+                            marginTop: '0px', // 原本 400px 似乎是錯誤的定位
                             transform: 'translate(-50%, -50%)'
                         }}
                         onClick={(e) => e.stopPropagation()}
@@ -284,7 +284,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                             <h3 className={`${theme.text} text-lg font-bold`}>自訂尺寸</h3>
                             <button
                                 onClick={() => setShowCustomDialog(false)}
-                                className={`${theme.text} opacity-60 hover:opacity-100 transition-colors p-1 hover:bg-white/10 rounded-full`}
+                                className={`${theme.text} opacity-60 hover:opacity-100 transition-colors p-1 ${theme.itemHover} rounded-full`}
                             >
                                 <X size={20} />
                             </button>
@@ -297,7 +297,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                                     type="number"
                                     value={tempWidth}
                                     onChange={(e) => setTempWidth(e.target.value)}
-                                    className={`w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
+                                    className={`w-full bg-black/10 border ${theme.panelBorder} rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
                                     placeholder="1920"
                                     min="1"
                                 />
@@ -309,7 +309,7 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                                     type="number"
                                     value={tempHeight}
                                     onChange={(e) => setTempHeight(e.target.value)}
-                                    className={`w-full bg-black/30 border border-white/10 rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
+                                    className={`w-full bg-black/10 border ${theme.panelBorder} rounded-lg px-4 py-2.5 ${theme.text} focus:outline-none focus:border-neon-blue focus:ring-1 focus:ring-neon-blue transition-all`}
                                     placeholder="1080"
                                     min="1"
                                 />
@@ -322,13 +322,13 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                             <div className="flex gap-3 pt-2">
                                 <button
                                     onClick={() => setShowCustomDialog(false)}
-                                    className={`flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 ${theme.text} rounded-lg transition-colors font-medium`}
+                                    className={`flex-1 px-4 py-2.5 ${theme.button} ${theme.itemHover} ${theme.text} rounded-lg transition-colors font-medium`}
                                 >
                                     取消
                                 </button>
                                 <button
                                     onClick={handleCustomSizeApply}
-                                    className="flex-1 px-4 py-2.5 bg-neon-blue hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/30 font-medium"
+                                    className={`flex-1 px-4 py-2.5 ${theme.accentActive} text-white rounded-lg transition-colors shadow-lg ${theme.accentShadow} font-medium`}
                                 >
                                     確定
                                 </button>

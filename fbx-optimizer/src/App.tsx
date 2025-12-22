@@ -27,6 +27,7 @@ import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
 import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
+import { createViewSnapshot, type ViewSnapshot } from './domain/value-objects/ViewSnapshot';
 import LeftToolbar from './presentation/features/scene-viewer/components/LeftToolbar';
 import type { Layer } from './domain/value-objects/Layer';
 import type { Element2D, SpineElement2D } from './domain/value-objects/Element2D';
@@ -78,6 +79,7 @@ import { isSpineElement } from './domain/value-objects/Element2D';
 
 // Toast 通知
 import { ToastContainer } from './presentation/components/Toast';
+import { VersionModal } from './presentation/components/VersionModal';
 
 // 向後兼容：重新導出類型
 export type { AudioTrigger } from './domain/value-objects/AudioTrigger';
@@ -179,6 +181,7 @@ function App() {
   // Camera Settings
   type SidebarPanel = 'none' | 'theme' | 'camera' | 'ground';
   const [activeSidebarPanel, setActiveSidebarPanel] = useState<SidebarPanel>('none');
+  const [isVersionModalOpen, setIsVersionModalOpen] = useState(false);
 
   const cameraSettingsRef = useRef<HTMLDivElement>(null);
   const groundSettingsRef = useRef<HTMLDivElement>(null);
@@ -234,6 +237,7 @@ function App() {
   const [groundPlaneColor, setGroundPlaneColor] = useState('#444444');
   const [groundPlaneOpacity, setGroundPlaneOpacity] = useState(1.0);
   const [enableShadows, setEnableShadows] = useState(false);
+  const [customSceneBgColor, setCustomSceneBgColor] = useState<string | null>(null);
   const [showGrid, setShowGrid] = useState(true);
 
   // Performance Monitor
@@ -531,7 +535,7 @@ function App() {
 
   // Click outside to close popovers
   useClickOutside(
-    [cameraSettingsRef as React.RefObject<HTMLElement>, groundSettingsRef as React.RefObject<HTMLElement>, themeMenuRef as React.RefObject<HTMLElement>],
+    [cameraSettingsRef, groundSettingsRef, themeMenuRef] as React.RefObject<HTMLElement>[],
     () => {
       setActiveSidebarPanel('none');
     },
@@ -1038,7 +1042,9 @@ function App() {
     [visibleBackLayers]
   );
 
-  const viewerBackgroundColor = is2DBackEnabled && hasBackContent ? 'transparent' : currentTheme.sceneBg;
+  const viewerBackgroundColor = is2DBackEnabled && hasBackContent 
+    ? 'transparent' 
+    : (customSceneBgColor ?? currentTheme.sceneBg);
   const isPointerEditing = activeTab === 'layer';
 
   // 切換分頁時，如果離開 layer 分頁，取消選定的 2D 元素
@@ -1302,26 +1308,8 @@ function App() {
   return (
     <div
       className={`h-screen overflow-hidden ${currentTheme.bg} ${currentTheme.text} flex flex-col`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
-      {/* 拖放覆蓋層 */}
-      {isFileDragging && (
-        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center animate-fade-in">
-          <div className="bg-gray-900/90 border-2 border-neon-blue border-dashed rounded-2xl p-12 shadow-[0_0_50px_rgba(59,130,246,0.3)] text-center transform transition-all duration-300 scale-100">
-            <div className="mb-6 flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-neon-blue/20 flex items-center justify-center animate-pulse-slow">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-neon-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                </svg>
-              </div>
-            </div>
-            <h3 className="text-2xl font-bold text-white mb-2">釋放滑鼠以上傳檔案</h3>
-            <p className="text-gray-400">支援 FBX 模型與貼圖檔案</p>
-          </div>
-        </div>
-      )}
+      {/* FBX 拖放覆蓋層已移至預覽區內 */}
 
       <div className="flex-1 flex overflow-hidden relative">
         {/* Left Toolbar (Floating Glass) - 可隱藏 */}
@@ -1370,6 +1358,9 @@ function App() {
           setIsOrthographic={setIsOrthographic}
           orthoZoom={orthoZoom}
           setOrthoZoom={setOrthoZoom}
+          sceneBgColor={customSceneBgColor ?? currentTheme.sceneBg}
+          setSceneBgColor={setCustomSceneBgColor}
+          defaultSceneBgColor={currentTheme.sceneBg}
         />}
 
         {/* 左側：3D 預覽區 */}
@@ -1527,7 +1518,26 @@ function App() {
             <div
               ref={aspectRatioContainerRef}
               className="absolute inset-0 bg-black flex items-center justify-center p-0 z-0"
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
             >
+              {/* FBX 拖放覆蓋層 - 僅覆蓋預覽區 */}
+              {isFileDragging && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center animate-fade-in">
+                  <div className="bg-gray-900/90 border-2 border-neon-blue border-dashed rounded-2xl p-12 shadow-[0_0_50px_rgba(59,130,246,0.3)] text-center transform transition-all duration-300 scale-100">
+                    <div className="mb-6 flex justify-center">
+                      <div className="w-20 h-20 rounded-full bg-neon-blue/20 flex items-center justify-center animate-pulse-slow">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10 text-neon-blue" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                      </div>
+                    </div>
+                    <h3 className="text-2xl font-bold text-white mb-2">釋放滑鼠以上傳檔案</h3>
+                    <p className="text-gray-400">支援 FBX 模型與貼圖檔案</p>
+                  </div>
+                </div>
+              )}
               <div
                 style={getAspectRatioStyle()}
                 className="relative z-[10]"
@@ -1541,14 +1551,12 @@ function App() {
                     onToggle2DFront={handleToggle2DFront}
                     onToggle2DBack={handleToggle2DBack}
                     onToggle3D={handleToggle3D}
+                    theme={currentTheme}
                   />
                 )}
                 <div
                   ref={previewContainerRef}
                   className="relative w-full h-full rounded-2xl overflow-hidden border border-white/10 bg-black/80"
-                  onDragOver={(e) => e.stopPropagation()}
-                  onDragLeave={(e) => e.stopPropagation()}
-                  onDrop={(e) => e.stopPropagation()}
                   onClick={() => {
                     // 點擊預覽區空白處時，取消選定的 2D 元素
                     if (isPointerEditing && activeElementId) {
@@ -1695,10 +1703,10 @@ function App() {
               <>
                 {/* 拖拉調整高度的把手 */}
                 <div
-                  className="absolute top-0 left-0 right-0 h-1 bg-gray-700 hover:bg-blue-500 cursor-ns-resize transition-colors z-10"
+                  className={`absolute top-0 left-0 right-0 h-1 bg-gray-700/30 hover:${currentTheme.accent.replace('bg-', 'bg-')} cursor-ns-resize transition-colors z-10`}
                   onMouseDown={handleMouseDown}
                 >
-                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500 rounded-full"></div>
+                  <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-12 h-1 bg-gray-500/50 rounded-full"></div>
                 </div>
                 
                 {/* 根據選中的元素類型顯示不同的面板 */}
@@ -1869,6 +1877,8 @@ function App() {
                   onReorderElement={handleReorderElement}
                   onUpdateElement={handleUpdateElementById}
                   onRemoveElement={handleRemoveElementById}
+                  currentTheme={currentTheme}
+                  themeMode={themeMode}
                 />
               </div>
             )}
@@ -1923,6 +1933,92 @@ function App() {
                 onFocusModel={(id) => {
                   sceneViewerRef.current?.focusOnModel(id);
                 }}
+                onSaveSnapshot={(modelId, name) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  const cameraState = sceneViewerRef.current?.getCameraState();
+                  if (!cameraState) {
+                    console.warn('無法獲取相機狀態');
+                    return;
+                  }
+                  
+                  const snapshot = createViewSnapshot(
+                    name,
+                    {
+                      position: cameraState.position,
+                      target: cameraState.target,
+                      fov: cameraState.fov,
+                      isOrthographic: cameraState.isOrthographic,
+                      orthoZoom: cameraState.orthoZoom,
+                    },
+                    {
+                      position: model.position,
+                      rotation: model.rotation,
+                      scale: model.scale,
+                      animationTime: model.currentTime,
+                    }
+                  );
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: [...model.viewSnapshots, snapshot],
+                  });
+                  
+                  console.log('已保存視圖快照:', snapshot.name);
+                }}
+                onApplySnapshot={(modelId, snapshot) => {
+                  // 1. 更新相機設定（isOrthographic 和 orthoZoom 透過 state 更新，會觸發 CameraController 切換相機）
+                  setIsOrthographic(snapshot.cameraIsOrthographic);
+                  setOrthoZoom(snapshot.cameraOrthoZoom);
+                  setCameraSettings(prev => ({ ...prev, fov: snapshot.cameraFov }));
+                  
+                  // 2. 設置模型狀態並暫停播放
+                  updateModel(modelId, {
+                    position: snapshot.modelPosition,
+                    rotation: snapshot.modelRotation,
+                    scale: snapshot.modelScale,
+                    currentTime: snapshot.animationTime,
+                    isPlaying: false, // 暫停動畫
+                  });
+                  
+                  // 3. 跳轉動畫時間
+                  sceneViewerRef.current?.seekTo(snapshot.animationTime);
+                  
+                  // 4. 延遲設置相機位置，等待相機類型切換完成（如果需要切換的話）
+                  // 使用 requestAnimationFrame 確保在下一幀設置，此時 CameraController 已完成相機切換
+                  requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                      sceneViewerRef.current?.setCameraState({
+                        position: snapshot.cameraPosition,
+                        target: snapshot.cameraTarget,
+                        fov: snapshot.cameraFov,
+                        isOrthographic: snapshot.cameraIsOrthographic,
+                        orthoZoom: snapshot.cameraOrthoZoom,
+                      });
+                    });
+                  });
+                  
+                  console.log('已套用視圖快照:', snapshot.name);
+                }}
+                onDeleteSnapshot={(modelId, snapshotId) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: model.viewSnapshots.filter(s => s.id !== snapshotId),
+                  });
+                }}
+                onRenameSnapshot={(modelId, snapshotId, newName) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    viewSnapshots: model.viewSnapshots.map(s => 
+                      s.id === snapshotId ? { ...s, name: newName } : s
+                    ),
+                  });
+                }}
+                isDirectorMode={isDirectorMode}
                 isLoading={isLoading}
                 toneMappingExposure={toneMappingExposure}
                 environmentIntensity={environmentIntensity}
@@ -1989,14 +2085,33 @@ function App() {
           </div>
 
           {/* 底部標籤 */}
-          <div className="p-4 text-center opacity-30 hover:opacity-100 transition-opacity border-t border-gray-700">
-            <p className="text-[10px] text-gray-400">
-              Designed for Game Developers · <span className="text-gray-500">v{__APP_VERSION__}</span>
-            </p>
+          <div className={`p-4 text-center group transition-all border-t ${currentTheme.dividerBorder} relative`}>
+            <div className="flex flex-col items-center justify-center gap-2">
+              <p className={`text-[10px] ${currentTheme.text} opacity-40 group-hover:opacity-70 transition-opacity`}>
+                Designed for Game Developers · <span className="opacity-50 font-mono">v{__APP_VERSION__}</span>
+              </p>
+              
+              <button
+                onClick={() => setIsVersionModalOpen(true)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-medium transition-all duration-200 
+                  ${currentTheme.button} border border-transparent hover:border-blue-500/30 hover:shadow-[0_0_12px_rgba(59,130,246,0.15)] 
+                  group-hover:translate-y-[-2px] opacity-40 group-hover:opacity-100`}
+              >
+                <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                <span>What's New</span>
+              </button>
+            </div>
           </div>
         </div>
       </div >
       
+      {/* 版本更新 Modal */}
+      <VersionModal 
+        isOpen={isVersionModalOpen} 
+        onClose={() => setIsVersionModalOpen(false)} 
+        theme={currentTheme}
+      />
+
       {/* Toast 通知容器 */}
       <ToastContainer />
     </div >
