@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import type { ViewSnapshot } from '../../../../domain/value-objects/ViewSnapshot';
+import type { TransformSnapshot } from '../../../../domain/value-objects/TransformSnapshot';
 import TextureManagerModal from './TextureManagerModal';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
@@ -105,6 +106,14 @@ interface ModelCardProps {
   onDeleteSnapshot?: (snapshotId: string) => void;
   /** 重命名視圖快照 */
   onRenameSnapshot?: (snapshotId: string, newName: string) => void;
+  /** 保存 Transform 快照 */
+  onSaveTransformSnapshot?: (name: string) => void;
+  /** 套用 Transform 快照 */
+  onApplyTransformSnapshot?: (snapshot: TransformSnapshot) => void;
+  /** 刪除 Transform 快照 */
+  onDeleteTransformSnapshot?: (snapshotId: string) => void;
+  /** 重命名 Transform 快照 */
+  onRenameTransformSnapshot?: (snapshotId: string, newName: string) => void;
   /** 是否為導演模式 */
   isDirectorMode?: boolean;
   // 場景設置參數
@@ -126,6 +135,10 @@ export default function ModelCard({
   onApplySnapshot,
   onDeleteSnapshot,
   onRenameSnapshot,
+  onSaveTransformSnapshot,
+  onApplyTransformSnapshot,
+  onDeleteTransformSnapshot,
+  onRenameTransformSnapshot,
   isDirectorMode = false,
   toneMappingExposure,
   environmentIntensity,
@@ -148,6 +161,12 @@ export default function ModelCard({
   const [hoveredSnapshotId, setHoveredSnapshotId] = useState<string | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   
+  // Transform 快照相關狀態
+  const [showTransformDropdown, setShowTransformDropdown] = useState(false);
+  const [editingTransformId, setEditingTransformId] = useState<string | null>(null);
+  const [editingTransformName, setEditingTransformName] = useState('');
+  const transformDropdownRef = useRef<HTMLDivElement>(null);
+  
   // 點擊外部關閉下拉選單
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -167,6 +186,24 @@ export default function ModelCard({
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [showSnapshotDropdown]);
+  
+  // 點擊外部關閉 Transform 下拉選單
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (transformDropdownRef.current && !transformDropdownRef.current.contains(event.target as Node)) {
+        setShowTransformDropdown(false);
+        setEditingTransformId(null);
+      }
+    };
+    
+    if (showTransformDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showTransformDropdown]);
   
   // 計算模型資訊
   const modelInfo = useMemo(() => calculateModelInfo(modelInstance.model), [modelInstance.model]);
@@ -526,6 +563,135 @@ export default function ModelCard({
                         </div>
                       ))
                     )}
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            {/* Transform 快照下拉選單 */}
+            <div className="relative" ref={transformDropdownRef}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowTransformDropdown(!showTransformDropdown);
+                }}
+                className={`p-1.5 rounded transition-all flex items-center gap-1 ${
+                  showTransformDropdown
+                    ? 'bg-cyan-500/50 text-white'
+                    : 'bg-cyan-500/30 text-cyan-300 hover:bg-cyan-500/50 hover:text-white'
+                }`}
+                title="Transform 快照（重置/記錄）"
+              >
+                <RotateCw className="w-3 h-3" />
+                <span className="text-[10px]">RESET</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showTransformDropdown ? 'rotate-180' : ''}`} />
+                {modelInstance.transformSnapshots.filter(s => !s.isDefault).length > 0 && (
+                  <span className="ml-0.5 text-[9px] bg-cyan-500/50 px-1 rounded">
+                    {modelInstance.transformSnapshots.filter(s => !s.isDefault).length}
+                  </span>
+                )}
+              </button>
+              
+              {/* Transform 下拉選單內容 */}
+              {showTransformDropdown && (
+                <div className={`absolute top-full left-0 mt-1 w-56 ${theme.panelBg} border ${theme.panelBorder} rounded-lg shadow-xl z-50 overflow-hidden`}>
+                  {/* 紀錄當前狀態按鈕 */}
+                  <button
+                    onClick={() => {
+                      const timestamp = new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                      onSaveTransformSnapshot?.(`快照 ${timestamp}`);
+                    }}
+                    className="w-full px-3 py-2 text-left text-xs text-cyan-300 hover:bg-cyan-500/20 flex items-center gap-2 border-b border-gray-700/50"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    紀錄當前狀態
+                  </button>
+                  
+                  {/* Transform 快照列表 */}
+                  <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                    {modelInstance.transformSnapshots.map((snapshot) => (
+                      <div
+                        key={snapshot.id}
+                        className="group flex items-center gap-1 px-2 py-1.5 hover:bg-gray-700/50"
+                      >
+                        {editingTransformId === snapshot.id ? (
+                          // 編輯模式
+                          <div className="flex-1 flex items-center gap-1">
+                            <input
+                              type="text"
+                              value={editingTransformName}
+                              onChange={(e) => setEditingTransformName(e.target.value)}
+                              className="flex-1 px-2 py-0.5 text-xs bg-gray-700/50 border border-gray-600 rounded text-white focus:outline-none focus:border-cyan-500"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && editingTransformName.trim()) {
+                                  onRenameTransformSnapshot?.(snapshot.id, editingTransformName.trim());
+                                  setEditingTransformId(null);
+                                } else if (e.key === 'Escape') {
+                                  setEditingTransformId(null);
+                                }
+                              }}
+                            />
+                            <button
+                              onClick={() => {
+                                if (editingTransformName.trim()) {
+                                  onRenameTransformSnapshot?.(snapshot.id, editingTransformName.trim());
+                                  setEditingTransformId(null);
+                                }
+                              }}
+                              className="p-0.5 text-green-400 hover:text-green-300"
+                            >
+                              <Check className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => setEditingTransformId(null)}
+                              className="p-0.5 text-gray-400 hover:text-gray-300"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ) : (
+                          // 顯示模式
+                          <>
+                            <button
+                              onClick={() => onApplyTransformSnapshot?.(snapshot)}
+                              className="flex-1 text-left text-xs text-gray-200 hover:text-white truncate flex items-center gap-1.5"
+                              title={snapshot.isDefault 
+                                ? '重置為初始狀態 (0,0,0 / 0,0,0 / 1.0 / 100%)' 
+                                : `套用：${snapshot.name}`
+                              }
+                            >
+                              <RotateCw className={`w-3 h-3 flex-shrink-0 ${snapshot.isDefault ? 'text-cyan-400' : 'text-gray-400'}`} />
+                              <span className="truncate">{snapshot.name}</span>
+                              {snapshot.isDefault && (
+                                <span className="text-[9px] text-cyan-400/70">(預設)</span>
+                              )}
+                            </button>
+                            {!snapshot.isDefault && (
+                              <>
+                                <button
+                                  onClick={() => {
+                                    setEditingTransformId(snapshot.id);
+                                    setEditingTransformName(snapshot.name);
+                                  }}
+                                  className="p-1 text-gray-400 hover:text-blue-400 hover:bg-blue-400/10 rounded transition-colors"
+                                  title="重命名"
+                                >
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => onDeleteTransformSnapshot?.(snapshot.id)}
+                                  className="p-1 text-gray-400 hover:text-red-400 hover:bg-red-400/10 rounded transition-colors"
+                                  title="刪除"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

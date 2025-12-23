@@ -9,7 +9,7 @@
 
 import React, { useState, memo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, ChevronDown, GripVertical, Box, Bone, Plus, Settings, Trash2, Sunrise, Sunset } from 'lucide-react';
+import { ChevronRight, ChevronDown, GripVertical, Box, Bone, Plus, Settings, Trash2, Sunrise, Sunset, Maximize2, Move } from 'lucide-react';
 import type { ActionSource, ActionSourceItem, ProceduralAnimationType } from '../../../../domain/entities/director/director.types';
 import { PROCEDURAL_ANIMATION_PRESETS } from '../../../../domain/entities/director/director.types';
 import type { ProceduralAction } from '../../../../domain/value-objects/ModelInstance';
@@ -188,6 +188,8 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({
     switch (type) {
       case 'fadeIn': return <Sunrise size={12} className="text-green-300" />;
       case 'fadeOut': return <Sunset size={12} className="text-red-300" />;
+      case 'scaleTo': return <Maximize2 size={12} className="text-blue-300" />;
+      case 'moveBy': return <Move size={12} className="text-purple-300" />;
     }
   };
 
@@ -263,7 +265,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({
                     {(modelProceduralActions.get(source.modelId) || []).length > 0 && (
                       <>
                         <div className="mx-5 my-1 border-t border-white/10" />
-                        {(modelProceduralActions.get(source.modelId) || []).map(action => (
+                        {(modelProceduralActions.get(source.modelId) || []).map((action: ProceduralAction) => (
                           <div
                             key={action.id}
                             draggable
@@ -376,7 +378,7 @@ export const ActionSourcePanel: React.FC<ActionSourcePanelProps> = memo(({
             <div className="px-3 py-1.5 text-xs text-gray-500 font-medium border-b border-white/10">
               選擇程式動作
             </div>
-            {(Object.entries(PROCEDURAL_ANIMATION_PRESETS) as [ProceduralAnimationType, typeof PROCEDURAL_ANIMATION_PRESETS['show']][]).map(([type, preset]) => (
+            {(Object.entries(PROCEDURAL_ANIMATION_PRESETS) as [ProceduralAnimationType, typeof PROCEDURAL_ANIMATION_PRESETS['fadeIn']][]).map(([type, preset]) => (
               <button
                 key={type}
                 onClick={() => handleSelectProceduralType(type)}

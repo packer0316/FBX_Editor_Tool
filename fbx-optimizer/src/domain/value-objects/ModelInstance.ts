@@ -4,6 +4,7 @@ import type { ShaderGroup } from './ShaderFeature';
 import type { AudioTrack } from './AudioTrack';
 import type { EffectItem } from '../../../presentation/features/effect-panel/components/EffectTestPanel';
 import type { ViewSnapshot } from './ViewSnapshot';
+import type { TransformSnapshot } from './TransformSnapshot';
 import type { ProceduralAnimationType, ProceduralAnimationConfig } from '../entities/director/director.types';
 
 /**
@@ -122,6 +123,10 @@ export interface ModelInstance {
   // 視圖快照
   /** 視圖快照列表 */
   viewSnapshots: ViewSnapshot[];
+  
+  // Transform 快照
+  /** Transform 快照列表（位置、旋轉、縮放、透明度） */
+  transformSnapshots: TransformSnapshot[];
   
   // 元資料
   /** 建立時間戳 */

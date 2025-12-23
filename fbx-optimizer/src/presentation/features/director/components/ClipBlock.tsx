@@ -4,7 +4,8 @@
 
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Bone, Trash2, Palette, Check, Copy, Clipboard, Sunrise, Sunset } from 'lucide-react';
+import { Box, Bone, Trash2, Palette, Check, Copy, Clipboard, Sunrise, Sunset, Maximize2, Move } from 'lucide-react';
+import type { EasingType } from '../../../../domain/entities/director/director.types';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { useSpineStore } from '../../../stores/spineStore';
 import type { DirectorClip, ProceduralAnimationType } from '../../../../domain/entities/director/director.types';
@@ -19,8 +20,18 @@ const getProceduralIcon = (type: ProceduralAnimationType, size = 12) => {
   switch (type) {
     case 'fadeIn': return <Sunrise size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
     case 'fadeOut': return <Sunset size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
+    case 'scaleTo': return <Maximize2 size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
+    case 'moveBy': return <Move size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
   }
 };
+
+// Easing 選項配置
+const EASING_OPTIONS: { value: EasingType; label: string }[] = [
+  { value: 'linear', label: '線性' },
+  { value: 'easeIn', label: '漸強 (Ease In)' },
+  { value: 'easeOut', label: '漸弱 (Ease Out)' },
+  { value: 'easeInOut', label: '漸強漸弱 (Ease In Out)' },
+];
 
 // Marker 類型定義
 type AudioMarkerEntry = {
@@ -48,6 +59,8 @@ interface ContextMenuState {
   visible: boolean;
   x: number;
   y: number;
+  calculatedX?: number;
+  calculatedY?: number;
 }
 
 export const ClipBlock: React.FC<ClipBlockProps> = memo(({
@@ -73,6 +86,34 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   // 右鍵選單狀態
   const [contextMenu, setContextMenu] = useState<ContextMenuState>({ visible: false, x: 0, y: 0 });
   const [showSkinSubmenu, setShowSkinSubmenu] = useState(false);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+  
+  // 右鍵選單位置調整（避免超出視窗）
+  useEffect(() => {
+    if (contextMenu.visible && contextMenuRef.current) {
+      const menuRect = contextMenuRef.current.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      
+      let newX = contextMenu.x;
+      let newY = contextMenu.y;
+      
+      // 如果選單底部超出視窗，向上移動
+      if (menuRect.bottom > viewportHeight - 10) {
+        newY = Math.max(10, viewportHeight - menuRect.height - 10);
+      }
+      
+      // 如果選單右側超出視窗，向左移動
+      if (menuRect.right > viewportWidth - 10) {
+        newX = Math.max(10, viewportWidth - menuRect.width - 10);
+      }
+      
+      // 只在需要調整時更新
+      if (newX !== contextMenu.calculatedX || newY !== contextMenu.calculatedY) {
+        setContextMenu(prev => ({ ...prev, calculatedX: newX, calculatedY: newY }));
+      }
+    }
+  }, [contextMenu.visible, contextMenu.x, contextMenu.y]);
   
   // 取得 Spine 實例的 skins 列表
   const spineSkins = useMemo(() => {
@@ -647,8 +688,12 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
           />
           {/* 選單 */}
           <div
-            className="fixed bg-gray-800/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl py-1 z-[501] min-w-[160px]"
-            style={{ left: contextMenu.x, top: contextMenu.y }}
+            ref={contextMenuRef}
+            className="fixed bg-gray-800/95 backdrop-blur-lg border border-white/10 rounded-lg shadow-xl py-1 z-[501] min-w-[160px] max-h-[90vh] overflow-y-auto"
+            style={{ 
+              left: contextMenu.calculatedX ?? contextMenu.x, 
+              top: contextMenu.calculatedY ?? contextMenu.y 
+            }}
           >
             {/* Spine Skin 選擇（僅 Spine 類型顯示） */}
             {clip.sourceType === 'spine' && spineSkins.length > 0 && (
@@ -688,6 +733,192 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
                     </div>
                   )}
                 </div>
+                <div className="h-px bg-white/10 my-1" />
+              </>
+            )}
+            
+            {/* 程式動作設定（僅 ScaleTo/MoveBy 類型顯示） */}
+            {clip.sourceType === 'procedural' && (clip.proceduralType === 'scaleTo' || clip.proceduralType === 'moveBy') && (
+              <>
+                {/* Easing 選項 */}
+                <div className="px-3 py-1.5 text-[10px] text-gray-500 font-medium">緩動效果</div>
+                {EASING_OPTIONS.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => {
+                      updateClip(clip.id, { 
+                        proceduralConfig: { 
+                          ...clip.proceduralConfig,
+                          type: clip.proceduralType!,
+                          easing: option.value,
+                          // 設定預設強度（如果還沒有的話）
+                          easingStrength: clip.proceduralConfig?.easingStrength ?? 2
+                        } 
+                      } as any);
+                    }}
+                    className={`w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 flex items-center gap-2 ${
+                      (clip.proceduralConfig?.easing ?? 'linear') === option.value ? 'text-amber-400' : 'text-gray-300'
+                    }`}
+                  >
+                    {(clip.proceduralConfig?.easing ?? 'linear') === option.value && <Check size={12} />}
+                    <span className={(clip.proceduralConfig?.easing ?? 'linear') === option.value ? '' : 'ml-5'}>{option.label}</span>
+                  </button>
+                ))}
+                
+                {/* 緩動強度（僅非線性時顯示） */}
+                {clip.proceduralConfig?.easing && clip.proceduralConfig.easing !== 'linear' && (
+                  <div className="px-3 py-2 border-t border-white/10 mt-1">
+                    <div className="text-[10px] text-gray-500 font-medium mb-2">緩動強度</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="0.5"
+                        value={clip.proceduralConfig?.easingStrength ?? 2}
+                        onChange={(e) => {
+                          updateClip(clip.id, { 
+                            proceduralConfig: { 
+                              ...clip.proceduralConfig,
+                              type: clip.proceduralType!,
+                              easingStrength: parseFloat(e.target.value) 
+                            } 
+                          } as any);
+                        }}
+                        className="director-slider flex-1"
+                        style={{
+                          background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${((clip.proceduralConfig?.easingStrength ?? 2) - 1) / 4 * 100}%, #4b5563 ${((clip.proceduralConfig?.easingStrength ?? 2) - 1) / 4 * 100}%, #4b5563 100%)`,
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        max="5"
+                        step="0.5"
+                        value={clip.proceduralConfig?.easingStrength ?? 2}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val >= 1 && val <= 5) {
+                            updateClip(clip.id, { 
+                              proceduralConfig: { 
+                                ...clip.proceduralConfig,
+                                type: clip.proceduralType!,
+                                easingStrength: val 
+                              } 
+                            } as any);
+                          }
+                        }}
+                        className="w-12 px-1.5 py-0.5 text-xs text-gray-200 bg-gray-700 border border-gray-600 rounded text-right focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* ScaleTo 強度設定 */}
+                {clip.proceduralType === 'scaleTo' && (
+                  <div className="px-3 py-2 border-t border-white/10 mt-1">
+                    <div className="text-[10px] text-gray-500 font-medium mb-2">目標縮放</div>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="range"
+                        min="0.1"
+                        max="3"
+                        step="0.1"
+                        value={clip.proceduralConfig?.targetScale ?? 1.5}
+                        onChange={(e) => {
+                          updateClip(clip.id, { 
+                            proceduralConfig: { 
+                              ...clip.proceduralConfig,
+                              type: clip.proceduralType!,
+                              targetScale: parseFloat(e.target.value) 
+                            } 
+                          } as any);
+                        }}
+                        className="director-slider flex-1"
+                        style={{
+                          background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${((clip.proceduralConfig?.targetScale ?? 1.5) - 0.1) / 2.9 * 100}%, #4b5563 ${((clip.proceduralConfig?.targetScale ?? 1.5) - 0.1) / 2.9 * 100}%, #4b5563 100%)`,
+                        }}
+                      />
+                      <input
+                        type="number"
+                        min="0.1"
+                        max="10"
+                        step="0.1"
+                        value={clip.proceduralConfig?.targetScale ?? 1.5}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value);
+                          if (!isNaN(val) && val > 0) {
+                            updateClip(clip.id, { 
+                              proceduralConfig: { 
+                                ...clip.proceduralConfig,
+                                type: clip.proceduralType!,
+                                targetScale: val 
+                              } 
+                            } as any);
+                          }
+                        }}
+                        className="w-16 px-1.5 py-0.5 text-xs text-gray-200 bg-gray-700 border border-gray-600 rounded text-right focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                  </div>
+                )}
+                
+                {/* MoveBy 位移設定 */}
+                {clip.proceduralType === 'moveBy' && (
+                  <div className="px-3 py-2 border-t border-white/10 mt-1">
+                    <div className="text-[10px] text-gray-500 font-medium mb-2">位移量</div>
+                    {(['X', 'Y', 'Z'] as const).map((axis) => {
+                      const key = `move${axis}` as 'moveX' | 'moveY' | 'moveZ';
+                      const currentValue = clip.proceduralConfig?.[key] ?? 0;
+                      // 計算滑桿進度 (-10 到 10 映射到 0% 到 100%)
+                      const progressPercent = ((currentValue + 10) / 20) * 100;
+                      return (
+                        <div key={axis} className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs text-gray-400 w-4">{axis}</span>
+                          <input
+                            type="range"
+                            min="-10"
+                            max="10"
+                            step="0.1"
+                            value={currentValue}
+                            onChange={(e) => {
+                              updateClip(clip.id, { 
+                                proceduralConfig: { 
+                                  ...clip.proceduralConfig,
+                                  type: clip.proceduralType!,
+                                  [key]: parseFloat(e.target.value) 
+                                } 
+                              } as any);
+                            }}
+                            className="director-slider flex-1"
+                            style={{
+                              background: `linear-gradient(to right, #f59e0b 0%, #f59e0b ${progressPercent}%, #4b5563 ${progressPercent}%, #4b5563 100%)`,
+                            }}
+                          />
+                          <input
+                            type="number"
+                            step="0.1"
+                            value={currentValue}
+                            onChange={(e) => {
+                              const val = parseFloat(e.target.value);
+                              if (!isNaN(val)) {
+                                updateClip(clip.id, { 
+                                  proceduralConfig: { 
+                                    ...clip.proceduralConfig,
+                                    type: clip.proceduralType!,
+                                    [key]: val 
+                                  } 
+                                } as any);
+                              }
+                            }}
+                            className="w-16 px-1.5 py-0.5 text-xs text-gray-200 bg-gray-700 border border-gray-600 rounded text-right focus:outline-none focus:border-amber-500"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                
                 <div className="h-px bg-white/10 my-1" />
               </>
             )}

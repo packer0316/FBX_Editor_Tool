@@ -506,9 +506,8 @@ export const useDirectorStore = create<DirectorStore>()(
         
         if (!targetClip) return;
         
-        // 程式化動畫（fadeIn/fadeOut）的特殊處理：直接調整時長
-        if (targetClip.sourceType === 'procedural' && 
-            (targetClip.proceduralType === 'fadeIn' || targetClip.proceduralType === 'fadeOut')) {
+        // 程式化動畫的特殊處理：直接調整時長（所有程式動作都可調整）
+        if (targetClip.sourceType === 'procedural') {
           let newDuration = targetClip.sourceAnimationDuration;
           let newStartFrame = targetClip.startFrame;
           let newEndFrame = targetClip.endFrame;
