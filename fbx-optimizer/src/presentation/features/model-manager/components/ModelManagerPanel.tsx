@@ -156,7 +156,7 @@ export default function ModelManagerPanel({
                 {/* 文字排版 */}
                 <div className="flex flex-col gap-0.5">
                   <div className="text-[12px] font-black tracking-[0.25em] uppercase text-gray-200 group-hover:text-white transition-colors duration-500">
-                    Import Engine
+                    IMPORT
                   </div>
                   <div className="text-[9px] font-medium tracking-[0.15em] uppercase text-gray-500 group-hover:text-blue-400/70 transition-colors duration-500">
                     FBX / Texture Pipeline
