@@ -19,10 +19,12 @@ import type {
   CreateClipParams,
   MoveClipParams,
   DraggingClipData,
+  ProceduralAnimationType,
 } from '../../domain/entities/director/director.types';
 import {
   DEFAULT_FPS,
   DEFAULT_TOTAL_FRAMES,
+  PROCEDURAL_ANIMATION_PRESETS,
 } from '../../domain/entities/director/director.types';
 
 // ============================================================================
@@ -341,6 +343,13 @@ export const useDirectorStore = create<DirectorStore>()(
             spineLayerId: params.spineLayerId,
             spineElementId: params.spineElementId,
           }),
+          // 程式化動畫特有屬性
+          ...(params.sourceType === 'procedural' && params.proceduralType && {
+            proceduralType: params.proceduralType,
+            proceduralConfig: {
+              type: params.proceduralType,
+            },
+          }),
         };
         
         // 自動擴展時間軸（留 10% 緩衝空間）
@@ -393,11 +402,15 @@ export const useDirectorStore = create<DirectorStore>()(
           return false;
         }
         
+        // 計算有效時長（考慮 trim）
+        const effectiveDuration = (sourceClip.trimEnd ?? sourceClip.sourceAnimationDuration - 1) 
+          - (sourceClip.trimStart ?? 0) + 1;
+        
         const updatedClip: DirectorClip = {
           ...sourceClip,
           trackId: newTrackId,
           startFrame: newStartFrame,
-          endFrame: newStartFrame + sourceClip.sourceAnimationDuration - 1,
+          endFrame: newStartFrame + effectiveDuration - 1,
         };
         
         // 自動擴展時間軸（留 10% 緩衝空間）
@@ -493,7 +506,51 @@ export const useDirectorStore = create<DirectorStore>()(
         
         if (!targetClip) return;
         
-        // 計算新的 trim 值
+        // 程式化動畫（fadeIn/fadeOut）的特殊處理：直接調整時長
+        if (targetClip.sourceType === 'procedural' && 
+            (targetClip.proceduralType === 'fadeIn' || targetClip.proceduralType === 'fadeOut')) {
+          let newDuration = targetClip.sourceAnimationDuration;
+          let newStartFrame = targetClip.startFrame;
+          let newEndFrame = targetClip.endFrame;
+          
+          if (side === 'start') {
+            // 從左邊調整：移動起點，縮短/延長時長
+            const newStart = Math.max(0, targetClip.startFrame + frameDelta);
+            const oldDuration = targetClip.endFrame - targetClip.startFrame + 1;
+            newDuration = Math.max(2, oldDuration - (newStart - targetClip.startFrame));
+            newStartFrame = newStart;
+            newEndFrame = newStartFrame + newDuration - 1;
+          } else {
+            // 從右邊調整：延長/縮短結束點
+            newDuration = Math.max(2, targetClip.sourceAnimationDuration + frameDelta);
+            newEndFrame = targetClip.startFrame + newDuration - 1;
+          }
+          
+          set(
+            (state) => ({
+              tracks: state.tracks.map((t) => ({
+                ...t,
+                clips: t.clips.map((c) =>
+                  c.id === clipId
+                    ? {
+                        ...c,
+                        sourceAnimationDuration: newDuration,
+                        startFrame: newStartFrame,
+                        endFrame: newEndFrame,
+                        trimStart: 0,
+                        trimEnd: newDuration - 1,
+                      }
+                    : c
+                ),
+              })),
+            }),
+            undefined,
+            'trimClip-procedural'
+          );
+          return;
+        }
+        
+        // 一般動畫的剪裁邏輯
         let newTrimStart = targetClip.trimStart;
         let newTrimEnd = targetClip.trimEnd;
         let newStartFrame = targetClip.startFrame;

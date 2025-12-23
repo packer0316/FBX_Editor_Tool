@@ -2,7 +2,7 @@
  * DirectorPanel - 導演模式主面板
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { X, Keyboard, Magnet, AlertCircle } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { ActionSourcePanel } from './ActionSourcePanel';
@@ -10,8 +10,10 @@ import { TimelineEditor } from './TimelineEditor';
 import { PlaybackControls } from './PlaybackControls';
 import { useTimelinePlayback } from '../hooks/useTimelinePlayback';
 import { useKeyboardShortcuts } from '../hooks/useKeyboardShortcuts';
-import type { ActionSource } from '../../../../domain/entities/director/director.types';
+import type { ActionSource, ProceduralAnimationType } from '../../../../domain/entities/director/director.types';
+import { PROCEDURAL_ANIMATION_PRESETS } from '../../../../domain/entities/director/director.types';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
+import type { ProceduralAction } from '../../../../domain/value-objects/ModelInstance';
 
 // 提示按鈕組件
 const HintButton: React.FC = () => {
@@ -72,6 +74,8 @@ interface DirectorPanelProps {
   onUpdateModelAnimation?: (modelId: string, animationId: string, localTime: number, localFrame: number) => void;
   /** 調整高度把手的 mouseDown 處理 */
   onResizeHandleMouseDown?: (e: React.MouseEvent) => void;
+  /** 更新模型的回調（用於新增/刪除程式動作） */
+  onUpdateModel?: (modelId: string, updates: Partial<ModelInstance>) => void;
 }
 
 export const DirectorPanel: React.FC<DirectorPanelProps> = ({ 
@@ -79,6 +83,7 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
   models = [],
   onUpdateModelAnimation,
   onResizeHandleMouseDown,
+  onUpdateModel,
 }) => {
   const { isDirectorMode, exitDirectorMode, ui, toggleClipSnapping } = useDirectorStore();
 
@@ -91,6 +96,45 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
 
   // 鍵盤快捷鍵
   const { shortcuts } = useKeyboardShortcuts({ enabled: isDirectorMode });
+
+  // 建立模型程式動作映射
+  const modelProceduralActions = useMemo(() => {
+    const map = new Map<string, ProceduralAction[]>();
+    models.forEach(model => {
+      map.set(model.id, model.proceduralActions || []);
+    });
+    return map;
+  }, [models]);
+
+  // 新增程式動作到模型
+  const handleAddProceduralAction = useCallback((modelId: string, type: ProceduralAnimationType) => {
+    if (!onUpdateModel) return;
+    
+    const model = models.find(m => m.id === modelId);
+    if (!model) return;
+    
+    const preset = PROCEDURAL_ANIMATION_PRESETS[type];
+    const newAction: ProceduralAction = {
+      id: `proc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type,
+      displayName: preset.displayName,
+      durationFrames: preset.defaultDuration,
+    };
+    
+    const updatedActions = [...(model.proceduralActions || []), newAction];
+    onUpdateModel(modelId, { proceduralActions: updatedActions });
+  }, [models, onUpdateModel]);
+
+  // 刪除模型的程式動作
+  const handleRemoveProceduralAction = useCallback((modelId: string, actionId: string) => {
+    if (!onUpdateModel) return;
+    
+    const model = models.find(m => m.id === modelId);
+    if (!model) return;
+    
+    const updatedActions = (model.proceduralActions || []).filter(a => a.id !== actionId);
+    onUpdateModel(modelId, { proceduralActions: updatedActions });
+  }, [models, onUpdateModel]);
 
   if (!isDirectorMode) return null;
 
@@ -164,7 +208,12 @@ export const DirectorPanel: React.FC<DirectorPanelProps> = ({
       {/* 主內容區 */}
       <div className="flex-1 flex overflow-hidden">
         {/* 左側：動作來源面板 */}
-        <ActionSourcePanel actionSources={actionSources} />
+        <ActionSourcePanel 
+          actionSources={actionSources}
+          onAddProceduralAction={handleAddProceduralAction}
+          onRemoveProceduralAction={handleRemoveProceduralAction}
+          modelProceduralActions={modelProceduralActions}
+        />
 
         {/* 右側：時間軸編輯器 */}
         <TimelineEditor models={models} />

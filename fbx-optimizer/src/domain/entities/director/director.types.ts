@@ -31,7 +31,49 @@ export const MAX_ZOOM = 5.0;
 /**
  * 動畫來源類型
  */
-export type AnimationSourceType = '3d-model' | 'spine';
+export type AnimationSourceType = '3d-model' | 'spine' | 'procedural';
+
+// ============================================================================
+// 程式化動畫類型
+// ============================================================================
+
+/**
+ * 程式化動畫類型
+ */
+export type ProceduralAnimationType = 
+  | 'fadeIn'    // 淡入（漸變）
+  | 'fadeOut';  // 淡出（漸變）
+
+/**
+ * 程式化動畫設定
+ */
+export interface ProceduralAnimationConfig {
+  /** 動畫類型 */
+  type: ProceduralAnimationType;
+  
+  /** 緩動函數（未來擴展用） */
+  easing?: 'linear' | 'easeIn' | 'easeOut' | 'easeInOut';
+}
+
+/**
+ * 預設程式化動畫定義
+ */
+export const PROCEDURAL_ANIMATION_PRESETS: Record<ProceduralAnimationType, {
+  displayName: string;
+  defaultDuration: number;  // 幀數
+  color: string;
+}> = {
+  fadeIn: {
+    displayName: 'FadeIn',
+    defaultDuration: 30,
+    color: '#4ade80',  // 淺綠
+  },
+  fadeOut: {
+    displayName: 'FadeOut',
+    defaultDuration: 30,
+    color: '#f87171',  // 淺紅
+  },
+};
 
 /**
  * 片段（Clip）- 動作在軌道上的實例
@@ -104,6 +146,13 @@ export interface DirectorClip {
   
   /** 顯示顏色（用於視覺區分） */
   color: string;
+  
+  // 程式化動畫專用欄位（sourceType === 'procedural' 時使用）
+  /** 程式化動畫類型 */
+  proceduralType?: ProceduralAnimationType;
+  
+  /** 程式化動畫設定 */
+  proceduralConfig?: ProceduralAnimationConfig;
 }
 
 /**
@@ -261,6 +310,9 @@ export interface DraggingClipData {
   
   /** 片段顏色（依據模型區分） */
   color?: string;
+  
+  /** 程式化動畫類型（sourceType === 'procedural' 時使用） */
+  proceduralType?: ProceduralAnimationType;
 }
 
 // ============================================================================
@@ -342,6 +394,9 @@ export interface CreateClipParams {
   spineInstanceId?: string;
   spineLayerId?: string;
   spineElementId?: string;
+  
+  /** 程式化動畫相關（sourceType === 'procedural' 時） */
+  proceduralType?: ProceduralAnimationType;
 }
 
 /**

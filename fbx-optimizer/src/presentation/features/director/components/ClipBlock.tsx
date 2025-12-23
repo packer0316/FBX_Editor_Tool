@@ -4,15 +4,23 @@
 
 import React, { memo, useCallback, useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Box, Bone, Trash2, Palette, Check, Copy, Clipboard } from 'lucide-react';
+import { Box, Bone, Trash2, Palette, Check, Copy, Clipboard, Sunrise, Sunset } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { useSpineStore } from '../../../stores/spineStore';
-import type { DirectorClip } from '../../../../domain/entities/director/director.types';
+import type { DirectorClip, ProceduralAnimationType } from '../../../../domain/entities/director/director.types';
 import { snapToGrid, snapToClipEdges } from '../../../../utils/director/directorUtils';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import type { AudioTrack } from '../../../../domain/value-objects/AudioTrack';
 import type { EffectItem } from '../../../features/effect-panel/components/EffectTestPanel';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
+
+// 取得程式動作圖示
+const getProceduralIcon = (type: ProceduralAnimationType, size = 12) => {
+  switch (type) {
+    case 'fadeIn': return <Sunrise size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
+    case 'fadeOut': return <Sunset size={size} className="flex-shrink-0 text-white/90 mr-1.5 pointer-events-none" />;
+  }
+};
 
 // Marker 類型定義
 type AudioMarkerEntry = {
@@ -79,6 +87,12 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     const trimEnd = clip.trimEnd ?? clip.sourceAnimationDuration - 1;
     const effectiveLen = trimEnd - trimStart + 1;
     const durationSeconds = (effectiveLen / timeline.fps).toFixed(2);
+    
+    // 程式動作顯示簡化文字
+    if (clip.sourceType === 'procedural') {
+      return `${clip.sourceAnimationName}\n目標：${clip.sourceModelName}\n時長：${effectiveLen} 幀 (${durationSeconds} 秒)`;
+    }
+    
     let text = `${clip.sourceModelName} - ${clip.sourceAnimationName}\n時長：${effectiveLen} 幀 (${durationSeconds} 秒)`;
     
     // 如果有剪裁，顯示剪裁範圍
@@ -322,6 +336,9 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     selectClip(clip.id);
   }, [isLocked, clip.trimStart, clip.trimEnd, clip.sourceAnimationDuration, clip.id, selectClip]);
   
+  // 判斷是否為程式動作（所有程式動作都可調整時長）
+  const isProcedural = clip.sourceType === 'procedural';
+  
   // 剪裁拖曳 effect
   useEffect(() => {
     if (!isTrimming || !trimSide) return;
@@ -331,24 +348,43 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       const frameDelta = Math.round(delta / pixelsPerFrame);
       
       if (trimSide === 'start') {
-        // 左邊緣剪裁：增加 trimStart（向右拖）= 減少有效長度
-        const newTrimStart = Math.max(0, Math.min(
-          originalTrimStart.current + frameDelta,
-          originalTrimEnd.current - 1
-        ));
-        const actualDelta = newTrimStart - (clip.trimStart ?? 0);
-        if (actualDelta !== 0) {
-          trimClip(clip.id, 'start', actualDelta);
+        if (isProcedural) {
+          // 程式動作（FadeIn/FadeOut）：直接傳遞 frameDelta，由 store 處理時長調整
+          // 向左拉（frameDelta < 0）= 延長時長，向右拉（frameDelta > 0）= 縮短時長
+          if (frameDelta !== 0) {
+            trimClip(clip.id, 'start', frameDelta);
+            // 更新參考點，避免累積
+            trimStartX.current = e.clientX;
+          }
+        } else {
+          // 一般動畫：增加 trimStart（向右拖）= 減少有效長度
+          const newTrimStart = Math.max(0, Math.min(
+            originalTrimStart.current + frameDelta,
+            originalTrimEnd.current - 1
+          ));
+          const actualDelta = newTrimStart - (clip.trimStart ?? 0);
+          if (actualDelta !== 0) {
+            trimClip(clip.id, 'start', actualDelta);
+          }
         }
       } else {
-        // 右邊緣剪裁：增加 trimEnd（向右拖）= 增加有效長度
-        const newTrimEnd = Math.max(
-          originalTrimStart.current + 1,
-          Math.min(originalTrimEnd.current + frameDelta, clip.sourceAnimationDuration - 1)
-        );
-        const actualDelta = newTrimEnd - (clip.trimEnd ?? clip.sourceAnimationDuration - 1);
-        if (actualDelta !== 0) {
-          trimClip(clip.id, 'end', actualDelta);
+        if (isProcedural) {
+          // 程式動作（FadeIn/FadeOut）：直接傳遞 frameDelta，由 store 處理時長調整
+          if (frameDelta !== 0) {
+            trimClip(clip.id, 'end', frameDelta);
+            // 更新參考點，避免累積
+            trimStartX.current = e.clientX;
+          }
+        } else {
+          // 一般動畫：增加 trimEnd（向右拖）= 增加有效長度（受限於原始時長）
+          const newTrimEnd = Math.max(
+            originalTrimStart.current + 1,
+            Math.min(originalTrimEnd.current + frameDelta, clip.sourceAnimationDuration - 1)
+          );
+          const actualDelta = newTrimEnd - (clip.trimEnd ?? clip.sourceAnimationDuration - 1);
+          if (actualDelta !== 0) {
+            trimClip(clip.id, 'end', actualDelta);
+          }
         }
       }
     };
@@ -365,7 +401,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isTrimming, trimSide, pixelsPerFrame, clip.id, clip.trimStart, clip.trimEnd, clip.sourceAnimationDuration, trimClip]);
+  }, [isTrimming, trimSide, pixelsPerFrame, clip.id, clip.trimStart, clip.trimEnd, clip.sourceAnimationDuration, trimClip, isProcedural]);
 
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
     if (isLocked || e.button !== 0) return;
@@ -459,7 +495,14 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         style={{
           left,
           width: Math.max(width, 20),
-          backgroundColor: clip.color,
+          // 程式動作漸層樣式
+          ...(clip.sourceType === 'procedural' && clip.proceduralType === 'fadeIn' ? {
+            background: `linear-gradient(90deg, transparent 0%, ${clip.color} 100%)`,
+          } : clip.sourceType === 'procedural' && clip.proceduralType === 'fadeOut' ? {
+            background: `linear-gradient(90deg, ${clip.color} 0%, transparent 100%)`,
+          } : {
+            backgroundColor: clip.color,
+          }),
           transition: isDragging || isTrimming ? 'none' : undefined,
         }}
       >
@@ -490,14 +533,19 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         {/* 上方：資訊列 */}
         <div className="flex items-center px-2">
           {/* 來源類型圖標 */}
-          {clip.sourceType === 'spine' ? (
+          {clip.sourceType === 'procedural' && clip.proceduralType ? (
+            getProceduralIcon(clip.proceduralType)
+          ) : clip.sourceType === 'spine' ? (
             <Bone size={12} className="flex-shrink-0 text-white/80 mr-1.5 pointer-events-none" />
           ) : (
             <Box size={12} className="flex-shrink-0 text-white/80 mr-1.5 pointer-events-none" />
           )}
           
           <span className="text-xs text-white font-medium truncate drop-shadow-sm pointer-events-none">
-            {clip.sourceModelName} - {clip.sourceAnimationName}
+            {clip.sourceType === 'procedural' 
+              ? `${clip.sourceModelName} - ${clip.sourceAnimationName}`
+              : `${clip.sourceModelName} - ${clip.sourceAnimationName}`
+            }
           </span>
           
           {/* 片段時長顯示（剪裁後的有效長度） */}

@@ -157,6 +157,7 @@ export class LoadModelUseCase {
       isShaderEnabled: true,
       audioTracks: [],
       effects: [],
+      proceduralActions: [],
       isPlaying: false,
       currentTime: 0,
       duration: originalClip?.duration || 0,

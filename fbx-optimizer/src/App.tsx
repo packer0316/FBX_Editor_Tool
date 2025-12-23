@@ -19,6 +19,7 @@ import { useSpineStore } from './presentation/stores/spineStore';
 import { useDirectorAudioTrigger } from './presentation/features/director/hooks/useDirectorAudioTrigger';
 import { useDirectorEffectTrigger } from './presentation/features/director/hooks/useDirectorEffectTrigger';
 import { useDirectorSpineTrigger } from './presentation/features/director/hooks/useDirectorSpineTrigger';
+import { useDirectorProceduralTrigger } from './presentation/features/director/hooks/useDirectorProceduralTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -307,6 +308,13 @@ function App() {
         };
       }));
     },
+  });
+
+  // Director Mode: 程式化動畫觸發（Show/Hide/FadeIn/FadeOut）
+  useDirectorProceduralTrigger({
+    enabled: isDirectorMode,
+    models,
+    onUpdateModel: updateModel,
   });
 
   // Director Mode: 收集所有模型和 Spine 的動作來源
@@ -1698,6 +1706,7 @@ function App() {
                 actionSources={actionSources}
                 models={models}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
+                onUpdateModel={updateModel}
               />
             ) : (
               <>

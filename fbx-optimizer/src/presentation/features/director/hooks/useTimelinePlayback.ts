@@ -113,23 +113,54 @@ export function useTimelinePlayback(
       const { clip, localTime } = clipResult;
       currentActiveClipIds.add(clip.id);
       
-      // 發送 clipUpdate 事件
       if (localTime !== null) {
         const localFrame = Math.floor(localTime * currentFps);
-        directorEventBus.emitClipUpdate({
-          modelId: clip.sourceModelId,
-          animationId: clip.sourceAnimationId,
-          localTime,
-          localFrame,
-        });
         
-        // 向後兼容：同時調用 callback
-        callbacksRef.current?.onUpdateModelAnimation?.(
-          clip.sourceModelId,
-          clip.sourceAnimationId,
-          localTime,
-          localFrame
-        );
+        // 程式化動畫發送 ProceduralUpdateEvent
+        if (clip.sourceType === 'procedural' && clip.proceduralType) {
+          const effectiveDuration = (clip.trimEnd ?? clip.sourceAnimationDuration - 1) - (clip.trimStart ?? 0) + 1;
+          const progress = effectiveDuration > 1 ? localFrame / (effectiveDuration - 1) : 1;
+          const clampedProgress = Math.max(0, Math.min(1, progress));
+          
+          // 計算目標透明度
+          let targetOpacity = 1;
+          
+          switch (clip.proceduralType) {
+            case 'fadeIn':
+              targetOpacity = clampedProgress;  // 0 → 1
+              break;
+            case 'fadeOut':
+              targetOpacity = 1 - clampedProgress;  // 1 → 0
+              break;
+          }
+          
+          // visible 根據 opacity 決定（opacity > 0 時 visible）
+          const targetVisible = targetOpacity > 0;
+          
+          directorEventBus.emitProceduralUpdate({
+            modelId: clip.sourceModelId,
+            type: clip.proceduralType,
+            progress: clampedProgress,
+            targetVisible,
+            targetOpacity,
+          });
+        } else {
+          // 一般動畫發送 clipUpdate 事件
+          directorEventBus.emitClipUpdate({
+            modelId: clip.sourceModelId,
+            animationId: clip.sourceAnimationId,
+            localTime,
+            localFrame,
+          });
+          
+          // 向後兼容：同時調用 callback
+          callbacksRef.current?.onUpdateModelAnimation?.(
+            clip.sourceModelId,
+            clip.sourceAnimationId,
+            localTime,
+            localFrame
+          );
+        }
       }
       
       // 檢查片段是否剛開始播放
@@ -147,10 +178,25 @@ export function useTimelinePlayback(
       if (!currentActiveClipIds.has(prevClipId)) {
         const prevClip = activeClipsRef.current.get(prevClipId);
         if (prevClip) {
+          const clip = prevClip.clip;
+          
+          // 程式動作結束時發送最終狀態
+          if (clip.sourceType === 'procedural' && clip.proceduralType) {
+            const targetOpacity = clip.proceduralType === 'fadeIn' ? 1 : 0;
+            
+            directorEventBus.emitProceduralUpdate({
+              modelId: clip.sourceModelId,
+              type: clip.proceduralType,
+              progress: 1,
+              targetVisible: targetOpacity > 0,
+              targetOpacity,
+            });
+          }
+          
           callbacksRef.current?.onClipEnd?.(
-            prevClip.clip.id,
-            prevClip.clip.sourceModelId,
-            prevClip.clip.sourceAnimationId
+            clip.id,
+            clip.sourceModelId,
+            clip.sourceAnimationId
           );
         }
       }
