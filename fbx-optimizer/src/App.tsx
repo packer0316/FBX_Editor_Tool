@@ -19,6 +19,7 @@ import { useSpineStore } from './presentation/stores/spineStore';
 import { useDirectorAudioTrigger } from './presentation/features/director/hooks/useDirectorAudioTrigger';
 import { useDirectorEffectTrigger } from './presentation/features/director/hooks/useDirectorEffectTrigger';
 import { useDirectorSpineTrigger } from './presentation/features/director/hooks/useDirectorSpineTrigger';
+import { useDirectorProceduralTrigger } from './presentation/features/director/hooks/useDirectorProceduralTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
 import { optimizeAnimationClip } from './utils/optimizer';
@@ -28,6 +29,7 @@ import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
 import type { AudioTrack } from './domain/value-objects/AudioTrack';
 import { CAMERA_PRESETS, type CameraPresetType } from './domain/value-objects/CameraPreset';
 import { createViewSnapshot, type ViewSnapshot } from './domain/value-objects/ViewSnapshot';
+import { createTransformSnapshot, type TransformSnapshot } from './domain/value-objects/TransformSnapshot';
 import LeftToolbar from './presentation/features/scene-viewer/components/LeftToolbar';
 import type { Layer } from './domain/value-objects/Layer';
 import type { Element2D, SpineElement2D } from './domain/value-objects/Element2D';
@@ -307,6 +309,13 @@ function App() {
         };
       }));
     },
+  });
+
+  // Director Mode: 程式化動畫觸發（Show/Hide/FadeIn/FadeOut）
+  useDirectorProceduralTrigger({
+    enabled: isDirectorMode,
+    models,
+    onUpdateModel: updateModel,
   });
 
   // Director Mode: 收集所有模型和 Spine 的動作來源
@@ -1698,6 +1707,7 @@ function App() {
                 actionSources={actionSources}
                 models={models}
                 onResizeHandleMouseDown={handleDirectorMouseDown}
+                onUpdateModel={updateModel}
               />
             ) : (
               <>
@@ -2014,6 +2024,51 @@ function App() {
                   
                   updateModel(modelId, {
                     viewSnapshots: model.viewSnapshots.map(s => 
+                      s.id === snapshotId ? { ...s, name: newName } : s
+                    ),
+                  });
+                }}
+                onSaveTransformSnapshot={(modelId, name) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  const snapshot = createTransformSnapshot(name, {
+                    position: model.position,
+                    rotation: model.rotation,
+                    scale: model.scale[0], // 使用等比縮放值
+                    opacity: model.opacity,
+                  });
+                  
+                  updateModel(modelId, {
+                    transformSnapshots: [...model.transformSnapshots, snapshot],
+                  });
+                  
+                  console.log('已保存 Transform 快照:', snapshot.name);
+                }}
+                onApplyTransformSnapshot={(modelId, snapshot) => {
+                  updateModel(modelId, {
+                    position: snapshot.position,
+                    rotation: snapshot.rotation,
+                    scale: [snapshot.scale, snapshot.scale, snapshot.scale],
+                    opacity: snapshot.opacity,
+                  });
+                  
+                  console.log('已套用 Transform 快照:', snapshot.name);
+                }}
+                onDeleteTransformSnapshot={(modelId, snapshotId) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    transformSnapshots: model.transformSnapshots.filter(s => s.id !== snapshotId),
+                  });
+                }}
+                onRenameTransformSnapshot={(modelId, snapshotId, newName) => {
+                  const model = models.find(m => m.id === modelId);
+                  if (!model) return;
+                  
+                  updateModel(modelId, {
+                    transformSnapshots: model.transformSnapshots.map(s => 
                       s.id === snapshotId ? { ...s, name: newName } : s
                     ),
                   });

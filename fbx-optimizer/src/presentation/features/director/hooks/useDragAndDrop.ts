@@ -205,6 +205,10 @@ export function useDragAndDrop(options: UseDragAndDropOptions): UseDragAndDropRe
             spineLayerId: data.spineLayerId,
             spineElementId: data.spineElementId,
           }),
+          // 程式化動畫特有屬性
+          ...(data.sourceType === 'procedural' && {
+            proceduralType: (data as unknown as { proceduralType?: string }).proceduralType,
+          }),
         });
         console.log('[useDragAndDrop] addClip result:', result);
       } else if (data.type === 'existing' && data.clipId) {

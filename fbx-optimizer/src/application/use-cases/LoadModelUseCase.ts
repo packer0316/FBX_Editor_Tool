@@ -3,6 +3,7 @@ import type { ShaderGroup } from '../../domain/value-objects/ShaderFeature';
 import { ModelLoaderService } from '../../domain/services/model/ModelLoaderService';
 import type { ModelInstance } from '../../domain/value-objects/ModelInstance';
 import { setClipIdentifier, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
+import { createDefaultTransformSnapshot } from '../../domain/value-objects/TransformSnapshot';
 
 /**
  * 載入模型的結果介面
@@ -157,6 +158,7 @@ export class LoadModelUseCase {
       isShaderEnabled: true,
       audioTracks: [],
       effects: [],
+      proceduralActions: [],
       isPlaying: false,
       currentTime: 0,
       duration: originalClip?.duration || 0,
@@ -174,6 +176,7 @@ export class LoadModelUseCase {
       isModelRotating: false,
       modelRotationSpeed: 30,
       viewSnapshots: [],
+      transformSnapshots: [createDefaultTransformSnapshot()],
       createdAt: Date.now(),
       updatedAt: Date.now()
     };

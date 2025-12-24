@@ -472,3 +472,49 @@ input[type=range]:focus {
   --glow-color: rgba(251, 146, 60, 0.6);
   animation: gentle-breathe 3s ease-in-out infinite;
 }
+
+/* ============================================================================
+ * Director 程式動作滑桿樣式
+ * ============================================================================ */
+
+.director-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  outline: none;
+  cursor: pointer;
+}
+
+.director-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.director-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+}
+
+.director-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #f59e0b;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 6px rgba(245, 158, 11, 0.6);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.director-slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
+}

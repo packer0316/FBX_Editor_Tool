@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { Upload, Package, Loader2 } from 'lucide-react';
 import type { ModelInstance } from '../../../../domain/value-objects/ModelInstance';
 import type { ViewSnapshot } from '../../../../domain/value-objects/ViewSnapshot';
+import type { TransformSnapshot } from '../../../../domain/value-objects/TransformSnapshot';
 import ModelCard from './ModelCard';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
 
@@ -36,6 +37,14 @@ interface ModelManagerPanelProps {
   onDeleteSnapshot?: (modelId: string, snapshotId: string) => void;
   /** 重命名視圖快照 */
   onRenameSnapshot?: (modelId: string, snapshotId: string, newName: string) => void;
+  /** 保存 Transform 快照 */
+  onSaveTransformSnapshot?: (modelId: string, name: string) => void;
+  /** 套用 Transform 快照 */
+  onApplyTransformSnapshot?: (modelId: string, snapshot: TransformSnapshot) => void;
+  /** 刪除 Transform 快照 */
+  onDeleteTransformSnapshot?: (modelId: string, snapshotId: string) => void;
+  /** 重命名 Transform 快照 */
+  onRenameTransformSnapshot?: (modelId: string, snapshotId: string, newName: string) => void;
   /** 是否為導演模式 */
   isDirectorMode?: boolean;
   isLoading?: boolean;
@@ -59,6 +68,10 @@ export default function ModelManagerPanel({
   onApplySnapshot,
   onDeleteSnapshot,
   onRenameSnapshot,
+  onSaveTransformSnapshot,
+  onApplyTransformSnapshot,
+  onDeleteTransformSnapshot,
+  onRenameTransformSnapshot,
   isDirectorMode = false,
   isLoading = false,
   toneMappingExposure,
@@ -143,7 +156,7 @@ export default function ModelManagerPanel({
                 {/* 文字排版 */}
                 <div className="flex flex-col gap-0.5">
                   <div className="text-[12px] font-black tracking-[0.25em] uppercase text-gray-200 group-hover:text-white transition-colors duration-500">
-                    Import Engine
+                    IMPORT
                   </div>
                   <div className="text-[9px] font-medium tracking-[0.15em] uppercase text-gray-500 group-hover:text-blue-400/70 transition-colors duration-500">
                     FBX / Texture Pipeline
@@ -210,6 +223,10 @@ export default function ModelManagerPanel({
               onApplySnapshot={onApplySnapshot ? (snapshot) => onApplySnapshot(modelInstance.id, snapshot) : undefined}
               onDeleteSnapshot={onDeleteSnapshot ? (snapshotId) => onDeleteSnapshot(modelInstance.id, snapshotId) : undefined}
               onRenameSnapshot={onRenameSnapshot ? (snapshotId, newName) => onRenameSnapshot(modelInstance.id, snapshotId, newName) : undefined}
+              onSaveTransformSnapshot={onSaveTransformSnapshot ? (name) => onSaveTransformSnapshot(modelInstance.id, name) : undefined}
+              onApplyTransformSnapshot={onApplyTransformSnapshot ? (snapshot) => onApplyTransformSnapshot(modelInstance.id, snapshot) : undefined}
+              onDeleteTransformSnapshot={onDeleteTransformSnapshot ? (snapshotId) => onDeleteTransformSnapshot(modelInstance.id, snapshotId) : undefined}
+              onRenameTransformSnapshot={onRenameTransformSnapshot ? (snapshotId, newName) => onRenameTransformSnapshot(modelInstance.id, snapshotId, newName) : undefined}
               isDirectorMode={isDirectorMode}
               toneMappingExposure={toneMappingExposure}
               environmentIntensity={environmentIntensity}

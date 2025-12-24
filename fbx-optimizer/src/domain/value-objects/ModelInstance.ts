@@ -4,6 +4,24 @@ import type { ShaderGroup } from './ShaderFeature';
 import type { AudioTrack } from './AudioTrack';
 import type { EffectItem } from '../../../presentation/features/effect-panel/components/EffectTestPanel';
 import type { ViewSnapshot } from './ViewSnapshot';
+import type { TransformSnapshot } from './TransformSnapshot';
+import type { ProceduralAnimationType, ProceduralAnimationConfig } from '../entities/director/director.types';
+
+/**
+ * 已加入的程式動作
+ */
+export interface ProceduralAction {
+  /** 唯一識別碼 */
+  id: string;
+  /** 動作類型 */
+  type: ProceduralAnimationType;
+  /** 顯示名稱 */
+  displayName: string;
+  /** 持續幀數 */
+  durationFrames: number;
+  /** 進階設定（預留） */
+  config?: ProceduralAnimationConfig;
+}
 
 /**
  * 模型實例介面
@@ -60,6 +78,10 @@ export interface ModelInstance {
   /** 特效列表 */
   effects: EffectItem[];
   
+  // 程式動作相關
+  /** 已加入的程式動作列表 */
+  proceduralActions: ProceduralAction[];
+  
   // 播放狀態（每個模型獨立）
   /** 是否正在播放 */
   isPlaying: boolean;
@@ -101,6 +123,10 @@ export interface ModelInstance {
   // 視圖快照
   /** 視圖快照列表 */
   viewSnapshots: ViewSnapshot[];
+  
+  // Transform 快照
+  /** Transform 快照列表（位置、旋轉、縮放、透明度） */
+  transformSnapshots: TransformSnapshot[];
   
   // 元資料
   /** 建立時間戳 */

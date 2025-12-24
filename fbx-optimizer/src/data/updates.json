@@ -1,5 +1,15 @@
 [
   {
+    "version": "v1.3.0",
+    "date": "2025-12-24",
+    "content": [
+      "新增 Director Mode 程式動畫：FadeIn、FadeOut（淡入淡出效果）",
+      "新增 Director Mode 程式動畫：MoveBy、ScaleTo（位移與縮放動畫）",
+      "程式動畫支援緩動效果（easeIn / easeOut / easeInOut）及強度調整",
+      "新增 Transform 快照（RESET）：可記錄並快速恢復模型的位置、旋轉、縮放、透明度"
+    ]
+  },
+  {
     "version": "v1.2.4",
     "date": "2025-12-22",
     "content": [

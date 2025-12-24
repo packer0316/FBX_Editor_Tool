@@ -26,9 +26,35 @@ export interface ClipUpdateEvent {
   localFrame: number;
 }
 
+/** 程式化動畫類型（從 director.types.ts 引用，這裡重複定義避免循環依賴） */
+export type ProceduralAnimationTypeEvent = 'fadeIn' | 'fadeOut' | 'scaleTo' | 'moveBy';
+
+/** ProceduralUpdate 事件 - 當程式化動畫需要更新時發送 */
+export interface ProceduralUpdateEvent {
+  /** Clip ID（用於追蹤每個 clip 的起始狀態） */
+  clipId: string;
+  /** 目標模型 ID */
+  modelId: string;
+  /** 程式化動畫類型 */
+  type: ProceduralAnimationTypeEvent;
+  /** 進度 (0-1) */
+  progress: number;
+  /** 是否是 clip 的第一幀（用於記錄起始狀態） */
+  isClipStart: boolean;
+  /** 計算後的目標可見性 */
+  targetVisible: boolean;
+  /** 計算後的目標透明度 */
+  targetOpacity: number;
+  /** 計算後的目標縮放值（ScaleTo 用，相對於起始值的目標倍率） */
+  targetScale?: number;
+  /** 計算後的目標位移（MoveBy 用，相對於起始位置的位移量） */
+  targetPosition?: { x: number; y: number; z: number };
+}
+
 /** 所有 Director 事件類型的聯合 */
 export type DirectorEvent = 
   | { type: 'tick'; payload: TickEvent }
   | { type: 'seek'; payload: SeekEvent }
-  | { type: 'clipUpdate'; payload: ClipUpdateEvent };
+  | { type: 'clipUpdate'; payload: ClipUpdateEvent }
+  | { type: 'proceduralUpdate'; payload: ProceduralUpdateEvent };
 

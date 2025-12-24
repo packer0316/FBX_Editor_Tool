@@ -11,7 +11,27 @@ import { useEffect, useRef, useCallback } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { directorEventBus } from '../../../../infrastructure/events';
 import { getClipLocalTime } from '../../../../utils/director/directorUtils';
-import type { ClipLocalTimeResult } from '../../../../domain/entities/director/director.types';
+import type { ClipLocalTimeResult, EasingType } from '../../../../domain/entities/director/director.types';
+
+// Easing 函數（支援強度參數）
+const applyEasing = (t: number, easing: EasingType = 'linear', strength: number = 2): number => {
+  // strength 範圍 1-5，影響曲線的陡峭程度
+  const power = Math.max(1, Math.min(5, strength));
+  
+  switch (easing) {
+    case 'easeIn':
+      return Math.pow(t, power);
+    case 'easeOut':
+      return 1 - Math.pow(1 - t, power);
+    case 'easeInOut':
+      return t < 0.5 
+        ? Math.pow(2, power - 1) * Math.pow(t, power)
+        : 1 - Math.pow(-2 * t + 2, power) / 2;
+    case 'linear':
+    default:
+      return t;
+  }
+};
 
 export interface PlaybackCallbacks {
   /** 當需要更新模型動畫時調用（向後兼容，建議改用 EventBus） */
@@ -113,23 +133,81 @@ export function useTimelinePlayback(
       const { clip, localTime } = clipResult;
       currentActiveClipIds.add(clip.id);
       
-      // 發送 clipUpdate 事件
       if (localTime !== null) {
         const localFrame = Math.floor(localTime * currentFps);
-        directorEventBus.emitClipUpdate({
-          modelId: clip.sourceModelId,
-          animationId: clip.sourceAnimationId,
-          localTime,
-          localFrame,
-        });
         
-        // 向後兼容：同時調用 callback
-        callbacksRef.current?.onUpdateModelAnimation?.(
-          clip.sourceModelId,
-          clip.sourceAnimationId,
-          localTime,
-          localFrame
-        );
+        // 程式化動畫發送 ProceduralUpdateEvent
+        if (clip.sourceType === 'procedural' && clip.proceduralType) {
+          const effectiveDuration = (clip.trimEnd ?? clip.sourceAnimationDuration - 1) - (clip.trimStart ?? 0) + 1;
+          const progress = effectiveDuration > 1 ? localFrame / (effectiveDuration - 1) : 1;
+          const clampedProgress = Math.max(0, Math.min(1, progress));
+          
+          // 檢查是否是 clip 的第一幀
+          const isClipStart = !previousActiveClipIds.current.has(clip.id);
+          
+          // 應用 easing（支援強度參數）
+          const easing = clip.proceduralConfig?.easing || 'linear';
+          const easingStrength = clip.proceduralConfig?.easingStrength ?? 2;
+          const easedProgress = applyEasing(clampedProgress, easing, easingStrength);
+          
+          // 計算目標值（這些值會在 useDirectorProceduralTrigger 中基於 clip 起始狀態來應用）
+          let targetOpacity = 1;
+          let targetScale: number | undefined;
+          let targetPosition: { x: number; y: number; z: number } | undefined;
+          
+          switch (clip.proceduralType) {
+            case 'fadeIn':
+              targetOpacity = easedProgress;  // 0 → 1
+              break;
+            case 'fadeOut':
+              targetOpacity = 1 - easedProgress;  // 1 → 0
+              break;
+            case 'scaleTo': {
+              // 傳遞目標縮放值和進度，由 trigger 來計算實際值
+              targetScale = clip.proceduralConfig?.targetScale ?? 1.5;
+              break;
+            }
+            case 'moveBy': {
+              // 傳遞最終位移量，由 trigger 來根據進度計算實際位移
+              const moveX = clip.proceduralConfig?.moveX ?? 0;
+              const moveY = clip.proceduralConfig?.moveY ?? 0;
+              const moveZ = clip.proceduralConfig?.moveZ ?? 0;
+              targetPosition = { x: moveX, y: moveY, z: moveZ };
+              break;
+            }
+          }
+          
+          // visible 根據 opacity 決定（opacity > 0 時 visible）
+          const targetVisible = targetOpacity > 0;
+          
+          directorEventBus.emitProceduralUpdate({
+            clipId: clip.id,
+            modelId: clip.sourceModelId,
+            type: clip.proceduralType,
+            progress: easedProgress,  // 使用 eased progress
+            isClipStart,
+            targetVisible,
+            targetOpacity,
+            targetScale,
+            targetPosition,
+          });
+        } else {
+          // 一般動畫發送 clipUpdate 事件
+          directorEventBus.emitClipUpdate({
+            modelId: clip.sourceModelId,
+            animationId: clip.sourceAnimationId,
+            localTime,
+            localFrame,
+          });
+          
+          // 向後兼容：同時調用 callback
+          callbacksRef.current?.onUpdateModelAnimation?.(
+            clip.sourceModelId,
+            clip.sourceAnimationId,
+            localTime,
+            localFrame
+          );
+        }
       }
       
       // 檢查片段是否剛開始播放
@@ -147,10 +225,50 @@ export function useTimelinePlayback(
       if (!currentActiveClipIds.has(prevClipId)) {
         const prevClip = activeClipsRef.current.get(prevClipId);
         if (prevClip) {
+          const clip = prevClip.clip;
+          
+          // 程式動作結束時發送最終狀態
+          if (clip.sourceType === 'procedural' && clip.proceduralType) {
+            let targetOpacity = 1;
+            let targetScale: number | undefined;
+            let targetPosition: { x: number; y: number; z: number } | undefined;
+            
+            switch (clip.proceduralType) {
+              case 'fadeIn':
+                targetOpacity = 1;
+                break;
+              case 'fadeOut':
+                targetOpacity = 0;
+                break;
+              case 'scaleTo':
+                targetScale = clip.proceduralConfig?.targetScale ?? 1.5;
+                break;
+              case 'moveBy':
+                targetPosition = {
+                  x: clip.proceduralConfig?.moveX ?? 0,
+                  y: clip.proceduralConfig?.moveY ?? 0,
+                  z: clip.proceduralConfig?.moveZ ?? 0,
+                };
+                break;
+            }
+            
+            directorEventBus.emitProceduralUpdate({
+              clipId: clip.id,
+              modelId: clip.sourceModelId,
+              type: clip.proceduralType,
+              progress: 1,
+              isClipStart: false,
+              targetVisible: targetOpacity > 0,
+              targetOpacity,
+              targetScale,
+              targetPosition,
+            });
+          }
+          
           callbacksRef.current?.onClipEnd?.(
-            prevClip.clip.id,
-            prevClip.clip.sourceModelId,
-            prevClip.clip.sourceAnimationId
+            clip.id,
+            clip.sourceModelId,
+            clip.sourceAnimationId
           );
         }
       }

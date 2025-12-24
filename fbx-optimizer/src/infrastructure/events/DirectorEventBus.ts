@@ -4,9 +4,9 @@
  * 解耦 SceneViewer 和 Director 之間的通訊
  */
 
-import type { TickEvent, SeekEvent, ClipUpdateEvent } from '../../domain/entities/director/directorEvents.types';
+import type { TickEvent, SeekEvent, ClipUpdateEvent, ProceduralUpdateEvent } from '../../domain/entities/director/directorEvents.types';
 
-export type { TickEvent, SeekEvent, ClipUpdateEvent };
+export type { TickEvent, SeekEvent, ClipUpdateEvent, ProceduralUpdateEvent };
 
 type EventHandler<T> = (event: T) => void;
 
@@ -14,6 +14,7 @@ class DirectorEventBus {
   private tickHandlers = new Set<EventHandler<TickEvent>>();
   private seekHandlers = new Set<EventHandler<SeekEvent>>();
   private clipUpdateHandlers = new Set<EventHandler<ClipUpdateEvent>>();
+  private proceduralUpdateHandlers = new Set<EventHandler<ProceduralUpdateEvent>>();
 
   // === Tick 事件 ===
   emitTick(event: TickEvent): void {
@@ -45,11 +46,22 @@ class DirectorEventBus {
     return () => this.clipUpdateHandlers.delete(handler);
   }
 
+  // === ProceduralUpdate 事件（程式化動畫） ===
+  emitProceduralUpdate(event: ProceduralUpdateEvent): void {
+    this.proceduralUpdateHandlers.forEach(handler => handler(event));
+  }
+
+  onProceduralUpdate(handler: EventHandler<ProceduralUpdateEvent>): () => void {
+    this.proceduralUpdateHandlers.add(handler);
+    return () => this.proceduralUpdateHandlers.delete(handler);
+  }
+
   // === 清理 ===
   clear(): void {
     this.tickHandlers.clear();
     this.seekHandlers.clear();
     this.clipUpdateHandlers.clear();
+    this.proceduralUpdateHandlers.clear();
   }
 
   // === 用於測試 ===
@@ -63,6 +75,10 @@ class DirectorEventBus {
 
   get clipUpdateHandlerCount(): number {
     return this.clipUpdateHandlers.size;
+  }
+
+  get proceduralUpdateHandlerCount(): number {
+    return this.proceduralUpdateHandlers.size;
   }
 }
 
