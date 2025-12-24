@@ -109,7 +109,7 @@ export class LoadModelUseCase {
     const result = await this.execute(files);
     const { fbxFile } = ModelLoaderService.classifyFiles(files);
     
-    // 提取骨骼（從兩個來源：樹狀結構和 SkinnedMesh.skeleton）
+    // 提取骨骼與可綁定節點（從三個來源：樹狀結構、SkinnedMesh.skeleton、Dummy）
     const boneSet = new Set<THREE.Object3D>();
     result.model.traverse((child) => {
       // 來源1: 樹狀結構中的 Bone 節點
@@ -124,6 +124,11 @@ export class LoadModelUseCase {
             boneSet.add(bone);
           });
         }
+      }
+      // 來源3: Dummy 節點（3DS Max 輔助物件）
+      // Dummy 在 FBX 匯入後會變成普通的 Object3D，透過名稱識別
+      if (child.name.toLowerCase().includes('dummy')) {
+        boneSet.add(child);
       }
     });
     const bones = Array.from(boneSet);

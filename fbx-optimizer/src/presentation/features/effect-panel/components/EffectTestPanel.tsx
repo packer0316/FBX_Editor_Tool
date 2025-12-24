@@ -324,6 +324,8 @@ const EffectCard = ({
     const [editingFrame, setEditingFrame] = useState<string>('');
     const [editingDuration, setEditingDuration] = useState<string>('');
     const [hasActiveEffect, setHasActiveEffect] = useState(false); // 追蹤特效是否存在
+    const [boneSearchQuery, setBoneSearchQuery] = useState(''); // 骨骼搜尋
+    const [isBoneDropdownOpen, setIsBoneDropdownOpen] = useState(false); // 骨骼下拉選單開啟狀態
     const [showResourcePopover, setShowResourcePopover] = useState(false); // 資源狀態 Popover
     const [popoverPosition, setPopoverPosition] = useState({ top: 0, left: 0 }); // Popover 位置
     const [previewImage, setPreviewImage] = useState<string | null>(null); // 預覽圖片 URL
@@ -333,6 +335,7 @@ const EffectCard = ({
     const resourcePopoverRef = useRef<HTMLDivElement>(null); // Popover 參考
     const resourceButtonRef = useRef<HTMLButtonElement>(null); // 按鈕參考
     const fullsizeModalRef = useRef<HTMLDivElement>(null); // 全尺寸 Modal 參考
+    const boneDropdownRef = useRef<HTMLDivElement>(null); // 骨骼下拉選單參考
 
     // 點擊外部關閉 Popover 和預覽
     useEffect(() => {
@@ -355,6 +358,23 @@ const EffectCard = ({
             document.removeEventListener('mousedown', handleClickOutside);
         };
     }, [showResourcePopover]);
+
+    // 點擊外部關閉骨骼下拉選單
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            const target = event.target as Node;
+            if (boneDropdownRef.current && !boneDropdownRef.current.contains(target)) {
+                setIsBoneDropdownOpen(false);
+                setBoneSearchQuery('');
+            }
+        };
+        if (isBoneDropdownOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        };
+    }, [isBoneDropdownOpen]);
 
     // 拖曳邏輯
     useEffect(() => {
@@ -704,7 +724,7 @@ const EffectCard = ({
         boundBoneRef.current = boundBone;
     }, [boundBone]);
 
-    // 更新正在播放的特效參數
+    // 更新正在播放的特效參數（使用 setMatrix 避免歐拉角順序問題）
     const updateRunningEffect = () => {
         if (!currentHandleRef.current || !currentHandleRef.current.exists) {
             return;
@@ -715,47 +735,67 @@ const EffectCard = ({
 
         const h = currentHandleRef.current;
 
-        // 計算位置
-        let x = currentItem.position[0];
-        let y = currentItem.position[1];
-        let z = currentItem.position[2];
-
         if (currentBoundBone && model) {
+            // 有綁定 bone 時，使用 setMatrix 避免歐拉角順序問題
+            
             // 獲取 bone 的世界位置
             const boneWorldPos = new THREE.Vector3();
             currentBoundBone.getWorldPosition(boneWorldPos);
-            // 加上偏移量
-            x = boneWorldPos.x + currentItem.position[0];
-            y = boneWorldPos.y + currentItem.position[1];
-            z = boneWorldPos.z + currentItem.position[2];
-        }
 
-        h.setLocation(x, y, z);
-
-        // 計算旋轉
-        let rx = currentItem.rotation[0];
-        let ry = currentItem.rotation[1];
-        let rz = currentItem.rotation[2];
-
-        if (currentBoundBone && model) {
-            // 獲取 bone 的世界旋轉（Euler）
+            // 獲取 bone 的世界旋轉
             const boneWorldQuat = new THREE.Quaternion();
             currentBoundBone.getWorldQuaternion(boneWorldQuat);
-            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
 
-            // 結合 bone 旋轉和特效旋轉
-            rx = (boneEuler.x * 180 / Math.PI) + currentItem.rotation[0];
-            ry = (boneEuler.y * 180 / Math.PI) + currentItem.rotation[1];
-            rz = (boneEuler.z * 180 / Math.PI) + currentItem.rotation[2];
+            // 將 local offset 轉換到 world space（模擬 parent-child 關係）
+            const offsetVec = new THREE.Vector3(
+                currentItem.position[0],
+                currentItem.position[1],
+                currentItem.position[2]
+            );
+            offsetVec.applyQuaternion(boneWorldQuat);
+
+            // 計算最終位置 = 骨骼位置 + 轉換後的偏移量
+            const finalPos = new THREE.Vector3(
+                boneWorldPos.x + offsetVec.x,
+                boneWorldPos.y + offsetVec.y,
+                boneWorldPos.z + offsetVec.z
+            );
+
+            // 計算旋轉（使用 Quaternion 相乘，正確模擬 parent-child 關係）
+            const offsetEuler = new THREE.Euler(
+                currentItem.rotation[0] * Math.PI / 180,
+                currentItem.rotation[1] * Math.PI / 180,
+                currentItem.rotation[2] * Math.PI / 180
+            );
+            const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
+            const finalQuat = boneWorldQuat.clone().multiply(offsetQuat);
+
+            // 縮放
+            const finalScale = new THREE.Vector3(
+                currentItem.scale[0],
+                currentItem.scale[1],
+                currentItem.scale[2]
+            );
+
+            // 建立變換矩陣並傳給 Effekseer
+            const matrix = new THREE.Matrix4();
+            matrix.compose(finalPos, finalQuat, finalScale);
+            h.setMatrix(new Float32Array(matrix.elements));
+        } else {
+            // 沒有綁定 bone 時，使用傳統方式
+            h.setLocation(
+                currentItem.position[0],
+                currentItem.position[1],
+                currentItem.position[2]
+            );
+            h.setRotation(
+                currentItem.rotation[0] * Math.PI / 180,
+                currentItem.rotation[1] * Math.PI / 180,
+                currentItem.rotation[2] * Math.PI / 180
+            );
+            h.setScale(currentItem.scale[0], currentItem.scale[1], currentItem.scale[2]);
         }
-
-        // Convert degrees to radians
-        h.setRotation(
-            rx * Math.PI / 180,
-            ry * Math.PI / 180,
-            rz * Math.PI / 180
-        );
-        h.setScale(currentItem.scale[0], currentItem.scale[1], currentItem.scale[2]);
+        
         h.setSpeed(currentItem.speed);
     };
 
@@ -1368,22 +1408,99 @@ const EffectCard = ({
                                     <Link className="w-3.5 h-3.5" />
                                     <span>骨骼綁定</span>
                                 </div>
-                                <select
-                                    value={item.boundBoneUuid || ''}
-                                    onChange={(e) => onUpdate(item.id, { boundBoneUuid: e.target.value || null })}
-                                    className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
-                                >
-                                    <option value="">無綁定（世界座標）</option>
-                                    {bones.length === 0 ? (
-                                        <option value="" disabled>模型未載入或無骨骼</option>
-                                    ) : (
-                                        bones.map((bone) => (
-                                            <option key={bone.uuid} value={bone.uuid}>
-                                                {bone.name || '未命名骨骼'}
-                                            </option>
-                                        ))
+                                
+                                {/* Bone Search Dropdown */}
+                                <div className="relative" ref={boneDropdownRef}>
+                                    {/* Current Selection / Search Input */}
+                                    <div 
+                                        className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300 cursor-pointer flex items-center justify-between hover:border-gray-600 transition-colors"
+                                        onClick={() => setIsBoneDropdownOpen(!isBoneDropdownOpen)}
+                                    >
+                                        <span className={item.boundBoneUuid ? 'text-gray-300' : 'text-gray-500'}>
+                                            {item.boundBoneUuid 
+                                                ? (boundBone?.name || '未命名骨骼')
+                                                : '無綁定（世界座標）'
+                                            }
+                                        </span>
+                                        <ChevronDown className={`w-3.5 h-3.5 text-gray-500 transition-transform ${isBoneDropdownOpen ? 'rotate-180' : ''}`} />
+                                    </div>
+                                    
+                                    {/* Dropdown Panel */}
+                                    {isBoneDropdownOpen && (
+                                        <div className="absolute z-50 mt-1 w-full bg-gray-800 border border-gray-700 rounded shadow-lg shadow-black/50">
+                                            {/* Search Input */}
+                                            <div className="p-2 border-b border-gray-700">
+                                                <input
+                                                    type="text"
+                                                    placeholder="搜尋骨骼..."
+                                                    value={boneSearchQuery}
+                                                    onChange={(e) => setBoneSearchQuery(e.target.value)}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-blue-500"
+                                                    autoFocus
+                                                />
+                                            </div>
+                                            
+                                            {/* Bone List */}
+                                            <div className="max-h-40 overflow-y-auto">
+                                                {/* Unbind Option */}
+                                                <div
+                                                    onClick={() => {
+                                                        onUpdate(item.id, { boundBoneUuid: null });
+                                                        setIsBoneDropdownOpen(false);
+                                                        setBoneSearchQuery('');
+                                                    }}
+                                                    className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+                                                        !item.boundBoneUuid
+                                                            ? 'bg-blue-500/20 text-blue-400'
+                                                            : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                                                    }`}
+                                                >
+                                                    無綁定（世界座標）
+                                                </div>
+                                                
+                                                {/* Filtered Bones */}
+                                                {bones.length === 0 ? (
+                                                    <div className="px-3 py-2 text-xs text-gray-500 italic">
+                                                        此模型無骨骼
+                                                    </div>
+                                                ) : (
+                                                    bones
+                                                        .filter((bone) =>
+                                                            bone.name.toLowerCase().includes(boneSearchQuery.toLowerCase())
+                                                        )
+                                                        .map((bone) => (
+                                                            <div
+                                                                key={bone.uuid}
+                                                                onClick={() => {
+                                                                    onUpdate(item.id, { boundBoneUuid: bone.uuid });
+                                                                    setIsBoneDropdownOpen(false);
+                                                                    setBoneSearchQuery('');
+                                                                }}
+                                                                className={`px-3 py-2 text-xs cursor-pointer transition-colors ${
+                                                                    item.boundBoneUuid === bone.uuid
+                                                                        ? 'bg-blue-500/20 text-blue-400'
+                                                                        : 'text-gray-400 hover:bg-gray-700/50 hover:text-gray-200'
+                                                                }`}
+                                                            >
+                                                                {bone.name || '未命名骨骼'}
+                                                            </div>
+                                                        ))
+                                                )}
+                                                
+                                                {/* No results message */}
+                                                {bones.length > 0 && 
+                                                    boneSearchQuery && 
+                                                    bones.filter((bone) => bone.name.toLowerCase().includes(boneSearchQuery.toLowerCase())).length === 0 && (
+                                                    <div className="px-3 py-2 text-xs text-gray-500 italic">
+                                                        找不到符合的骨骼
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
-                                </select>
+                                </div>
+                                
                                 {item.boundBoneUuid && boundBone && (
                                     <div className="text-[10px] text-blue-400 mt-1 flex items-center gap-1">
                                         <Link className="w-3 h-3" />

@@ -11,6 +11,7 @@ interface TrackedEffect {
     bone: THREE.Object3D;
     offset: [number, number, number];      // 位置偏移
     rotationOffset: [number, number, number]; // 旋轉偏移 (degrees)
+    scale: [number, number, number];       // 縮放
     timerId?: number; // duration 計時器 ID（如果有設定 duration）
 }
 
@@ -25,19 +26,22 @@ class EffectHandleRegistryClass {
      * @param bone - 要跟隨的骨骼
      * @param offset - 位置偏移
      * @param rotationOffset - 旋轉偏移 (degrees)
+     * @param scale - 縮放
      */
     register(
         key: string,
         handle: effekseer.EffekseerHandle,
         bone: THREE.Object3D,
         offset: [number, number, number] = [0, 0, 0],
-        rotationOffset: [number, number, number] = [0, 0, 0]
+        rotationOffset: [number, number, number] = [0, 0, 0],
+        scale: [number, number, number] = [1, 1, 1]
     ): void {
         this.trackedEffects.set(key, {
             handle,
             bone,
             offset,
-            rotationOffset
+            rotationOffset,
+            scale
         });
         console.log(`[EffectHandleRegistry] 註冊跟隨特效: ${key}, 骨骼: ${bone.name}`);
     }
@@ -52,6 +56,7 @@ class EffectHandleRegistryClass {
      * @param bone - 要跟隨的骨骼
      * @param offset - 位置偏移
      * @param rotationOffset - 旋轉偏移 (degrees)
+     * @param scale - 縮放
      * @param duration - 播放持續時間（秒），不設定則播放到特效自然結束
      */
     registerWithTrigger(
@@ -61,6 +66,7 @@ class EffectHandleRegistryClass {
         bone: THREE.Object3D,
         offset: [number, number, number] = [0, 0, 0],
         rotationOffset: [number, number, number] = [0, 0, 0],
+        scale: [number, number, number] = [1, 1, 1],
         duration?: number
     ): void {
         const key = `${effectId}-${triggerId}`;
@@ -99,6 +105,7 @@ class EffectHandleRegistryClass {
             bone,
             offset,
             rotationOffset,
+            scale,
             timerId
         });
         console.log(`[EffectHandleRegistry] 註冊 Trigger 特效: ${key}, 骨骼: ${bone.name}${duration ? `, duration: ${duration}秒` : ''}`);
@@ -121,6 +128,9 @@ class EffectHandleRegistryClass {
     /**
      * 更新所有追蹤中的特效位置和旋轉
      * 應該在每幀呼叫
+     * 
+     * 使用 setMatrix 直接設定變換矩陣，避免歐拉角順序問題
+     * 位置偏移使用 Local Space（模擬 parent-child 關係）
      */
     updateAll(): void {
         const keysToRemove: string[] = [];
@@ -136,30 +146,47 @@ class EffectHandleRegistryClass {
             const boneWorldPos = new THREE.Vector3();
             tracked.bone.getWorldPosition(boneWorldPos);
 
-            // 計算最終位置 = 骨骼位置 + 偏移量
-            const x = boneWorldPos.x + tracked.offset[0];
-            const y = boneWorldPos.y + tracked.offset[1];
-            const z = boneWorldPos.z + tracked.offset[2];
-
-            // 更新位置
-            tracked.handle.setLocation(x, y, z);
-
             // 獲取骨骼的世界旋轉
             const boneWorldQuat = new THREE.Quaternion();
             tracked.bone.getWorldQuaternion(boneWorldQuat);
-            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
 
-            // 計算最終旋轉 = 骨骼旋轉 + 偏移量
-            const rx = (boneEuler.x * 180 / Math.PI) + tracked.rotationOffset[0];
-            const ry = (boneEuler.y * 180 / Math.PI) + tracked.rotationOffset[1];
-            const rz = (boneEuler.z * 180 / Math.PI) + tracked.rotationOffset[2];
-
-            // 更新旋轉 (轉換為弧度)
-            tracked.handle.setRotation(
-                rx * Math.PI / 180,
-                ry * Math.PI / 180,
-                rz * Math.PI / 180
+            // 將 local offset 轉換到 world space（模擬 parent-child 關係）
+            const offsetVec = new THREE.Vector3(
+                tracked.offset[0],
+                tracked.offset[1],
+                tracked.offset[2]
             );
+            offsetVec.applyQuaternion(boneWorldQuat);
+
+            // 計算最終位置 = 骨骼位置 + 轉換後的偏移量
+            const finalPos = new THREE.Vector3(
+                boneWorldPos.x + offsetVec.x,
+                boneWorldPos.y + offsetVec.y,
+                boneWorldPos.z + offsetVec.z
+            );
+
+            // 計算最終旋轉（使用 Quaternion 相乘，正確模擬 parent-child 關係）
+            const offsetEuler = new THREE.Euler(
+                tracked.rotationOffset[0] * Math.PI / 180,
+                tracked.rotationOffset[1] * Math.PI / 180,
+                tracked.rotationOffset[2] * Math.PI / 180
+            );
+            const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
+            const finalQuat = boneWorldQuat.clone().multiply(offsetQuat);
+
+            // 縮放
+            const finalScale = new THREE.Vector3(
+                tracked.scale[0],
+                tracked.scale[1],
+                tracked.scale[2]
+            );
+
+            // 建立變換矩陣並傳給 Effekseer（避免歐拉角順序問題）
+            const matrix = new THREE.Matrix4();
+            matrix.compose(finalPos, finalQuat, finalScale);
+
+            // 使用 setMatrix 直接設定變換
+            tracked.handle.setMatrix(new Float32Array(matrix.elements));
         });
 
         // 清理已結束的特效

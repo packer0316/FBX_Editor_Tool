@@ -76,23 +76,10 @@ export function useDirectorEffectTrigger({
             if (triggeredEffectsRef.current.has(triggerKey)) return;
             triggeredEffectsRef.current.add(triggerKey);
 
-            // 計算位置（包含骨骼綁定）
+            // 計算位置和旋轉（包含骨骼綁定，使用 Local Space 模擬 parent-child 關係）
             let x = effect.position[0];
             let y = effect.position[1];
             let z = effect.position[2];
-
-            if (effect.boundBoneUuid && model.model) {
-              const boundBone = model.bones.find(b => b.uuid === effect.boundBoneUuid);
-              if (boundBone) {
-                const boneWorldPos = new THREE.Vector3();
-                boundBone.getWorldPosition(boneWorldPos);
-                x = boneWorldPos.x + effect.position[0];
-                y = boneWorldPos.y + effect.position[1];
-                z = boneWorldPos.z + effect.position[2];
-              }
-            }
-
-            // 計算旋轉
             let rx = effect.rotation[0];
             let ry = effect.rotation[1];
             let rz = effect.rotation[2];
@@ -100,13 +87,40 @@ export function useDirectorEffectTrigger({
             if (effect.boundBoneUuid && model.model) {
               const boundBone = model.bones.find(b => b.uuid === effect.boundBoneUuid);
               if (boundBone) {
+                // 獲取骨骼的世界位置
+                const boneWorldPos = new THREE.Vector3();
+                boundBone.getWorldPosition(boneWorldPos);
+
+                // 獲取骨骼的世界旋轉
                 const boneWorldQuat = new THREE.Quaternion();
                 boundBone.getWorldQuaternion(boneWorldQuat);
-                const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
 
-                rx = (boneEuler.x * 180 / Math.PI) + effect.rotation[0];
-                ry = (boneEuler.y * 180 / Math.PI) + effect.rotation[1];
-                rz = (boneEuler.z * 180 / Math.PI) + effect.rotation[2];
+                // 將 local offset 轉換到 world space（模擬 parent-child 關係）
+                const offsetVec = new THREE.Vector3(
+                  effect.position[0],
+                  effect.position[1],
+                  effect.position[2]
+                );
+                offsetVec.applyQuaternion(boneWorldQuat);
+
+                // 計算最終位置 = 骨骼位置 + 轉換後的偏移量
+                x = boneWorldPos.x + offsetVec.x;
+                y = boneWorldPos.y + offsetVec.y;
+                z = boneWorldPos.z + offsetVec.z;
+
+                // 計算旋轉（使用 Quaternion 相乘，正確模擬 parent-child 關係）
+                const offsetEuler = new THREE.Euler(
+                  effect.rotation[0] * Math.PI / 180,
+                  effect.rotation[1] * Math.PI / 180,
+                  effect.rotation[2] * Math.PI / 180
+                );
+                const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
+                const finalQuat = boneWorldQuat.clone().multiply(offsetQuat);
+                const finalEuler = new THREE.Euler().setFromQuaternion(finalQuat);
+
+                rx = finalEuler.x * 180 / Math.PI;
+                ry = finalEuler.y * 180 / Math.PI;
+                rz = finalEuler.z * 180 / Math.PI;
               }
             }
 
@@ -135,6 +149,7 @@ export function useDirectorEffectTrigger({
                   boundBone,
                   effect.position,
                   effect.rotation,
+                  effect.scale,
                   trigger.duration
                 );
               }
