@@ -147,9 +147,16 @@ export default function ModelCard({
 }: ModelCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(modelInstance.name);
-  const [isExpanded, setIsExpanded] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(isActive); // 初始值跟隨 isActive
   const [showTextureManager, setShowTextureManager] = useState(false);
   const [showModelInfo, setShowModelInfo] = useState(false);
+  
+  // 當選中模型時自動展開卡片
+  useEffect(() => {
+    if (isActive) {
+      setIsExpanded(true);
+    }
+  }, [isActive]);
   
   // 視圖快照相關狀態
   const [showSnapshotDropdown, setShowSnapshotDropdown] = useState(false);

@@ -159,7 +159,7 @@ export default function ModelManagerPanel({
                     IMPORT
                   </div>
                   <div className="text-[9px] font-medium tracking-[0.15em] uppercase text-gray-500 group-hover:text-blue-400/70 transition-colors duration-500">
-                    FBX / Texture / INI Pipeline
+                    FBX / Texture / INI
                   </div>
                 </div>
               </div>
