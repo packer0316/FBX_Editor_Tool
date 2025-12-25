@@ -5,6 +5,7 @@
  */
 
 import * as THREE from 'three';
+import { composeEffekseerMatrix } from './effekseerTransformUtils';
 
 interface TrackedEffect {
     handle: effekseer.EffekseerHandle;
@@ -181,12 +182,14 @@ class EffectHandleRegistryClass {
                 tracked.scale[2]
             );
 
-            // 建立變換矩陣並傳給 Effekseer（避免歐拉角順序問題）
-            const matrix = new THREE.Matrix4();
-            matrix.compose(finalPos, finalQuat, finalScale);
-
-            // 使用 setMatrix 直接設定變換
-            tracked.handle.setMatrix(new Float32Array(matrix.elements));
+            // 統一 setMatrix（在共用工具內做座標修正：X+90、Y*-1、Z*-1，post-local）
+            tracked.handle.setMatrix(
+                composeEffekseerMatrix({
+                    worldPosition: finalPos,
+                    worldQuaternion: finalQuat,
+                    worldScale: finalScale,
+                })
+            );
         });
 
         // 清理已結束的特效

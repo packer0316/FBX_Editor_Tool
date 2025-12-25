@@ -22,6 +22,9 @@
  * adapter.render();
  * ```
  */
+import * as THREE from 'three';
+import { composeEffekseerMatrix } from './effekseerTransformUtils';
+
 export class EffekseerRuntimeAdapter {
     public effekseerContext: effekseer.EffekseerContext | null = null; // 公開以供相機矩陣同步
     public loadedEffects: Map<string, effekseer.EffekseerEffect> = new Map(); // 公開以供外部載入特效
@@ -240,22 +243,28 @@ export class EffekseerRuntimeAdapter {
             return null;
         }
 
-        const x = params.x ?? 0;
-        const y = params.y ?? 0;
-        const z = params.z ?? 0;
-
-        const handle = this.effekseerContext.play(effect, x, y, z);
+        // 統一用 setMatrix（避免 setRotation/setScale 分散修正，導致不同路徑方向不一致）
+        // 位置交給 matrix，play 一律從原點建立 instance
+        const handle = this.effekseerContext.play(effect, 0, 0, 0);
         
         if (handle) {
-            // Apply Rotation
-            if (params.rx !== undefined || params.ry !== undefined || params.rz !== undefined) {
-                handle.setRotation(params.rx ?? 0, params.ry ?? 0, params.rz ?? 0);
-            }
+            const x = params.x ?? 0;
+            const y = params.y ?? 0;
+            const z = params.z ?? 0;
 
-            // Apply Scale
-            if (params.sx !== undefined || params.sy !== undefined || params.sz !== undefined) {
-                handle.setScale(params.sx ?? 1, params.sy ?? 1, params.sz ?? 1);
-            }
+            const rx = params.rx ?? 0;
+            const ry = params.ry ?? 0;
+            const rz = params.rz ?? 0;
+
+            const sx = params.sx ?? 1;
+            const sy = params.sy ?? 1;
+            const sz = params.sz ?? 1;
+
+            const worldPosition = new THREE.Vector3(x, y, z);
+            const worldQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(rx, ry, rz, 'XYZ'));
+            const worldScale = new THREE.Vector3(sx, sy, sz);
+
+            handle.setMatrix(composeEffekseerMatrix({ worldPosition, worldQuaternion, worldScale }));
 
             // Apply Speed
             if (params.speed !== undefined) {

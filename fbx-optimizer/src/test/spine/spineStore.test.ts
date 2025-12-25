@@ -63,9 +63,10 @@ describe('SpineStore', () => {
 
       store.addInstance(instance);
 
-      expect(store.instanceCount).toBe(1);
-      expect(store.hasInstance(instance.id)).toBe(true);
-      expect(store.getInstance(instance.id)).toEqual(instance);
+      // 注意：Zustand getState() 可能回傳 snapshot，需重新取得最新 state 以避免測試不穩定
+      expect(getSpineStore().instanceCount).toBe(1);
+      expect(getSpineStore().hasInstance(instance.id)).toBe(true);
+      expect(getSpineStore().getInstance(instance.id)).toEqual(instance);
     });
 
     it('應該支援新增多個實例', () => {
@@ -76,9 +77,9 @@ describe('SpineStore', () => {
       store.addInstance(instance1);
       store.addInstance(instance2);
 
-      expect(store.instanceCount).toBe(2);
-      expect(store.getAllInstanceIds()).toContain(instance1.id);
-      expect(store.getAllInstanceIds()).toContain(instance2.id);
+      expect(getSpineStore().instanceCount).toBe(2);
+      expect(getSpineStore().getAllInstanceIds()).toContain(instance1.id);
+      expect(getSpineStore().getAllInstanceIds()).toContain(instance2.id);
     });
   });
 
@@ -96,7 +97,7 @@ describe('SpineStore', () => {
         currentAnimation: 'walk',
       });
 
-      const updated = store.getInstance(instance.id);
+      const updated = getSpineStore().getInstance(instance.id);
       expect(updated?.isPlaying).toBe(true);
       expect(updated?.currentAnimation).toBe('walk');
       expect(updated?.updatedAt).toBeGreaterThan(instance.updatedAt);
@@ -118,8 +119,8 @@ describe('SpineStore', () => {
 
       store.removeInstance(instance.id);
 
-      expect(store.instanceCount).toBe(0);
-      expect(store.hasInstance(instance.id)).toBe(false);
+      expect(getSpineStore().instanceCount).toBe(0);
+      expect(getSpineStore().hasInstance(instance.id)).toBe(false);
     });
 
     it('應該忽略不存在的實例', () => {
@@ -136,7 +137,7 @@ describe('SpineStore', () => {
       const instance = createMockInstance('test-spine');
       store.addInstance(instance);
 
-      const result = store.getInstance(instance.id);
+      const result = getSpineStore().getInstance(instance.id);
       expect(result).toEqual(instance);
     });
 
@@ -155,7 +156,7 @@ describe('SpineStore', () => {
       store.addInstance(instance1);
       store.addInstance(instance2);
 
-      const allInstances = store.getAllInstances();
+      const allInstances = getSpineStore().getAllInstances();
       expect(allInstances).toHaveLength(2);
       expect(allInstances).toContainEqual(instance1);
       expect(allInstances).toContainEqual(instance2);
@@ -178,8 +179,8 @@ describe('SpineStore', () => {
 
       store.cleanupAll();
 
-      expect(store.instanceCount).toBe(0);
-      expect(store.getAllInstances()).toHaveLength(0);
+      expect(getSpineStore().instanceCount).toBe(0);
+      expect(getSpineStore().getAllInstances()).toHaveLength(0);
     });
   });
 
@@ -196,10 +197,10 @@ describe('SpineStore', () => {
       // 只保留 instance1 和 instance3
       store.cleanupUnused([instance1.id, instance3.id]);
 
-      expect(store.instanceCount).toBe(2);
-      expect(store.hasInstance(instance1.id)).toBe(true);
-      expect(store.hasInstance(instance2.id)).toBe(false);
-      expect(store.hasInstance(instance3.id)).toBe(true);
+      expect(getSpineStore().instanceCount).toBe(2);
+      expect(getSpineStore().hasInstance(instance1.id)).toBe(true);
+      expect(getSpineStore().hasInstance(instance2.id)).toBe(false);
+      expect(getSpineStore().hasInstance(instance3.id)).toBe(true);
     });
 
     it('應該什麼都不做如果所有實例都在使用中', () => {
@@ -211,7 +212,7 @@ describe('SpineStore', () => {
 
       store.cleanupUnused([instance1.id, instance2.id]);
 
-      expect(store.instanceCount).toBe(2);
+      expect(getSpineStore().instanceCount).toBe(2);
     });
   });
 

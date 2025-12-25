@@ -1,5 +1,5 @@
 {
-  "generated": "2025-12-23T17:59:11.631Z",
+  "generated": "2025-12-25T16:22:42.666Z",
   "root": {
     "efk": [
       {
@@ -137,6 +137,15 @@
           {
             "name": "TSTreeTurtle_BigExplosion.efk",
             "path": "Boss/TSTreeTurtle_BigExplosion.efk"
+          }
+        ],
+        "subdirs": {}
+      },
+      "JR_test_251224": {
+        "efk": [
+          {
+            "name": "FortuneExposure_pivot.efk",
+            "path": "JR_test_251224/FortuneExposure_pivot.efk"
           }
         ],
         "subdirs": {}

@@ -309,6 +309,71 @@ if (cachedResources && cachedResources.length > 0) {
 
 ---
 
+## 🔄 座標系轉換（Cocos2d-x ↔ Three.js）
+
+### 問題背景
+
+Effekseer 特效在不同引擎中使用相同的旋轉設定時，可能會顯示不同的軸向。這是因為 **Cocos2d-x 和 Three.js 的座標系 Z 軸方向相反**：
+
+| 引擎 | 座標系 | Z 軸方向 |
+|------|--------|----------|
+| **Cocos2d-x** | 右手座標系 | **+Z 向外**（朝向觀察者） |
+| **Three.js** | 右手座標系 | **+Z 向內**（朝向螢幕內部） |
+
+### 歐拉角順序
+
+兩個引擎都使用 **XYZ** 歐拉角順序，這不是問題的原因。
+
+### 解決方案架構
+
+所有座標系轉換邏輯統一在 `effekseerTransformUtils.ts` 中處理：
+
+```typescript
+// src/infrastructure/effect/effekseerTransformUtils.ts
+
+// 修正選項（根據專案需求調整）：
+// - 繞 X 軸旋轉 180°: new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.PI, 0, 0))
+// - Z 軸鏡像: new THREE.Vector3(1, 1, -1)
+// - 在輸入時取反 X & Y 角度（在 EffectTestPanel.tsx 處理）
+
+const CORRECTION_QUAT = new THREE.Quaternion(); // 旋轉修正
+const CORRECTION_SCALE = new THREE.Vector3(1, 1, 1); // 縮放修正
+
+export function composeEffekseerMatrix(params: ComposeEffekseerMatrixParams): Float32Array {
+  const finalQuat = params.worldQuaternion.clone().multiply(CORRECTION_QUAT);
+  const finalScale = params.worldScale.clone().multiply(CORRECTION_SCALE);
+
+  const matrix = new THREE.Matrix4();
+  matrix.compose(params.worldPosition, finalQuat, finalScale);
+  return new Float32Array(matrix.elements);
+}
+```
+
+### 修正方式選擇
+
+| 修正方式 | 適用情況 | 程式碼 |
+|----------|----------|--------|
+| **繞 X 軸旋轉 180°** | 翻轉 Y 和 Z 軸 | `CORRECTION_QUAT.setFromEuler(new THREE.Euler(Math.PI, 0, 0))` |
+| **Z 軸鏡像** | 只翻轉 Z 軸 | `CORRECTION_SCALE = new THREE.Vector3(1, 1, -1)` |
+| **輸入角度取反** | 在 UI 層處理 | `rx' = -rx, ry' = -ry` |
+
+### 調試建議
+
+1. **先測試 (0, 0, 0)**：確認無旋轉時特效的預設方向
+2. **單軸測試**：分別測試 (90, 0, 0)、(0, 90, 0)、(0, 0, 90)
+3. **對比遊戲效果**：與 Cocos2d-x 遊戲中的效果進行對比
+
+### 相關檔案
+
+| 檔案 | 說明 |
+|------|------|
+| `src/infrastructure/effect/effekseerTransformUtils.ts` | 座標系轉換核心邏輯 |
+| `src/infrastructure/effect/EffectHandleRegistry.ts` | 骨骼綁定特效的每幀更新 |
+| `src/infrastructure/effect/EffekseerRuntimeAdapter.ts` | 特效播放 API |
+| `src/presentation/features/effect-panel/components/EffectTestPanel.tsx` | UI 層旋轉參數處理 |
+
+---
+
 ## 📦 打包匯出功能
 
 ### 功能說明
@@ -428,6 +493,22 @@ if (localTime >= trigger.frame / fps) {
 
 ## 📝 更新日誌
 
+### 2025.12.26 - 座標系轉換架構
+
+**問題分析**：
+- Cocos2d-x 和 Three.js 使用相同歐拉角設定時，特效軸向顯示不同
+- 原因：Z 軸方向相反（Cocos +Z 向外，Three.js +Z 向內）
+
+**解決方案**：
+1. ✅ 新增 `effekseerTransformUtils.ts` 統一處理座標系轉換
+2. ✅ 提供多種修正選項（旋轉修正 / 縮放鏡像 / 輸入取反）
+3. ✅ 文檔化座標系差異及調試建議
+
+**相關檔案**：
+- `src/infrastructure/effect/effekseerTransformUtils.ts`
+
+---
+
 ### 2025.12.12 - 資源管理系統完善
 
 **新增功能**：
@@ -452,7 +533,7 @@ if (localTime >= trigger.frame / fps) {
 
 ---
 
-**最後更新**：2025.12.12  
+**最後更新**：2025.12.26  
 **維護者**：JR.H
 
 

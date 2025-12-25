@@ -6,6 +6,7 @@ import type { ShaderFeature, ShaderGroup } from '../../../../domain/value-object
 import { loadTexture } from '../../../../utils/texture/textureLoaderUtils';
 import { InitEffekseerRuntimeUseCase } from '../../../../application/use-cases/InitEffekseerRuntimeUseCase';
 import { getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
+import { UpdateEffectFollowUseCase } from '../../../../application/use-cases/UpdateEffectFollowUseCase';
 import { KeyboardCameraControls } from './KeyboardCameraControls';
 import { FrameEmitter } from './FrameEmitter';
 import { directorEventBus } from '../../../../infrastructure/events';
@@ -204,6 +205,9 @@ function EffekseerFrameBridge() {
                 // 使用類型斷言來避免類型錯誤
                 (originalOnAfterRender as (renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) => void)(renderer, scene, camera);
             }
+
+            // 先更新跟隨骨骼的特效矩陣（此時 Three.js 已完成 matrixWorld 更新）
+            UpdateEffectFollowUseCase.execute();
 
             // 同步相機矩陣
             const projMatrix = (camera as any).projectionMatrix.elements;

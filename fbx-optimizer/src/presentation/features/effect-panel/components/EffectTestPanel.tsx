@@ -5,7 +5,8 @@ import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
-import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, RefreshCw, Maximize, Gauge, Link, X, Film, ChevronLeft, ChevronRight as ChevronRightIcon, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
+import { composeEffekseerMatrix } from '../../../../infrastructure/effect/effekseerTransformUtils';
+import { Sparkles, Plus, Trash2, Play, Square, Repeat, ChevronDown, ChevronRight, AlertCircle, CheckCircle2, Loader2, FolderOpen, Move3d, RefreshCcw, RefreshCw, Maximize, Gauge, Link, X, Film, Pause, Eye, EyeOff, FileImage, XCircle, Image, Box, FileQuestion, Trash, Download } from 'lucide-react';
 import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
@@ -299,8 +300,8 @@ const EffectCard = ({
     bones,
     createdClips,
     theme,
-    duration,
-    fps = 30,
+    duration: _duration,
+    fps: _fps = 30,
     effectResourceCache,
     setEffectResourceCache
 }: {
@@ -735,66 +736,59 @@ const EffectCard = ({
 
         const h = currentHandleRef.current;
 
+        // 統一：永遠用 setMatrix（轉向修正由 composeEffekseerMatrix 內部處理）
+        // - 無骨骼：worldQuat = userQuat
+        // - 有骨骼：worldQuat = boneQuat * userQuat（post-local）
+        let worldPosition: THREE.Vector3;
+        let worldQuaternion: THREE.Quaternion;
+
+        const userQuat = new THREE.Quaternion().setFromEuler(
+            new THREE.Euler(
+                currentItem.rotation[0] * Math.PI / 180,
+                currentItem.rotation[1] * Math.PI / 180,
+                currentItem.rotation[2] * Math.PI / 180,
+                'XYZ'
+            )
+        );
+
         if (currentBoundBone && model) {
-            // 有綁定 bone 時，使用 setMatrix 避免歐拉角順序問題
-            
-            // 獲取 bone 的世界位置
             const boneWorldPos = new THREE.Vector3();
             currentBoundBone.getWorldPosition(boneWorldPos);
 
-            // 獲取 bone 的世界旋轉
             const boneWorldQuat = new THREE.Quaternion();
             currentBoundBone.getWorldQuaternion(boneWorldQuat);
 
-            // 將 local offset 轉換到 world space（模擬 parent-child 關係）
+            // local offset -> world offset
             const offsetVec = new THREE.Vector3(
                 currentItem.position[0],
                 currentItem.position[1],
                 currentItem.position[2]
-            );
-            offsetVec.applyQuaternion(boneWorldQuat);
+            ).applyQuaternion(boneWorldQuat);
 
-            // 計算最終位置 = 骨骼位置 + 轉換後的偏移量
-            const finalPos = new THREE.Vector3(
-                boneWorldPos.x + offsetVec.x,
-                boneWorldPos.y + offsetVec.y,
-                boneWorldPos.z + offsetVec.z
-            );
-
-            // 計算旋轉（使用 Quaternion 相乘，正確模擬 parent-child 關係）
-            const offsetEuler = new THREE.Euler(
-                currentItem.rotation[0] * Math.PI / 180,
-                currentItem.rotation[1] * Math.PI / 180,
-                currentItem.rotation[2] * Math.PI / 180
-            );
-            const offsetQuat = new THREE.Quaternion().setFromEuler(offsetEuler);
-            const finalQuat = boneWorldQuat.clone().multiply(offsetQuat);
-
-            // 縮放
-            const finalScale = new THREE.Vector3(
-                currentItem.scale[0],
-                currentItem.scale[1],
-                currentItem.scale[2]
-            );
-
-            // 建立變換矩陣並傳給 Effekseer
-            const matrix = new THREE.Matrix4();
-            matrix.compose(finalPos, finalQuat, finalScale);
-            h.setMatrix(new Float32Array(matrix.elements));
+            worldPosition = boneWorldPos.add(offsetVec);
+            worldQuaternion = boneWorldQuat.clone().multiply(userQuat);
         } else {
-            // 沒有綁定 bone 時，使用傳統方式
-            h.setLocation(
+            worldPosition = new THREE.Vector3(
                 currentItem.position[0],
                 currentItem.position[1],
                 currentItem.position[2]
             );
-            h.setRotation(
-                currentItem.rotation[0] * Math.PI / 180,
-                currentItem.rotation[1] * Math.PI / 180,
-                currentItem.rotation[2] * Math.PI / 180
-            );
-            h.setScale(currentItem.scale[0], currentItem.scale[1], currentItem.scale[2]);
+            worldQuaternion = userQuat;
         }
+
+        const worldScale = new THREE.Vector3(
+            currentItem.scale[0],
+            currentItem.scale[1],
+            currentItem.scale[2]
+        );
+
+        h.setMatrix(
+            composeEffekseerMatrix({
+                worldPosition,
+                worldQuaternion,
+                worldScale,
+            })
+        );
         
         h.setSpeed(currentItem.speed);
     };
@@ -837,44 +831,11 @@ const EffectCard = ({
             currentHandleRef.current.stop();
         }
 
-        // 計算位置
-        let x = item.position[0];
-        let y = item.position[1];
-        let z = item.position[2];
-
-        if (boundBone && model) {
-            // 獲取 bone 的世界位置
-            const boneWorldPos = new THREE.Vector3();
-            boundBone.getWorldPosition(boneWorldPos);
-            // 加上偏移量
-            x = boneWorldPos.x + item.position[0];
-            y = boneWorldPos.y + item.position[1];
-            z = boneWorldPos.z + item.position[2];
-        }
-
-        // 計算旋轉
-        let rx = item.rotation[0];
-        let ry = item.rotation[1];
-        let rz = item.rotation[2];
-
-        if (boundBone && model) {
-            // 獲取 bone 的世界旋轉（Euler）
-            const boneWorldQuat = new THREE.Quaternion();
-            boundBone.getWorldQuaternion(boneWorldQuat);
-            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-
-            // 結合 bone 旋轉和特效旋轉
-            rx = (boneEuler.x * 180 / Math.PI) + item.rotation[0];
-            ry = (boneEuler.y * 180 / Math.PI) + item.rotation[1];
-            rz = (boneEuler.z * 180 / Math.PI) + item.rotation[2];
-        }
-
+        // 統一：播放時先建立 handle（從原點），實際 transform 交給 updateRunningEffect（setMatrix）
         const handle = PlayEffectUseCase.execute({
             id: item.id,
-            x, y, z,
-            rx: rx * Math.PI / 180,
-            ry: ry * Math.PI / 180,
-            rz: rz * Math.PI / 180,
+            x: 0, y: 0, z: 0,
+            rx: 0, ry: 0, rz: 0,
             sx: item.scale[0], sy: item.scale[1], sz: item.scale[2],
             speed: item.speed
         });
@@ -884,6 +845,8 @@ const EffectCard = ({
             setHasActiveEffect(true);
             // 套用顯示/隱藏狀態
             handle.setShown(item.isVisible);
+            // 立即套用一次矩陣（避免第一幀方向/位置不一致）
+            updateRunningEffect();
         }
 
         onUpdate(item.id, { isPlaying: true });
@@ -898,39 +861,10 @@ const EffectCard = ({
             currentHandleRef.current.stop();
         }
 
-        // 計算位置
-        let x = item.position[0];
-        let y = item.position[1];
-        let z = item.position[2];
-
-        if (boundBone && model) {
-            const boneWorldPos = new THREE.Vector3();
-            boundBone.getWorldPosition(boneWorldPos);
-            x = boneWorldPos.x + item.position[0];
-            y = boneWorldPos.y + item.position[1];
-            z = boneWorldPos.z + item.position[2];
-        }
-
-        // 計算旋轉
-        let rx = item.rotation[0];
-        let ry = item.rotation[1];
-        let rz = item.rotation[2];
-
-        if (boundBone && model) {
-            const boneWorldQuat = new THREE.Quaternion();
-            boundBone.getWorldQuaternion(boneWorldQuat);
-            const boneEuler = new THREE.Euler().setFromQuaternion(boneWorldQuat);
-            rx = (boneEuler.x * 180 / Math.PI) + item.rotation[0];
-            ry = (boneEuler.y * 180 / Math.PI) + item.rotation[1];
-            rz = (boneEuler.z * 180 / Math.PI) + item.rotation[2];
-        }
-
         const handle = PlayEffectUseCase.execute({
             id: item.id,
-            x, y, z,
-            rx: rx * Math.PI / 180,
-            ry: ry * Math.PI / 180,
-            rz: rz * Math.PI / 180,
+            x: 0, y: 0, z: 0,
+            rx: 0, ry: 0, rz: 0,
             sx: item.scale[0], sy: item.scale[1], sz: item.scale[2],
             speed: item.speed
         });
@@ -940,6 +874,8 @@ const EffectCard = ({
             setHasActiveEffect(true);
             // 套用顯示/隱藏狀態
             handle.setShown(item.isVisible);
+            // 立即套用一次矩陣（與 handlePlay 一致）
+            updateRunningEffect();
             // 前進 1 幀然後立即暫停
             const adapter = getEffekseerRuntimeAdapter();
             if (adapter?.effekseerContext) {
