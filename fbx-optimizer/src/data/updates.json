@@ -1,5 +1,15 @@
 [
   {
+    "version": "v1.3.1",
+    "date": "2025-12-26",
+    "content": [
+      "模型匯入支援同時選擇 FBX + INI，自動創建動畫片段",
+      "載入模型後 ModelCard 自動展開",
+      "相機骨骼綁定支援 Camera 輔助物件節點",
+      "新增 Effekseer 座標系轉換架構文檔"
+    ]
+  },
+  {
     "version": "v1.3.0",
     "date": "2025-12-24",
     "content": [
