@@ -555,7 +555,7 @@ function App() {
   const handleFileUpload = async (files: FileList) => {
     setIsLoading(true);
     try {
-      const instance = await LoadModelUseCase.executeAndCreateInstance(files);
+      const { instance, iniResult } = await LoadModelUseCase.executeAndCreateInstance(files);
 
       // 優化動畫（如果有）
       if (instance.originalClip) {
@@ -591,6 +591,36 @@ function App() {
           expanded: true,
         },
       ];
+
+      // 如果有 INI 檔案，自動創建動畫片段
+      if (iniResult && iniResult.clips.length > 0 && instance.originalClip) {
+        const sourceClip = instance.originalClip;
+        const fps = iniResult.fps || 30;
+        const createdClipsFromIni: IdentifiableClip[] = [];
+        
+        for (const clipInfo of iniResult.clips) {
+          if (!clipInfo.enabled) continue;
+          
+          try {
+            const newClip = CreateClipUseCase.execute(
+              sourceClip,
+              clipInfo.name,
+              clipInfo.startFrame,
+              clipInfo.endFrame,
+              fps,
+              createdClipsFromIni // 傳入已創建的片段避免名稱衝突
+            );
+            createdClipsFromIni.push(newClip);
+          } catch (error) {
+            console.warn(`[App] 創建片段 "${clipInfo.name}" 失敗:`, error);
+          }
+        }
+        
+        if (createdClipsFromIni.length > 0) {
+          instance.createdClips = createdClipsFromIni;
+          console.log(`✅ 從 INI 自動創建 ${createdClipsFromIni.length} 個動畫片段`);
+        }
+      }
 
       // 添加到模型列表
       addModel(instance);

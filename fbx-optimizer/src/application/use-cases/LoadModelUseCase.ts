@@ -4,6 +4,7 @@ import { ModelLoaderService } from '../../domain/services/model/ModelLoaderServi
 import type { ModelInstance } from '../../domain/value-objects/ModelInstance';
 import { setClipIdentifier, type IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 import { createDefaultTransformSnapshot } from '../../domain/value-objects/TransformSnapshot';
+import { parseIniFromFile, type IniParseResult } from '../../utils/ini/iniParser';
 
 /**
  * 載入模型的結果介面
@@ -17,6 +18,8 @@ export interface LoadModelResult {
   defaultShaderGroup: ShaderGroup | null;
   /** 模型包含的動畫片段陣列 */
   animations: THREE.AnimationClip[];
+  /** INI 解析結果（如果有 INI 檔案） */
+  iniResult: IniParseResult | null;
 }
 
 /**
@@ -56,7 +59,7 @@ export class LoadModelUseCase {
    */
   static async execute(files: FileList): Promise<LoadModelResult> {
     // 分類檔案
-    const { fbxFile, textureFiles } = ModelLoaderService.classifyFiles(files);
+    const { fbxFile, textureFiles, iniFile } = ModelLoaderService.classifyFiles(files);
 
     if (!fbxFile) {
       throw new Error('請至少選擇一個 FBX 檔案！');
@@ -80,32 +83,47 @@ export class LoadModelUseCase {
       };
     }
 
+    // 解析 INI 檔案（如果有）
+    let iniResult: IniParseResult | null = null;
+    if (iniFile) {
+      try {
+        iniResult = await parseIniFromFile(iniFile);
+        console.log('[LoadModelUseCase] 已解析 INI 檔案:', iniFile.name, iniResult);
+      } catch (error) {
+        console.warn('[LoadModelUseCase] INI 檔案解析失敗:', error);
+      }
+    }
+
     return {
       model,
       meshNames,
       defaultShaderGroup,
       animations: model.animations || [],
+      iniResult,
     };
   }
 
   /**
    * 載入模型並創建 ModelInstance
    * 
-   * @param files - 檔案列表，應包含至少一個 FBX 檔案和可選的貼圖檔案
+   * @param files - 檔案列表，應包含至少一個 FBX 檔案和可選的貼圖檔案和 INI 檔案
    * @param modelName - 可選的模型名稱（預設使用檔名）
-   * @returns Promise 解析為 ModelInstance
+   * @returns Promise 解析為包含 ModelInstance 和 INI 結果的物件
    * @throws {Error} 當檔案列表中沒有 FBX 檔案時拋出錯誤
    * 
    * @example
    * ```typescript
-   * const instance = await LoadModelUseCase.executeAndCreateInstance(files, '我的模型');
+   * const { instance, iniResult } = await LoadModelUseCase.executeAndCreateInstance(files, '我的模型');
    * console.log(instance.id); // "model_1234567890_abc"
+   * if (iniResult) {
+   *   console.log('找到', iniResult.clips.length, '個動畫片段定義');
+   * }
    * ```
    */
   static async executeAndCreateInstance(
     files: FileList,
     modelName?: string
-  ): Promise<ModelInstance> {
+  ): Promise<{ instance: ModelInstance; iniResult: IniParseResult | null }> {
     const result = await this.execute(files);
     const { fbxFile } = ModelLoaderService.classifyFiles(files);
     
@@ -147,7 +165,7 @@ export class LoadModelUseCase {
       masterClip = clip;
     }
 
-    return {
+    const instance: ModelInstance = {
       id: `model_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       name: modelName || fbxFile?.name.replace(/\.fbx$/i, '') || '未命名模型',
       file: fbxFile || null,
@@ -184,6 +202,11 @@ export class LoadModelUseCase {
       transformSnapshots: [createDefaultTransformSnapshot()],
       createdAt: Date.now(),
       updatedAt: Date.now()
+    };
+
+    return {
+      instance,
+      iniResult: result.iniResult
     };
   }
 }

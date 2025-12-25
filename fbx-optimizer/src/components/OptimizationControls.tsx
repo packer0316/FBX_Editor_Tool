@@ -35,7 +35,7 @@ export default function OptimizationControls({
                 <div className="relative">
                     <input
                         type="file"
-                        accept=".fbx,.png,.jpg,.jpeg,.tga"
+                        accept=".fbx,.png,.jpg,.jpeg,.tga,.ini"
                         multiple
                         onChange={(e) => e.target.files && onFileUpload(e.target.files)}
                         className="hidden"

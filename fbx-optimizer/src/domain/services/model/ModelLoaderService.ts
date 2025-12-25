@@ -21,38 +21,50 @@ import { MaterialFixService } from './MaterialFixService';
  */
 export class ModelLoaderService {
   /**
-   * 分類檔案：找出 FBX 檔案和貼圖檔案
+   * 分類檔案：找出 FBX 檔案、貼圖檔案和 INI 檔案
    * 
-   * 從檔案列表中分離出 FBX 檔案和貼圖檔案。貼圖檔案會以小寫檔名作為 key
+   * 從檔案列表中分離出 FBX 檔案、貼圖檔案和 INI 檔案。貼圖檔案會以小寫檔名作為 key
    * 儲存在 Map 中，以便後續快速查找。
    * 
    * @param files - 檔案列表（通常來自 input[type="file"] 的 files 屬性）
-   * @returns 包含 FBX 檔案（可能為 null）和貼圖檔案 Map 的物件
+   * @returns 包含 FBX 檔案（可能為 null）、貼圖檔案 Map 和 INI 檔案（可能為 null）的物件
    * 
    * @example
    * ```typescript
-   * const { fbxFile, textureFiles } = ModelLoaderService.classifyFiles(fileInput.files);
+   * const { fbxFile, textureFiles, iniFile } = ModelLoaderService.classifyFiles(fileInput.files);
    * if (!fbxFile) {
    *   throw new Error('未找到 FBX 檔案');
    * }
    * console.log('找到', textureFiles.size, '個貼圖檔案');
+   * if (iniFile) {
+   *   console.log('找到 INI 檔案:', iniFile.name);
+   * }
    * ```
    */
-  static classifyFiles(files: FileList): { fbxFile: File | null; textureFiles: Map<string, File> } {
+  static classifyFiles(files: FileList): { 
+    fbxFile: File | null; 
+    textureFiles: Map<string, File>;
+    iniFile: File | null;
+  } {
     let fbxFile: File | null = null;
+    let iniFile: File | null = null;
     const textureFiles = new Map<string, File>();
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
-      if (file.name.toLowerCase().endsWith('.fbx')) {
+      const lowerName = file.name.toLowerCase();
+      
+      if (lowerName.endsWith('.fbx')) {
         fbxFile = file;
+      } else if (lowerName.endsWith('.ini')) {
+        iniFile = file;
       } else {
         // 儲存貼圖檔案 (使用小寫檔名作為 Key)
-        textureFiles.set(file.name.toLowerCase(), file);
+        textureFiles.set(lowerName, file);
       }
     }
 
-    return { fbxFile, textureFiles };
+    return { fbxFile, textureFiles, iniFile };
   }
 
   /**

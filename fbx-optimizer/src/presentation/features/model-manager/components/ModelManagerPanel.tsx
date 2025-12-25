@@ -115,7 +115,7 @@ export default function ModelManagerPanel({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".fbx,.png,.jpg,.jpeg,.tga"
+          accept=".fbx,.png,.jpg,.jpeg,.tga,.ini"
           multiple
           onChange={handleFileUpload}
           className="hidden"
@@ -159,7 +159,7 @@ export default function ModelManagerPanel({
                     IMPORT
                   </div>
                   <div className="text-[9px] font-medium tracking-[0.15em] uppercase text-gray-500 group-hover:text-blue-400/70 transition-colors duration-500">
-                    FBX / Texture Pipeline
+                    FBX / Texture / INI Pipeline
                   </div>
                 </div>
               </div>
@@ -179,7 +179,7 @@ export default function ModelManagerPanel({
         <div className="flex items-center gap-1.5 px-1 opacity-60">
           <div className="w-1 h-1 rounded-full bg-blue-400/50" />
           <p className="text-[9px] text-gray-500 tracking-wider">
-            Supports multi-file asset injection for FBX & associated textures
+            Supports FBX, textures & INI (auto-create animation clips)
           </p>
         </div>
       </div>
