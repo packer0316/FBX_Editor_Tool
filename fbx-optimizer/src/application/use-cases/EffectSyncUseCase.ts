@@ -134,6 +134,14 @@ export class EffectSyncUseCase {
                   effect.scale,
                   trigger.duration
                 );
+              } else if (trigger.duration !== undefined && trigger.duration > 0) {
+                // 沒有綁定骨骼但有設定 duration：單獨處理計時器
+                window.setTimeout(() => {
+                  if (handle.exists) {
+                    handle.stop();
+                    console.log(`[Effect Trigger] Duration 到期，停止特效: ${effect.name} (${trigger.duration}秒)`);
+                  }
+                }, trigger.duration * 1000);
               }
             }
           }

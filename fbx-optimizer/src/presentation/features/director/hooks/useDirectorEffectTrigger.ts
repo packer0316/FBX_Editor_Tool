@@ -111,6 +111,14 @@ export function useDirectorEffectTrigger({
                 effect.scale,
                 trigger.duration
               );
+            } else if (handle && trigger.duration !== undefined && trigger.duration > 0) {
+              // 沒有綁定骨骼但有設定 duration：單獨處理計時器
+              window.setTimeout(() => {
+                if (handle.exists) {
+                  handle.stop();
+                  console.log(`[Director Effect] Duration 到期，停止特效: ${effect.name} (${trigger.duration}秒)`);
+                }
+              }, trigger.duration * 1000);
             }
           }
         });
