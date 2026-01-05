@@ -1555,7 +1555,7 @@ const EffectCard = ({
                                             <div key={trigger.id} className={`flex items-center justify-between bg-gray-800 rounded px-2 py-1.5 border transition-colors ${isEditing ? 'border-blue-500' : 'border-gray-700 hover:border-gray-600 cursor-pointer'}`}>
                                                 {isEditing ? (
                                                     // 編輯模式
-                                                    <div className="flex items-center gap-2 text-xs flex-1">
+                                                    <div className="flex items-center gap-2 text-xs flex-1" data-trigger-edit>
                                                         <span className="text-blue-400">{displayName}</span>
                                                         <span className="text-gray-500">@</span>
                                                         <input
@@ -1563,7 +1563,14 @@ const EffectCard = ({
                                                             value={editingFrame}
                                                             onChange={(e) => setEditingFrame(e.target.value)}
                                                             onKeyDown={handleEditKeyDown}
-                                                            onBlur={saveEditTrigger}
+                                                            onBlur={(e) => {
+                                                                // 如果焦點移動到同一個編輯區域內的其他元素，不要關閉編輯模式
+                                                                const container = e.currentTarget.closest('[data-trigger-edit]');
+                                                                if (container && container.contains(e.relatedTarget as Node)) {
+                                                                    return;
+                                                                }
+                                                                saveEditTrigger();
+                                                            }}
                                                             autoFocus
                                                             min={0}
                                                             className="w-16 bg-gray-900 border border-blue-500 rounded px-1.5 py-0.5 text-xs focus:outline-none"
@@ -1575,7 +1582,14 @@ const EffectCard = ({
                                                             value={editingDuration}
                                                             onChange={(e) => setEditingDuration(e.target.value)}
                                                             onKeyDown={handleEditKeyDown}
-                                                            onBlur={saveEditTrigger}
+                                                            onBlur={(e) => {
+                                                                // 如果焦點移動到同一個編輯區域內的其他元素，不要關閉編輯模式
+                                                                const container = e.currentTarget.closest('[data-trigger-edit]');
+                                                                if (container && container.contains(e.relatedTarget as Node)) {
+                                                                    return;
+                                                                }
+                                                                saveEditTrigger();
+                                                            }}
                                                             placeholder="秒"
                                                             min={0}
                                                             step={0.01}
@@ -1922,6 +1936,20 @@ export default function EffectTestPanel({
         }
     };
 
+    // 停止所有播放中的特效
+    const handleStopAllPlayingEffects = () => {
+        // 1. 停止所有 Effekseer 正在播放的特效（包括沒有綁定骨骼的）
+        const adapter = getEffekseerRuntimeAdapter();
+        if (adapter.isReady()) {
+            adapter.stop();
+        }
+        
+        // 2. 清理 Registry 中追蹤的特效（有綁定骨骼的）
+        EffectHandleRegistry.clear();
+        
+        console.log('[EffectTestPanel] 🛑 已停止所有播放中的特效');
+    };
+
     // 打包匯出所有特效及其資源
     const [isExporting, setIsExporting] = useState(false);
     
@@ -2057,109 +2085,120 @@ export default function EffectTestPanel({
 
     return (
         <div className="flex flex-col gap-4">
-            {/* Header / Status */}
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${isRuntimeReady ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-yellow-500 animate-pulse'}`} />
-                    <span className="text-xs text-gray-400">
-                        {isRuntimeReady ? 'Runtime Ready' : 'Initializing...'}
-                    </span>
-                </div>
-                <div className="flex items-center gap-2">
-                    {/* 打包匯出按鈕 */}
+            {/* Header：Runtime Status */}
+            <div className="flex items-center gap-2">
+                <span className={`w-2 h-2 rounded-full ${isRuntimeReady ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]' : 'bg-yellow-500 animate-pulse'}`} />
+                <span className="text-xs text-gray-400">
+                    {isRuntimeReady ? 'Runtime Ready' : 'Initializing...'}
+                </span>
+            </div>
+            
+            {/* 按鈕工具列 */}
+            <div className="flex items-center gap-2 flex-wrap">
+                {/* 停止所有播放中特效按鈕 */}
+                <button
+                    onClick={handleStopAllPlayingEffects}
+                    disabled={!isRuntimeReady}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/20 hover:bg-orange-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-orange-400 hover:text-orange-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-orange-600/30"
+                    title="停止所有正在播放的觸發特效"
+                >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                    停止所有播放中特效
+                </button>
+                
+                {/* 打包匯出按鈕 */}
+                <button
+                    onClick={handleExportEffects}
+                    disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-green-600/30"
+                    title="打包匯出所有已載入的特效及其資源"
+                >
+                    {isExporting ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                        <Download className="w-3.5 h-3.5" />
+                    )}
+                    {isExporting ? '打包中...' : '打包匯出'}
+                </button>
+                
+                {/* 清除快取按鈕 */}
+                <button
+                    onClick={handleClearCache}
+                    disabled={!isRuntimeReady}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-red-600/30"
+                    title="清除所有特效快取（釋放記憶體）"
+                >
+                    <Trash className="w-3.5 h-3.5" />
+                    清除快取
+                </button>
+                
+                {/* 載入資料夾下拉選單 */}
+                <div className="relative" ref={folderDropdownRef}>
                     <button
-                        onClick={handleExportEffects}
-                        disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-green-600/30"
-                        title="打包匯出所有已載入的特效及其資源"
+                        onClick={() => {
+                            refreshFolderList(); // 每次點擊都刷新列表
+                            setShowFolderDropdown(!showFolderDropdown);
+                        }}
+                        disabled={isLoadingFolder}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-purple-900/20"
+                        title={availableFolders.length === 0 ? '尚未找到資料夾，請確認 public/effekseer/ 下有子資料夾' : `共 ${availableFolders.length} 個資料夾可用`}
                     >
-                        {isExporting ? (
+                        {isLoadingFolder ? (
                             <Loader2 className="w-3.5 h-3.5 animate-spin" />
                         ) : (
-                            <Download className="w-3.5 h-3.5" />
+                            <FolderOpen className="w-3.5 h-3.5" />
                         )}
-                        {isExporting ? '打包中...' : '打包匯出'}
+                        載入資料夾
+                        <ChevronDown className="w-3 h-3" />
                     </button>
                     
-                    {/* 清除快取按鈕 */}
-                    <button
-                        onClick={handleClearCache}
-                        disabled={!isRuntimeReady}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-red-600/30"
-                        title="清除所有特效快取（釋放記憶體）"
-                    >
-                        <Trash className="w-3.5 h-3.5" />
-                        清除快取
-                    </button>
-                    
-                    {/* 載入資料夾下拉選單 */}
-                    <div className="relative" ref={folderDropdownRef}>
-                        <button
-                            onClick={() => {
-                                refreshFolderList(); // 每次點擊都刷新列表
-                                setShowFolderDropdown(!showFolderDropdown);
-                            }}
-                            disabled={isLoadingFolder}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-600 hover:bg-purple-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-purple-900/20"
-                            title={availableFolders.length === 0 ? '尚未找到資料夾，請確認 public/effekseer/ 下有子資料夾' : `共 ${availableFolders.length} 個資料夾可用`}
-                        >
-                            {isLoadingFolder ? (
-                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                                <FolderOpen className="w-3.5 h-3.5" />
-                            )}
-                            載入資料夾
-                            <ChevronDown className="w-3 h-3" />
-                        </button>
-                        
-                        {showFolderDropdown && (
-                            <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
-                                {/* 重新掃描按鈕 - 置頂選項 */}
-                                <button
-                                    onClick={handleRefreshManifest}
-                                    disabled={isRefreshingManifest}
-                                    className="w-full px-3 py-2 text-left text-xs text-green-400 hover:bg-gray-700 hover:text-green-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2 border-b border-gray-700/50"
-                                >
-                                    {isRefreshingManifest ? (
-                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                    ) : (
-                                        <RefreshCw className="w-3.5 h-3.5" />
-                                    )}
-                                    {isRefreshingManifest ? '掃描中...' : '🔄 重新掃描資源'}
-                                </button>
-
-                                {/* 資料夾列表 */}
-                                {availableFolders.length > 0 ? (
-                                    availableFolders.map(folder => (
-                                        <button
-                                            key={folder}
-                                            onClick={() => loadFolder(folder)}
-                                            className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
-                                        >
-                                            <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
-                                            {folder}
-                                        </button>
-                                    ))
+                    {showFolderDropdown && (
+                        <div className="absolute top-full right-0 mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50 overflow-hidden">
+                            {/* 重新掃描按鈕 - 置頂選項 */}
+                            <button
+                                onClick={handleRefreshManifest}
+                                disabled={isRefreshingManifest}
+                                className="w-full px-3 py-2 text-left text-xs text-green-400 hover:bg-gray-700 hover:text-green-300 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors flex items-center gap-2 border-b border-gray-700/50"
+                            >
+                                {isRefreshingManifest ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                                 ) : (
-                                    <div className="px-3 py-2 text-xs text-gray-500 text-center">
-                                        尚未找到資料夾
-                                        <div className="text-xs text-gray-600 mt-1">
-                                            請在 public/effekseer/ 下新增資料夾
-                                        </div>
-                                    </div>
+                                    <RefreshCw className="w-3.5 h-3.5" />
                                 )}
-                            </div>
-                        )}
-                    </div>
+                                {isRefreshingManifest ? '掃描中...' : '🔄 重新掃描資源'}
+                            </button>
 
-                    <button
-                        onClick={addEffectCard}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        新增特效
-                    </button>
+                            {/* 資料夾列表 */}
+                            {availableFolders.length > 0 ? (
+                                availableFolders.map(folder => (
+                                    <button
+                                        key={folder}
+                                        onClick={() => loadFolder(folder)}
+                                        className="w-full px-3 py-2 text-left text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition-colors flex items-center gap-2"
+                                    >
+                                        <FolderOpen className="w-3.5 h-3.5 text-yellow-500" />
+                                        {folder}
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="px-3 py-2 text-xs text-gray-500 text-center">
+                                    尚未找到資料夾
+                                    <div className="text-xs text-gray-600 mt-1">
+                                        請在 public/effekseer/ 下新增資料夾
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
+
+                <button
+                    onClick={addEffectCard}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
+                >
+                    <Plus className="w-3.5 h-3.5" />
+                    新增特效
+                </button>
             </div>
 
             {/* Effect Cards List */}
