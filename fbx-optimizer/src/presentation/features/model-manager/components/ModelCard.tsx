@@ -145,6 +145,16 @@ export default function ModelCard({
   hdriUrl,
   theme
 }: ModelCardProps) {
+  // 安全取值：確保所有數值屬性有預設值
+  const safePosition = modelInstance.position ?? [0, 0, 0];
+  const safeRotation = modelInstance.rotation ?? [0, 0, 0];
+  const safeScale = modelInstance.scale ?? [1, 1, 1];
+  const safeCameraOrbitSpeed = modelInstance.cameraOrbitSpeed ?? 30;
+  const safeModelRotationSpeed = modelInstance.modelRotationSpeed ?? 30;
+  const safeIsCameraOrbiting = modelInstance.isCameraOrbiting ?? false;
+  const safeIsModelRotating = modelInstance.isModelRotating ?? false;
+  const safeOpacity = modelInstance.opacity ?? 1;
+  
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(modelInstance.name);
   const [isExpanded, setIsExpanded] = useState(isActive); // 初始值跟隨 isActive
@@ -437,9 +447,9 @@ export default function ModelCard({
                 <Bookmark className="w-3 h-3" />
                 <span className="text-[10px]">視圖快照</span>
                 <ChevronDown className={`w-3 h-3 transition-transform ${showSnapshotDropdown ? 'rotate-180' : ''}`} />
-                {modelInstance.viewSnapshots.length > 0 && (
+                {(modelInstance.viewSnapshots?.length ?? 0) > 0 && (
                   <span className="ml-0.5 text-[9px] bg-amber-500/50 px-1 rounded">
-                    {modelInstance.viewSnapshots.length}
+                    {modelInstance.viewSnapshots?.length ?? 0}
                   </span>
                 )}
               </button>
@@ -471,12 +481,12 @@ export default function ModelCard({
                       setTooltipPosition(null);
                     }}
                   >
-                    {modelInstance.viewSnapshots.length === 0 ? (
+                    {(modelInstance.viewSnapshots?.length ?? 0) === 0 ? (
                       <div className="px-3 py-4 text-center text-xs text-gray-500">
                         尚無儲存的快照
                       </div>
                     ) : (
-                      modelInstance.viewSnapshots.map((snapshot) => (
+                      (modelInstance.viewSnapshots ?? []).map((snapshot) => (
                         <div
                           key={snapshot.id}
                           className="group flex items-center gap-1 px-2 py-1.5 hover:bg-gray-700/50"
@@ -592,9 +602,9 @@ export default function ModelCard({
                 <RotateCw className="w-3 h-3" />
                 <span className="text-[10px]">RESET</span>
                 <ChevronDown className={`w-3 h-3 transition-transform ${showTransformDropdown ? 'rotate-180' : ''}`} />
-                {modelInstance.transformSnapshots.filter(s => !s.isDefault).length > 0 && (
+                {(modelInstance.transformSnapshots?.filter(s => !s.isDefault).length ?? 0) > 0 && (
                   <span className="ml-0.5 text-[9px] bg-cyan-500/50 px-1 rounded">
-                    {modelInstance.transformSnapshots.filter(s => !s.isDefault).length}
+                    {modelInstance.transformSnapshots?.filter(s => !s.isDefault).length ?? 0}
                   </span>
                 )}
               </button>
@@ -616,7 +626,7 @@ export default function ModelCard({
                   
                   {/* Transform 快照列表 */}
                   <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                    {modelInstance.transformSnapshots.map((snapshot) => (
+                    {(modelInstance.transformSnapshots ?? []).map((snapshot) => (
                       <div
                         key={snapshot.id}
                         className="group flex items-center gap-1 px-2 py-1.5 hover:bg-gray-700/50"
@@ -718,11 +728,11 @@ export default function ModelCard({
                     <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
                     <div className="flex items-center gap-1">
                       <NumberInput
-                        value={modelInstance.position[idx].toFixed(2)}
+                        value={safePosition[idx].toFixed(2)}
                         onChange={(val) => {
                           const value = parseFloat(val);
                           if (!isNaN(value)) {
-                            const newPosition: [number, number, number] = [...modelInstance.position];
+                            const newPosition: [number, number, number] = [...safePosition];
                             newPosition[idx] = value;
                             onUpdateTransform({ position: newPosition });
                           }
@@ -763,16 +773,16 @@ export default function ModelCard({
                       min="-50"
                       max="50"
                       step="0.05"
-                      value={modelInstance.position[idx]}
+                      value={safePosition[idx]}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value);
-                        const newPosition: [number, number, number] = [...modelInstance.position];
+                        const newPosition: [number, number, number] = [...safePosition];
                         newPosition[idx] = value;
                         onUpdateTransform({ position: newPosition });
                       }}
                       className="flex-1 h-1 slider-blue-track appearance-none cursor-pointer rounded-full"
                     />
-                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{modelInstance.position[idx].toFixed(2)}</span>
+                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{safePosition[idx].toFixed(2)}</span>
                   </div>
                 </div>
               );
@@ -792,11 +802,11 @@ export default function ModelCard({
                     <span className="text-[10px] text-gray-500 mb-1">{axis.toUpperCase()}</span>
                     <div className="flex items-center gap-1">
                       <NumberInput
-                        value={modelInstance.rotation[idx].toFixed(1)}
+                        value={safeRotation[idx].toFixed(1)}
                         onChange={(val) => {
                           const value = parseFloat(val);
                           if (!isNaN(value)) {
-                            const newRotation: [number, number, number] = [...modelInstance.rotation];
+                            const newRotation: [number, number, number] = [...safeRotation];
                             newRotation[idx] = value;
                             onUpdateTransform({ rotation: newRotation });
                           }
@@ -837,16 +847,16 @@ export default function ModelCard({
                       min="-180"
                       max="180"
                       step="0.5"
-                      value={modelInstance.rotation[idx]}
+                      value={safeRotation[idx]}
                       onChange={(e) => {
                         const value = parseFloat(e.target.value);
-                        const newRotation: [number, number, number] = [...modelInstance.rotation];
+                        const newRotation: [number, number, number] = [...safeRotation];
                         newRotation[idx] = value;
                         onUpdateTransform({ rotation: newRotation });
                       }}
                       className="flex-1 h-1 slider-blue-track appearance-none cursor-pointer rounded-full"
                     />
-                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{modelInstance.rotation[idx].toFixed(1)}°</span>
+                    <span className="text-[10px] text-neon-blue font-mono w-12 text-right">{safeRotation[idx].toFixed(1)}°</span>
                   </div>
                 </div>
               );
@@ -857,7 +867,7 @@ export default function ModelCard({
           <div className="space-y-1">
             <label className="text-xs text-gray-400">縮放 (Scale) - 等比</label>
             <NumberInput
-              value={modelInstance.scale[0].toFixed(2)}
+              value={safeScale[0].toFixed(2)}
               onChange={(val) => {
                 const value = parseFloat(val);
                 if (!isNaN(value)) {
@@ -874,14 +884,14 @@ export default function ModelCard({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-xs text-gray-400">透明度 (Opacity)</label>
-              <span className="text-[10px] text-neon-blue font-mono">{Math.round(modelInstance.opacity * 100)}%</span>
+              <span className="text-[10px] text-neon-blue font-mono">{Math.round(safeOpacity * 100)}%</span>
             </div>
             <input
               type="range"
               min="0"
               max="1"
               step="0.01"
-              value={modelInstance.opacity}
+              value={safeOpacity}
               onChange={(e) => {
                 const value = parseFloat(e.target.value);
                 onUpdateTransform({ opacity: value });
@@ -895,7 +905,7 @@ export default function ModelCard({
             <label className="text-xs text-gray-400">相機公轉 (Camera Orbit)</label>
             <div className="flex items-center gap-2">
               <NumberInput
-                value={modelInstance.cameraOrbitSpeed.toFixed(0)}
+                value={safeCameraOrbitSpeed.toFixed(0)}
                 onChange={(val) => {
                   const value = parseFloat(val);
                   if (!isNaN(value)) {
@@ -909,20 +919,20 @@ export default function ModelCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onUpdateTransform({ isCameraOrbiting: !modelInstance.isCameraOrbiting });
+                  onUpdateTransform({ isCameraOrbiting: !safeIsCameraOrbiting });
                 }}
                 className={`px-3 py-2 rounded transition-all flex items-center gap-1 text-xs font-medium ${
-                  modelInstance.isCameraOrbiting
+                  safeIsCameraOrbiting
                     ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/30 animate-pulse'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                 }`}
-                title={modelInstance.isCameraOrbiting ? '停止公轉' : '開始公轉'}
+                title={safeIsCameraOrbiting ? '停止公轉' : '開始公轉'}
               >
-                <Orbit className={`w-3.5 h-3.5 ${modelInstance.isCameraOrbiting ? 'animate-spin' : ''}`} />
-                {modelInstance.isCameraOrbiting ? '運行中' : '公轉'}
+                <Orbit className={`w-3.5 h-3.5 ${safeIsCameraOrbiting ? 'animate-spin' : ''}`} />
+                {safeIsCameraOrbiting ? '運行中' : '公轉'}
               </button>
             </div>
-            <div className="text-[10px] text-gray-500">速度：{modelInstance.cameraOrbitSpeed}°/秒</div>
+            <div className="text-[10px] text-gray-500">速度：{safeCameraOrbitSpeed}°/秒</div>
           </div>
 
           {/* 模型自轉 */}
@@ -930,7 +940,7 @@ export default function ModelCard({
             <label className="text-xs text-gray-400">模型自轉 (Model Rotation)</label>
             <div className="flex items-center gap-2">
               <NumberInput
-                value={modelInstance.modelRotationSpeed.toFixed(0)}
+                value={safeModelRotationSpeed.toFixed(0)}
                 onChange={(val) => {
                   const value = parseFloat(val);
                   if (!isNaN(value)) {
@@ -944,20 +954,20 @@ export default function ModelCard({
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  onUpdateTransform({ isModelRotating: !modelInstance.isModelRotating });
+                  onUpdateTransform({ isModelRotating: !safeIsModelRotating });
                 }}
                 className={`px-3 py-2 rounded transition-all flex items-center gap-1 text-xs font-medium ${
-                  modelInstance.isModelRotating
+                  safeIsModelRotating
                     ? 'bg-green-500 text-white shadow-lg shadow-green-500/30 animate-pulse'
                     : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
                 }`}
-                title={modelInstance.isModelRotating ? '停止自轉' : '開始自轉'}
+                title={safeIsModelRotating ? '停止自轉' : '開始自轉'}
               >
-                <RotateCw className={`w-3.5 h-3.5 ${modelInstance.isModelRotating ? 'animate-spin' : ''}`} />
-                {modelInstance.isModelRotating ? '運行中' : '自轉'}
+                <RotateCw className={`w-3.5 h-3.5 ${safeIsModelRotating ? 'animate-spin' : ''}`} />
+                {safeIsModelRotating ? '運行中' : '自轉'}
               </button>
             </div>
-            <div className="text-[10px] text-gray-500">速度：{modelInstance.modelRotationSpeed}°/秒</div>
+            <div className="text-[10px] text-gray-500">速度：{safeModelRotationSpeed}°/秒</div>
           </div>
         </div>
       )}
@@ -983,7 +993,7 @@ export default function ModelCard({
         >
           <div className="px-3 py-2 bg-gradient-to-br from-gray-800 to-gray-900 border border-cyan-500/40 rounded-lg shadow-xl shadow-cyan-500/20">
             {(() => {
-              const snapshot = modelInstance.viewSnapshots.find(s => s.id === hoveredSnapshotId);
+              const snapshot = (modelInstance.viewSnapshots ?? []).find(s => s.id === hoveredSnapshotId);
               if (!snapshot) return null;
               return (
                 <div className="flex items-center gap-2.5 text-[11px]">

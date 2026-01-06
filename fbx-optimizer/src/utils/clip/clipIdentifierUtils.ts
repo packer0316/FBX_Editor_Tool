@@ -133,10 +133,11 @@ export function copyClipIdentifier(
 /**
  * 取得 Clip 的顯示名稱
  * 
- * @param clip - 動畫片段
- * @returns 顯示名稱（優先使用 displayName，fallback 到 name）
+ * @param clip - 動畫片段（可為 null 或 undefined）
+ * @returns 顯示名稱（優先使用 displayName，fallback 到 name），若 clip 為空則返回空字串
  */
-export function getClipDisplayName(clip: IdentifiableClip): string {
+export function getClipDisplayName(clip: IdentifiableClip | null | undefined): string {
+  if (!clip) return '';
   return clip.displayName || clip.name;
 }
 

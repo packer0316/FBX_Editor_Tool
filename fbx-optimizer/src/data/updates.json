@@ -1,5 +1,17 @@
 [
   {
+    "version": "v1.4.0",
+    "date": "2025-01-06",
+    "content": [
+      "新增專案匯出/載入功能（.jr3d 格式）",
+      "支援完整保存：3D 模型、Transform 設定、切割動作、導演模式編排",
+      "支援 Shader 配置匯出/載入（含 Matcap、Normal Map 等貼圖）",
+      "修復程式動作（FadeIn、FadeOut、ScaleTo、MoveBy）匯出後載入壞掉的問題",
+      "匯出選項可勾選：動作 & 導演模式、Shader 配置",
+      "使用方式：左側工具列點擊專案按鈕 → 輸入專案名稱 → 匯出/載入"
+    ]
+  },
+  {
     "version": "v1.3.1",
     "date": "2025-12-26",
     "content": [

@@ -53,6 +53,10 @@ import { AddElement2DUseCase } from './application/use-cases/AddElement2DUseCase
 import { UpdateElement2DUseCase } from './application/use-cases/UpdateElement2DUseCase';
 import { RemoveElement2DUseCase } from './application/use-cases/RemoveElement2DUseCase';
 import { ReorderElement2DUseCase } from './application/use-cases/ReorderElement2DUseCase';
+import { ExportProjectUseCase } from './application/use-cases/ExportProjectUseCase';
+import { LoadProjectUseCase } from './application/use-cases/LoadProjectUseCase';
+import ProjectIOPanel from './presentation/features/project-io/ProjectIOPanel';
+import type { ExportOptions } from './domain/value-objects/ProjectState';
 
 // Hooks
 import { useTheme } from './presentation/hooks/useTheme';
@@ -102,6 +106,7 @@ function App() {
     addModel,
     removeModel,
     updateModel,
+    getModel,
   } = useModelsManager();
 
   // 🔧 Clip 優化 Hook（帶快取，避免重複計算）
@@ -114,6 +119,12 @@ function App() {
   const [optimizedClip, setOptimizedClip] = useState<IdentifiableClip | null>(null);
   const [tolerance, setTolerance] = useState<number>(0);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  // Project IO 狀態
+  const [isProjectIOOpen, setIsProjectIOOpen] = useState(false);
+  const [isProjectProcessing, setIsProjectProcessing] = useState(false);
+  const [projectProgress, setProjectProgress] = useState(0);
+  const [projectProgressMessage, setProjectProgressMessage] = useState('');
 
   // 動畫控制狀態
   const sceneViewerRef = useRef<SceneViewerRef>(null);
@@ -329,8 +340,8 @@ function App() {
       const allClips = [
         m.originalClip,
         m.masterClip,
-        ...m.createdClips,
-      ].filter((c): c is IdentifiableClip => c !== null);
+        ...(m.createdClips || []),
+      ].filter((c): c is IdentifiableClip => c != null);
 
       // 用 clipId 去重
       const seenIds = new Set<string>();
@@ -641,6 +652,112 @@ function App() {
     }
   };
 
+  // Project IO: 匯出專案
+  const handleExportProject = useCallback(async (exportOptions: ExportOptions, projectName: string): Promise<boolean> => {
+    setIsProjectProcessing(true);
+    setProjectProgress(0);
+    setProjectProgressMessage('正在準備匯出...');
+
+    try {
+      const directorStore = useDirectorStore.getState();
+      
+      const result = await ExportProjectUseCase.exportAndDownload({
+        projectName,
+        exportOptions,
+        models,
+        directorTracks: directorStore.tracks,
+        directorTimeline: {
+          totalFrames: directorStore.timeline.totalFrames,
+          fps: directorStore.timeline.fps,
+          loopRegion: directorStore.timeline.loopRegion,
+        },
+        globalSettings: {
+          cameraFov: cameraSettings.fov,
+          cameraNear: cameraSettings.near,
+          cameraFar: cameraSettings.far,
+          showGrid,
+        },
+      });
+
+      if (result) {
+        setProjectProgress(100);
+        setProjectProgressMessage('匯出完成！');
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('匯出專案失敗:', error);
+      alert(`匯出失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+      return false;
+    } finally {
+      setIsProjectProcessing(false);
+    }
+  }, [models, cameraSettings, showGrid]);
+
+  // Project IO: 載入專案
+  const handleLoadProject = useCallback(async (file: File): Promise<boolean> => {
+    setIsProjectProcessing(true);
+    setProjectProgress(0);
+    setProjectProgressMessage('正在載入專案...');
+
+    try {
+      const directorStore = useDirectorStore.getState();
+
+      const result = await LoadProjectUseCase.execute(
+        file,
+        {
+          addModel,
+          updateModel,
+          getModel,
+          clearModels: () => {
+            // 清空現有模型
+            models.forEach(m => removeModel(m.id));
+          },
+          onProgress: (progress, message) => {
+            setProjectProgress(progress);
+            setProjectProgressMessage(message);
+          },
+        },
+        {
+          reset: directorStore.reset,
+          setFps: directorStore.setFps,
+          setTotalFrames: directorStore.setTotalFrames,
+          setInPoint: directorStore.setInPoint,
+          setOutPoint: directorStore.setOutPoint,
+          toggleLoopRegion: directorStore.toggleLoopRegion,
+          addTrack: directorStore.addTrack,
+          updateTrack: directorStore.updateTrack,
+          addClip: directorStore.addClip as any,
+          updateClip: directorStore.updateClip,
+        }
+      );
+
+      if (result.success) {
+        setProjectProgress(100);
+        setProjectProgressMessage('載入完成！');
+        
+        // 設定第一個模型為活動模型
+        if (result.modelIdMap && result.modelIdMap.size > 0) {
+          const firstNewModelId = result.modelIdMap.values().next().value;
+          if (firstNewModelId) {
+            setActiveModelId(firstNewModelId);
+          }
+        }
+      } else {
+        alert(`載入失敗: ${result.error}`);
+        return false;
+      }
+
+      return result.success;
+    } catch (error) {
+      console.error('載入專案失敗:', error);
+      alert(`載入失敗: ${error instanceof Error ? error.message : '未知錯誤'}`);
+      return false;
+    } finally {
+      setIsProjectProcessing(false);
+    }
+  }, [models, addModel, updateModel, getModel, removeModel, setActiveModelId]);
+
   // 追蹤是否正在同步，避免循環更新
   const isSyncingRef = useRef(false);
 
@@ -666,7 +783,7 @@ function App() {
       setOriginalClip(activeModel.originalClip);
       setMasterClip(activeModel.masterClip);
       setOptimizedClip(activeModel.optimizedClip);
-      setCreatedClips(activeModel.createdClips);
+      setCreatedClips(activeModel.createdClips || []);
       setTolerance(activeModel.tolerance);
       setAudioTracks(activeModel.audioTracks);
       setEffects(activeModel.effects);
@@ -1401,6 +1518,7 @@ function App() {
           sceneBgColor={customSceneBgColor ?? currentTheme.sceneBg}
           setSceneBgColor={setCustomSceneBgColor}
           defaultSceneBgColor={currentTheme.sceneBg}
+          onOpenProjectIO={() => setIsProjectIOOpen(true)}
         />}
 
         {/* 左側：3D 預覽區 */}
@@ -1637,8 +1755,8 @@ function App() {
                         allClips: [
                           m.originalClip,
                           m.masterClip,
-                          ...m.createdClips,
-                        ].filter((c): c is NonNullable<typeof c> => c !== null),
+                          ...(m.createdClips || []),
+                        ].filter((c): c is NonNullable<typeof c> => c != null),
                         shaderGroups: m.shaderGroups,
                         isShaderEnabled: m.isShaderEnabled,
                         position: m.position,
@@ -2200,6 +2318,19 @@ function App() {
 
       {/* Toast 通知容器 */}
       <ToastContainer />
+
+      {/* 專案匯出/載入面板 */}
+      <ProjectIOPanel
+        isOpen={isProjectIOOpen}
+        onClose={() => setIsProjectIOOpen(false)}
+        onExport={handleExportProject}
+        onLoad={handleLoadProject}
+        hasModels={models.length > 0}
+        theme={currentTheme}
+        isProcessing={isProjectProcessing}
+        progress={projectProgress}
+        progressMessage={projectProgressMessage}
+      />
     </div >
   );
 }
