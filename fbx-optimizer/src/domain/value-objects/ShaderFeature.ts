@@ -28,5 +28,6 @@ export interface ShaderGroup {
     features: ShaderFeature[];
     selectedMeshes: string[]; // mesh names
     expanded: boolean;
+    enabled: boolean; // 整個組合的開關
 }
 

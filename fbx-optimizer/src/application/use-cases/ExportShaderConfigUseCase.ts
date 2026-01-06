@@ -69,7 +69,8 @@ export class ExportShaderConfigUseCase {
           id: group.id,
           name: group.name,
           selectedMeshes: group.selectedMeshes,
-          features: exportFeatures
+          features: exportFeatures,
+          enabled: group.enabled ?? true
         };
       });
 

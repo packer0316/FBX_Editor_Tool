@@ -589,6 +589,7 @@ function App() {
           ],
           selectedMeshes: instance.meshNames, // 應用到所有 mesh
           expanded: true,
+          enabled: true,
         },
       ];
 

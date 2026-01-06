@@ -23,6 +23,7 @@ export interface ShaderGroupExport {
   name: string;
   selectedMeshes: string[];
   features: ShaderFeatureExport[];
+  enabled: boolean;
 }
 
 /**

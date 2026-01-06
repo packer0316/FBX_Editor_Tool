@@ -97,7 +97,8 @@ export class ImportShaderConfigUseCase {
           name: exportGroup.name,
           selectedMeshes: exportGroup.selectedMeshes,
           features,
-          expanded: true
+          expanded: true,
+          enabled: (exportGroup as any).enabled ?? true
         };
       });
 

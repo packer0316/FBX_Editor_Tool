@@ -708,12 +708,12 @@ const Model = forwardRef<ModelRef, ModelProps>(
                     return;
                 }
 
-                // 找到包含此 mesh 的組
+                // 找到包含此 mesh 的組（必須是啟用的組）
                 const meshGroup = shaderGroups.find(group =>
-                    group.selectedMeshes.includes(child.name)
+                    group.selectedMeshes.includes(child.name) && (group.enabled ?? true)
                 );
 
-                // 如果沒有組包含此 mesh，恢復原始材質
+                // 如果沒有啟用的組包含此 mesh，恢復原始材質
                 if (!meshGroup) {
                     child.material = child.userData.originalMaterial;
                     return;

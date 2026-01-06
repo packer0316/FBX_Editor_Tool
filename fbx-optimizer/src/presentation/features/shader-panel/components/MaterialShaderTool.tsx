@@ -261,8 +261,16 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
             features: [],
             selectedMeshes: [],
             expanded: true,
+            enabled: true,
         };
         onGroupsChange([...shaderGroups, newGroup]);
+    };
+
+    // 切換組合啟用狀態
+    const toggleGroupEnabled = (groupId: string) => {
+        onGroupsChange(shaderGroups.map(group =>
+            group.id === groupId ? { ...group, enabled: !group.enabled } : group
+        ));
     };
 
     // 刪除組合
@@ -349,7 +357,7 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
         onGroupsChange(updateShaderGroupFeatureParam(shaderGroups, groupId, featureId, paramName, value));
     };
 
-    // 切換 mesh 選擇
+    // 切換 mesh 選擇（允許同一個 mesh 被多個組選取）
     const toggleMeshSelection = (groupId: string, meshName: string) => {
         onGroupsChange(shaderGroups.map(group => {
             if (group.id === groupId) {
@@ -360,13 +368,9 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                         ? group.selectedMeshes.filter(selectedMeshName => selectedMeshName !== meshName)
                         : [...group.selectedMeshes, meshName]
                 };
-            } else {
-                // 從其他組移除這個 mesh
-                return {
-                    ...group,
-                    selectedMeshes: group.selectedMeshes.filter(selectedMeshName => selectedMeshName !== meshName)
-                };
             }
+            // 不影響其他組的選取
+            return group;
         }));
     };
 
@@ -677,6 +681,26 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                             </div>
 
                             <div className="flex items-center gap-2 flex-shrink-0">
+                                {/* 組合開關 */}
+                                <button
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        toggleGroupEnabled(group.id);
+                                    }}
+                                    className={cn(
+                                        "w-10 h-5 rounded-full relative transition-all duration-200 flex-shrink-0",
+                                        (group.enabled ?? true)
+                                            ? "bg-purple-600 hover:bg-purple-500"
+                                            : "bg-gray-700 hover:bg-gray-600"
+                                    )}
+                                    title={(group.enabled ?? true) ? "停用此組合" : "啟用此組合"}
+                                >
+                                    <div className={cn(
+                                        "w-4 h-4 bg-white rounded-full absolute top-0.5 transition-all duration-200 shadow-sm",
+                                        (group.enabled ?? true) ? "left-[22px]" : "left-0.5"
+                                    )} />
+                                </button>
+
                                 {/* Mesh Selection Dropdown */}
                                 <div className="relative" ref={showMeshMenu === group.id ? meshMenuRef : null}>
                                     <button
@@ -697,19 +721,18 @@ export default function MaterialShaderTool({ fileName: _fileName, shaderGroups, 
                                                     return (
                                                         <label
                                                             key={meshName}
-                                                            className={`flex items-center gap-2 p-2.5 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0 ${isUsedByOther && !isSelected ? 'opacity-50' : ''}`}
+                                                            className="flex items-center gap-2 p-2.5 hover:bg-white/10 cursor-pointer transition-colors border-b border-white/5 last:border-0"
                                                         >
                                                             <input
                                                                 type="checkbox"
                                                                 checked={isSelected}
-                                                                disabled={isUsedByOther && !isSelected}
                                                                 onChange={() => toggleMeshSelection(group.id, meshName)}
                                                                 className="w-4 h-4 rounded border-white/20 bg-black/30 checked:bg-purple-500 checked:border-purple-500"
                                                             />
                                                             <span className="text-sm text-white flex-1">{meshName}</span>
                                                             {isSelected && <Check size={14} className="text-green-400" />}
-                                                            {isUsedByOther && !isSelected && (
-                                                                <span className="text-xs text-gray-400">(已使用)</span>
+                                                            {isUsedByOther && (
+                                                                <span className="text-xs text-orange-400">(已使用)</span>
                                                             )}
                                                         </label>
                                                     );
