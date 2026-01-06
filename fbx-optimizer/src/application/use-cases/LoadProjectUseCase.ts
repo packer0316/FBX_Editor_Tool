@@ -92,6 +92,12 @@ export interface DirectorCallbacks {
     sourceAnimationDuration: number;
     startFrame: number;
     color?: string;
+    /** Spine 相關 */
+    spineInstanceId?: string;
+    spineLayerId?: string;
+    spineElementId?: string;
+    /** 程式動作類型 */
+    proceduralType?: string;
   }) => { id: string } | null;
   
   /** 更新片段 */
@@ -100,6 +106,8 @@ export interface DirectorCallbacks {
     trimEnd?: number;
     speed?: number;
     loop?: boolean;
+    /** 程式動作設定 */
+    proceduralConfig?: Record<string, any>;
   }) => void;
 }
 
@@ -527,7 +535,10 @@ export class LoadProjectUseCase {
 
       // 還原片段
       for (const savedClip of savedTrack.clips) {
-        // 映射新的 ID
+        // 程式動作特殊處理
+        const isProcedural = savedClip.sourceType === 'procedural';
+        
+        // 映射新的 ID（程式動作也需要映射 modelId）
         const newModelId = modelIdMap.get(savedClip.sourceModelId);
         const newClipId = clipIdMap.get(savedClip.sourceAnimationId);
 
@@ -542,11 +553,19 @@ export class LoadProjectUseCase {
           sourceType: savedClip.sourceType,
           sourceModelId: newModelId,
           sourceModelName: savedClip.sourceModelName,
-          sourceAnimationId: newClipId || savedClip.sourceAnimationId,
+          sourceAnimationId: isProcedural 
+            ? savedClip.sourceAnimationId  // 程式動作使用原始 ID
+            : (newClipId || savedClip.sourceAnimationId),
           sourceAnimationName: savedClip.sourceAnimationName,
           sourceAnimationDuration: savedClip.sourceAnimationDuration,
           startFrame: savedClip.startFrame,
           color: savedClip.color,
+          // Spine 相關
+          spineInstanceId: savedClip.spineInstanceId,
+          spineLayerId: savedClip.spineLayerId,
+          spineElementId: savedClip.spineElementId,
+          // 程式動作類型
+          proceduralType: savedClip.proceduralType,
         });
 
         // 還原進階設定
@@ -556,6 +575,8 @@ export class LoadProjectUseCase {
             trimEnd: savedClip.trimEnd,
             speed: savedClip.speed,
             loop: savedClip.loop,
+            // 程式動作設定
+            proceduralConfig: savedClip.proceduralConfig,
           });
         }
       }

@@ -96,7 +96,7 @@ interface DirectorActions {
   addClip: (params: CreateClipParams) => DirectorClip | null;
   moveClip: (params: MoveClipParams) => boolean;
   removeClip: (clipId: string) => void;
-  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin' | 'trimStart' | 'trimEnd'>>) => void;
+  updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin' | 'trimStart' | 'trimEnd' | 'proceduralConfig'>>) => void;
   trimClip: (clipId: string, side: 'start' | 'end', frameDelta: number) => void;
   copyClip: (clipId: string) => void;
   pasteClip: (trackId: string, startFrame: number) => DirectorClip | null;
