@@ -37,8 +37,8 @@ export interface ExportOptions {
   /** 動作切割 & 導演模式編排 */
   includeAnimations: boolean;
   
-  /** Shader 設定（預留，暫時 false） */
-  includeShader: false;
+  /** Shader 設定 */
+  includeShader: boolean;
   
   /** Audio 音效（預留，暫時 false） */
   includeAudio: false;
@@ -54,7 +54,7 @@ export function createDefaultExportOptions(): ExportOptions {
   return {
     include3DModels: true,
     includeAnimations: true,
-    includeShader: false,
+    includeShader: true,
     includeAudio: false,
     includeEffekseer: false,
   };
@@ -91,6 +91,57 @@ export interface SerializableClipInfo {
   
   /** 幀率 */
   fps: number;
+}
+
+// ============================================================================
+// 可序列化 Shader 設定
+// ============================================================================
+
+/**
+ * 可序列化的 Shader 功能
+ * 
+ * 用於保存 ShaderFeature 的配置，貼圖參數會被轉換為相對路徑
+ */
+export interface SerializableShaderFeature {
+  /** 功能類型（如 'matcap', 'rim_light' 等） */
+  type: string;
+  
+  /** 功能名稱 */
+  name: string;
+  
+  /** 功能描述 */
+  description: string;
+  
+  /** 圖示 */
+  icon: string;
+  
+  /** 是否啟用 */
+  enabled: boolean;
+  
+  /** 參數（貼圖會轉為相對路徑字串） */
+  params: Record<string, any>;
+}
+
+/**
+ * 可序列化的 Shader 組合
+ * 
+ * 用於保存 ShaderGroup 的配置，包含選中的 mesh 和功能列表
+ */
+export interface SerializableShaderGroup {
+  /** 組合唯一識別碼 */
+  id: string;
+  
+  /** 組合名稱 */
+  name: string;
+  
+  /** 套用到的 Mesh 名稱列表 */
+  selectedMeshes: string[];
+  
+  /** 功能列表 */
+  features: SerializableShaderFeature[];
+  
+  /** 是否啟用 */
+  enabled: boolean;
 }
 
 // ============================================================================
@@ -142,8 +193,14 @@ export interface SerializableModelState {
   /** 是否啟用循環播放 */
   isLoopEnabled: boolean;
   
+  // Shader 設定（當 includeShader = true）
+  /** Shader 組合列表 */
+  shaderGroups?: SerializableShaderGroup[];
+  
+  /** Shader 是否啟用（主開關） */
+  isShaderEnabled?: boolean;
+  
   // 預留擴充欄位（暫不序列化）
-  // shaderGroups?: ShaderGroup[];
   // audioTracks?: SerializableAudioTrack[];
   // effects?: SerializableEffectItem[];
 }

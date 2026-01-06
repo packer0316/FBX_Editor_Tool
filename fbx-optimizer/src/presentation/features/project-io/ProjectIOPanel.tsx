@@ -190,6 +190,22 @@ export default function ProjectIOPanel({
                 <Film className="w-4 h-4 text-green-400" />
                 <span className={theme.text}>動作 & 導演模式編排</span>
               </label>
+
+              {/* Shader */}
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-pointer hover:bg-white/5 transition-colors`}>
+                <input
+                  type="checkbox"
+                  checked={exportOptions.includeShader}
+                  onChange={(e) => setExportOptions({
+                    ...exportOptions,
+                    includeShader: e.target.checked,
+                  })}
+                  disabled={isProcessing}
+                  className="w-4 h-4 rounded accent-blue-500"
+                />
+                <Palette className="w-4 h-4 text-purple-400" />
+                <span className={theme.text}>Shader 配置</span>
+              </label>
             </div>
           </div>
 
@@ -199,19 +215,6 @@ export default function ProjectIOPanel({
               未實作功能
             </label>
             <div className="space-y-2 opacity-50">
-              {/* Shader */}
-              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-not-allowed`}>
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled={true}
-                  className="w-4 h-4 rounded"
-                />
-                <Palette className="w-4 h-4 text-purple-400" />
-                <span className="text-gray-500">Shader</span>
-                <span className="ml-auto text-xs text-gray-600">未實作</span>
-              </label>
-
               {/* Audio */}
               <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-not-allowed`}>
                 <input

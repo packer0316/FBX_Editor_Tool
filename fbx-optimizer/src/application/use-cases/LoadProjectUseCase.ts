@@ -23,8 +23,11 @@ import {
   type SerializableModelState,
   type SerializableClipInfo,
   type SerializableDirectorState,
+  type SerializableShaderGroup,
+  type SerializableShaderFeature,
   isVersionCompatible,
 } from '../../domain/value-objects/ProjectState';
+import type { ShaderGroup, ShaderFeature } from '../../domain/value-objects/ShaderFeature';
 
 // ============================================================================
 // 載入參數介面
@@ -201,9 +204,20 @@ export class LoadProjectUseCase {
         }
       }
 
-      // 7. 還原切割動作（直接使用載入的模型實例，避免異步狀態問題）
+      // 7. 還原 Shader 配置
+      if (projectState.exportOptions.includeShader) {
+        modelCallbacks.onProgress?.(70, '正在還原 Shader 配置...');
+        for (const savedModel of projectState.models) {
+          const newModelId = modelIdMap.get(savedModel.id);
+          if (newModelId && savedModel.shaderGroups && savedModel.shaderGroups.length > 0) {
+            await this.restoreShaderGroups(zip, savedModel, newModelId, modelCallbacks);
+          }
+        }
+      }
+
+      // 8. 還原切割動作（直接使用載入的模型實例，避免異步狀態問題）
       if (projectState.exportOptions.includeAnimations) {
-        modelCallbacks.onProgress?.(75, '正在還原動作片段...');
+        modelCallbacks.onProgress?.(80, '正在還原動作片段...');
         for (const savedModel of projectState.models) {
           const loadedModel = loadedModels.get(savedModel.id);
           if (loadedModel && savedModel.createdClips && savedModel.createdClips.length > 0) {
@@ -216,9 +230,9 @@ export class LoadProjectUseCase {
           }
         }
 
-        // 8. 還原導演模式
+        // 9. 還原導演模式
         if (projectState.director && directorCallbacks) {
-          modelCallbacks.onProgress?.(85, '正在還原導演模式...');
+          modelCallbacks.onProgress?.(90, '正在還原導演模式...');
           this.restoreDirectorMode(
             projectState.director,
             modelIdMap,
@@ -379,6 +393,97 @@ export class LoadProjectUseCase {
       callbacks.updateModel(model.id, { createdClips: restoredClips });
       console.log(`✅ 已更新模型 ${model.name} 的 createdClips，共 ${restoredClips.length} 個動作`);
     }
+  }
+
+  /**
+   * 還原 Shader 配置
+   * 
+   * @param zip - ZIP 檔案
+   * @param savedModel - 已保存的模型狀態
+   * @param newModelId - 新模型 ID
+   * @param callbacks - 回調函數
+   */
+  private static async restoreShaderGroups(
+    zip: JSZip,
+    savedModel: SerializableModelState,
+    newModelId: string,
+    callbacks: LoadProjectCallbacks
+  ): Promise<void> {
+    if (!savedModel.shaderGroups || savedModel.shaderGroups.length === 0) {
+      return;
+    }
+
+    console.log(`🎨 還原 Shader 配置: ${savedModel.name}, ${savedModel.shaderGroups.length} 個組合`);
+
+    const modelFolderPath = `models/${savedModel.id}`;
+    const restoredGroups: ShaderGroup[] = [];
+
+    for (const savedGroup of savedModel.shaderGroups) {
+      const restoredFeatures: ShaderFeature[] = [];
+
+      for (const savedFeature of savedGroup.features) {
+        const restoredParams: Record<string, any> = {};
+
+        // 處理每個參數
+        for (const [key, value] of Object.entries(savedFeature.params)) {
+          // 如果是字串且看起來像貼圖路徑
+          if (typeof value === 'string' && value.startsWith('shader/textures/')) {
+            const texturePath = `${modelFolderPath}/${value}`;
+            const textureZipFile = zip.file(texturePath);
+            
+            if (textureZipFile) {
+              const blob = await textureZipFile.async('blob');
+              const fileName = value.split('/').pop() || value;
+              const mimeType = this.getMimeType(fileName);
+              const file = new File([blob], fileName, { type: mimeType });
+              restoredParams[key] = file;
+              console.log(`  🖼️ 還原貼圖: ${key} <- ${value}`);
+            } else {
+              console.warn(`  ⚠️ 找不到貼圖: ${texturePath}`);
+              restoredParams[key] = null;
+            }
+          } else {
+            // 其他參數直接複製
+            restoredParams[key] = value;
+          }
+        }
+
+        // 建立還原的 ShaderFeature
+        const restoredFeature: ShaderFeature = {
+          id: `${savedFeature.type}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: savedFeature.type as ShaderFeature['type'],
+          name: savedFeature.name,
+          description: savedFeature.description,
+          icon: savedFeature.icon,
+          expanded: false,
+          enabled: savedFeature.enabled,
+          params: restoredParams,
+        };
+
+        restoredFeatures.push(restoredFeature);
+      }
+
+      // 建立還原的 ShaderGroup
+      const restoredGroup: ShaderGroup = {
+        id: savedGroup.id || `group_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: savedGroup.name,
+        selectedMeshes: [...savedGroup.selectedMeshes],
+        features: restoredFeatures,
+        expanded: true,
+        enabled: savedGroup.enabled,
+      };
+
+      restoredGroups.push(restoredGroup);
+      console.log(`  ✅ 還原組合: ${savedGroup.name}, Meshes: [${savedGroup.selectedMeshes.join(', ')}], 啟用: ${savedGroup.enabled}`);
+    }
+
+    // 更新模型的 Shader 設定
+    callbacks.updateModel(newModelId, {
+      shaderGroups: restoredGroups,
+      isShaderEnabled: savedModel.isShaderEnabled ?? true,
+    });
+
+    console.log(`✅ Shader 配置還原完成: ${restoredGroups.length} 個組合`);
   }
 
   /**

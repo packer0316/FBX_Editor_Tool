@@ -22,9 +22,12 @@ import {
   type SerializableDirectorState,
   type SerializableDirectorClip,
   type SerializableTrack,
+  type SerializableShaderGroup,
+  type SerializableShaderFeature,
   type GlobalSettings,
   PROJECT_VERSION,
 } from '../../domain/value-objects/ProjectState';
+import type { ShaderGroup, ShaderFeature } from '../../domain/value-objects/ShaderFeature';
 
 // ============================================================================
 // 匯出參數介面
@@ -167,15 +170,101 @@ function serializeDirectorState(
 }
 
 /**
+ * Shader 貼圖檔案資訊（用於打包到 ZIP）
+ */
+interface ShaderTextureInfo {
+  /** 參數路徑（用於識別） */
+  paramKey: string;
+  /** 貼圖檔案 */
+  file: File;
+  /** ZIP 內的相對路徑 */
+  relativePath: string;
+}
+
+/**
+ * 序列化 Shader 功能
+ */
+function serializeShaderFeature(
+  feature: ShaderFeature,
+  groupIndex: number,
+  featureIndex: number,
+  textureInfos: ShaderTextureInfo[]
+): SerializableShaderFeature {
+  const serializedParams: Record<string, any> = {};
+  let textureCounter = 0;
+
+  // 處理每個參數
+  Object.entries(feature.params).forEach(([key, value]) => {
+    if (value instanceof File) {
+      // 是貼圖檔案，轉換為相對路徑
+      textureCounter++;
+      const extension = value.name.split('.').pop() || 'png';
+      const relativePath = `shader/textures/${key}_${groupIndex}_${featureIndex}_${textureCounter}.${extension}`;
+      
+      textureInfos.push({
+        paramKey: `${feature.id}.${key}`,
+        file: value,
+        relativePath,
+      });
+      
+      serializedParams[key] = relativePath;
+    } else {
+      // 其他參數直接複製
+      serializedParams[key] = value;
+    }
+  });
+
+  return {
+    type: feature.type,
+    name: feature.name,
+    description: feature.description,
+    icon: feature.icon,
+    enabled: feature.enabled,
+    params: serializedParams,
+  };
+}
+
+/**
+ * 序列化 Shader 組合
+ */
+function serializeShaderGroup(
+  group: ShaderGroup,
+  groupIndex: number,
+  textureInfos: ShaderTextureInfo[]
+): SerializableShaderGroup {
+  return {
+    id: group.id,
+    name: group.name,
+    selectedMeshes: [...group.selectedMeshes],
+    features: group.features.map((feature, featureIndex) => 
+      serializeShaderFeature(feature, groupIndex, featureIndex, textureInfos)
+    ),
+    enabled: group.enabled ?? true,
+  };
+}
+
+/**
  * 序列化模型狀態
  */
 function serializeModelState(
   model: ModelInstance,
-  includeAnimations: boolean
+  includeAnimations: boolean,
+  includeShader: boolean,
+  shaderTextureInfos: ShaderTextureInfo[]
 ): SerializableModelState {
   // 取得貼圖檔案名稱
   const texturePaths: string[] = [];
-  // TODO: 從 model 中提取貼圖檔案路徑
+  
+  // 序列化 Shader 組合（如果啟用）
+  let shaderGroups: SerializableShaderGroup[] | undefined;
+  let isShaderEnabled: boolean | undefined;
+  
+  if (includeShader && model.shaderGroups && model.shaderGroups.length > 0) {
+    shaderGroups = model.shaderGroups.map((group, groupIndex) => 
+      serializeShaderGroup(group, groupIndex, shaderTextureInfos)
+    );
+    isShaderEnabled = model.isShaderEnabled;
+  }
   
   return {
     id: model.id,
@@ -192,6 +281,8 @@ function serializeModelState(
     visible: model.visible,
     opacity: model.opacity,
     isLoopEnabled: model.isLoopEnabled,
+    shaderGroups,
+    isShaderEnabled,
   };
 }
 
@@ -258,7 +349,7 @@ export class ExportProjectUseCase {
           console.warn(`模型 ${model.name} 沒有原始檔案`);
         }
 
-        // 加入貼圖檔案（從 shaderGroups 中提取）
+        // 加入模型貼圖檔案（載入時保存的原始貼圖）
         const textureFiles = this.extractTextureFiles(model);
         const texturePaths: string[] = [];
         
@@ -267,9 +358,28 @@ export class ExportProjectUseCase {
           texturePaths.push(textureFile.name);
         }
 
-        // 序列化模型狀態
-        const serializedModel = serializeModelState(model, exportOptions.includeAnimations);
+        // 收集 Shader 貼圖資訊
+        const shaderTextureInfos: ShaderTextureInfo[] = [];
+        
+        // 序列化模型狀態（含 Shader）
+        const serializedModel = serializeModelState(
+          model, 
+          exportOptions.includeAnimations,
+          exportOptions.includeShader,
+          shaderTextureInfos
+        );
         serializedModel.texturePaths = texturePaths;
+        
+        // 加入 Shader 貼圖到 ZIP
+        if (exportOptions.includeShader && shaderTextureInfos.length > 0) {
+          console.log(`📦 模型 ${model.name} 有 ${shaderTextureInfos.length} 個 Shader 貼圖`);
+          
+          for (const textureInfo of shaderTextureInfos) {
+            modelFolder.file(textureInfo.relativePath, textureInfo.file);
+            console.log(`  🖼️ 加入 Shader 貼圖: ${textureInfo.relativePath}`);
+          }
+        }
+        
         serializedModels.push(serializedModel);
       }
 
