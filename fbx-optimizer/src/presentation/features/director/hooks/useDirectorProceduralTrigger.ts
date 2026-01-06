@@ -71,9 +71,11 @@ export function useDirectorProceduralTrigger({
       originalStateRef.current.clear();
       clipStartStatesRef.current.clear();
       models.forEach(model => {
+        const safeScale = model.scale ?? [1, 1, 1];
+        const safePosition = model.position ?? [0, 0, 0];
         originalStateRef.current.set(model.id, {
-          scale: [...model.scale] as [number, number, number],
-          position: [...model.position] as [number, number, number],
+          scale: [...safeScale] as [number, number, number],
+          position: [...safePosition] as [number, number, number],
         });
       });
     }
@@ -85,9 +87,11 @@ export function useDirectorProceduralTrigger({
     // 直接從 modelsRef 獲取最新狀態（用戶可能手動調整過）
     const model = modelsRef.current.find(m => m.id === modelId);
     if (model) {
+      const safeScale = model.scale ?? [1, 1, 1];
+      const safePosition = model.position ?? [0, 0, 0];
       return {
-        scale: [...model.scale] as [number, number, number],
-        position: [...model.position] as [number, number, number],
+        scale: [...safeScale] as [number, number, number],
+        position: [...safePosition] as [number, number, number],
       };
     }
     
@@ -217,12 +221,14 @@ export function useDirectorProceduralTrigger({
       // 退出時重置所有模型的狀態（恢復原始值）
       modelsRef.current.forEach(model => {
         const originalState = originalStateRef.current.get(model.id);
+        const safeScale = model.scale ?? [1, 1, 1];
+        const safePosition = model.position ?? [0, 0, 0];
         if (onUpdateModelRef.current) {
           onUpdateModelRef.current(model.id, {
             visible: true,
             opacity: 1,
-            scale: originalState?.scale || model.scale,
-            position: originalState?.position || model.position,
+            scale: originalState?.scale || safeScale,
+            position: originalState?.position || safePosition,
           });
         }
       });

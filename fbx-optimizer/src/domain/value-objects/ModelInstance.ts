@@ -43,6 +43,8 @@ export interface ModelInstance {
   name: string;
   /** 原始檔案（用於重新載入） */
   file: File | null;
+  /** 貼圖檔案列表（用於匯出） */
+  textureFiles: File[];
   
   // 模型資料
   /** Three.js 模型群組 */

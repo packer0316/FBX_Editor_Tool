@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Grid, Camera, Activity } from 'lucide-react';
+import { Grid, Camera, Activity, FolderOpen } from 'lucide-react';
 import { type ThemeStyle, themeOptions, type ThemeMode } from '../../../hooks/useTheme';
 import { useClickOutside } from '../../../hooks/useClickOutside';
 import { CAMERA_PRESETS, type CameraPresetType } from '../../../../domain/value-objects/CameraPreset';
@@ -66,6 +66,9 @@ interface LeftToolbarProps {
     sceneBgColor: string;
     setSceneBgColor: (color: string | null) => void;
     defaultSceneBgColor: string;
+
+    // Project IO
+    onOpenProjectIO?: () => void;
 }
 
 const LeftToolbar: React.FC<LeftToolbarProps> = ({
@@ -115,7 +118,8 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
     setOrthoZoom,
     sceneBgColor,
     setSceneBgColor,
-    defaultSceneBgColor
+    defaultSceneBgColor,
+    onOpenProjectIO
 }) => {
     const themeMenuRef = useRef<HTMLDivElement>(null);
     const cameraSettingsRef = useRef<HTMLDivElement>(null);
@@ -197,13 +201,16 @@ const LeftToolbar: React.FC<LeftToolbarProps> = ({
                 </div>
             </div>
 
-            {/* Tool: Rotate */}
+            {/* Tool: Project IO (Export/Import) */}
             <div className="group relative">
-                <button disabled className={`p-3 rounded-xl transition-all duration-300 ${currentTheme.button} opacity-30 cursor-not-allowed`}>
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
+                <button 
+                    onClick={onOpenProjectIO}
+                    className={`p-3 rounded-xl transition-all duration-300 hover:scale-110 ${currentTheme.button} ${currentTheme.itemHover}`}
+                >
+                    <FolderOpen size={20} />
                 </button>
                 <div className={`absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 ${currentTheme.tooltipBg} backdrop-blur-md border ${currentTheme.toolbarBorder} ${currentTheme.tooltipText} text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 shadow-xl transition-opacity duration-200`}>
-                    旋轉工具 (未實作)
+                    專案匯出 / 載入
                     <div className={`absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 ${currentTheme.tooltipBg} rotate-45 border-b border-l ${currentTheme.toolbarBorder}`}></div>
                 </div>
             </div>

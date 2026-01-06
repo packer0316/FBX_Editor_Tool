@@ -1595,7 +1595,11 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
     ({ modelInstance, onTimeUpdate, loop = true, onFinish, enableShadows, isActiveModel = false, isDirectorMode = false, onGroupRefMount }, ref) => {
         const { 
             id: modelId,
-            model, clip, allClips = [], shaderGroups, isShaderEnabled, position, rotation, scale, visible, 
+            model, clip, allClips = [], shaderGroups, isShaderEnabled, 
+            position = [0, 0, 0] as [number, number, number], 
+            rotation = [0, 0, 0] as [number, number, number], 
+            scale = [1, 1, 1] as [number, number, number], 
+            visible = true, 
             showWireframe = false,
             opacity = 1.0,
             isPlaying = false, currentTime, isLoopEnabled,

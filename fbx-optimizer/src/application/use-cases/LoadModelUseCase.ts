@@ -20,6 +20,8 @@ export interface LoadModelResult {
   animations: THREE.AnimationClip[];
   /** INI 解析結果（如果有 INI 檔案） */
   iniResult: IniParseResult | null;
+  /** 貼圖檔案列表 */
+  textureFiles: File[];
 }
 
 /**
@@ -100,6 +102,7 @@ export class LoadModelUseCase {
       defaultShaderGroup,
       animations: model.animations || [],
       iniResult,
+      textureFiles: Array.from(textureFiles.values()), // Convert Map to Array
     };
   }
 
@@ -169,6 +172,7 @@ export class LoadModelUseCase {
       id: `model_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
       name: modelName || fbxFile?.name.replace(/\.fbx$/i, '') || '未命名模型',
       file: fbxFile || null,
+      textureFiles: result.textureFiles,
       model: result.model,
       meshNames: result.meshNames,
       bones,
