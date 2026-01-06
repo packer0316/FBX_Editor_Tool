@@ -327,10 +327,51 @@ onUpdateElement={(isPointerEditing || isDirectorMode) ? handleUpdateElementById 
 架構型的文件檔案 放在 archi_docs/ 目錄下 
 臨時文件檔案 放在 temp_docs/ 目錄下 
 
+---
+
+## 📦 專案匯出/載入系統速查
+
+### 核心概念
+- **檔案格式**：`.jr3d`（ZIP 格式）
+- **結構**：`manifest.json` + `project-state.json` + `models/` 資料夾
+
+### 已實作功能
+- ✅ 3D 模型、Transform、貼圖
+- ✅ 切割動作（createdClips）
+- ✅ 導演模式（tracks、clips）
+- ✅ 程式動作（proceduralType、proceduralConfig）
+- ✅ Shader 配置（shaderGroups、shader 貼圖）
+
+### ⚠️ 新增欄位時必須同步修改
+
+當新增或修改以下類型時，**必須同時更新匯出/載入邏輯**，避免改一個壞一個：
+
+| 修改目標 | 需同步更新 |
+|----------|------------|
+| `ModelInstance` 新增欄位 | `SerializableModelState`、`ExportProjectUseCase`、`LoadProjectUseCase` |
+| `ShaderGroup` / `ShaderFeature` | `SerializableShaderGroup`、`serializeShaderGroups()`、`restoreShaderGroups()` |
+| `DirectorClip` 新增欄位 | `SerializableDirectorClip`、`DirectorCallbacks`、`restoreDirectorMode()` |
+| `directorStore.addClip()` 參數 | `DirectorCallbacks.addClip` 介面 |
+| `directorStore.updateClip()` 參數 | `DirectorCallbacks.updateClip` 介面 |
+
+### 關鍵檔案
+```
+src/domain/value-objects/ProjectState.ts       # 類型定義
+src/application/use-cases/ExportProjectUseCase.ts  # 匯出邏輯
+src/application/use-cases/LoadProjectUseCase.ts    # 載入邏輯
+```
+
+### 詳細文檔
+- `archi_docs/PROJECT_IO_SYSTEM.md`
+
+---
+
 ## 📖 參考文檔
 
 - **架構詳解**：`PROJECT_ARCHITECTURE.md`
 - **技術上下文**：`PROJECT_CONTEXT.md`
+- **專案匯出/載入**：`archi_docs/PROJECT_IO_SYSTEM.md`
 - **Director Mode 設計**：`archi_docs/DIRECTOR_MODE_DESIGN.md`
+- **程式動作設計**：`archi_docs/PROCEDURAL_ANIMATION_DESIGN.md`
 - **Spine 整合架構**：`archi_docs/SPINE_INTEGRATION_ARCHITECTURE.md`
 - **Effekseer 整合架構**：`archi_docs/EFFEKSEER_INTEGRATION_ARCHITECTURE.md`
