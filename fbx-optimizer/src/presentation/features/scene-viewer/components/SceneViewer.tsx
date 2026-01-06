@@ -1779,11 +1779,13 @@ const MultiModel = forwardRef<ModelRef, MultiModelProps>(
         });
         
         // 監聯外部 currentTime 變化（非 Director Mode 時）
+        // 🔥 只在非播放狀態時才同步，避免與 AnimationMixer 競爭
+        // 播放時由 AnimationMixer 自己更新時間，拖動進度條（暫停時）才需要同步
         useEffect(() => {
-            if (!isDirectorMode && currentTime !== undefined && modelRef.current) {
+            if (!isDirectorMode && !isPlaying && currentTime !== undefined && modelRef.current) {
                 modelRef.current.seekTo(currentTime);
             }
-        }, [currentTime, isDirectorMode]);
+        }, [currentTime, isDirectorMode, isPlaying]);
 
         // Director Mode：訂閱 clipUpdate 事件，動態切換動畫並設置時間
         useEffect(() => {

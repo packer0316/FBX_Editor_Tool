@@ -1,4 +1,4 @@
-import { useMemo, useState, type MouseEvent } from 'react';
+import { useMemo, useState, useEffect, useRef, type MouseEvent, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import type { AudioTrack } from '../../domain/value-objects/AudioTrack';
 import type { EffectItem } from '../features/effect-panel/components/EffectTestPanel';
@@ -73,6 +73,12 @@ interface ProgressBarProps {
 
   /** 主題樣式 */
   theme?: ThemeStyle;
+
+  /** 可選：即時時間 ref（用於 60fps 進度更新，繞過 React 渲染） */
+  progressTimeRef?: RefObject<number>;
+
+  /** 可選：是否啟用即時更新模式（需搭配 progressTimeRef 和 clipDuration） */
+  enableRealtimeUpdate?: boolean;
 }
 
 /**
@@ -111,12 +117,40 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
   clipDuration = 0,
   className = '',
   theme,
+  progressTimeRef,
+  enableRealtimeUpdate = false,
 }) => {
   const [hoveredTooltip, setHoveredTooltip] = useState<{
     x: number;
     y: number;
     items: MarkerEntry[];
   } | null>(null);
+
+  // 🔥 即時更新模式：使用 ref 直接操作 DOM，實現 60fps 進度更新
+  const progressFillRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!enableRealtimeUpdate || !progressTimeRef || clipDuration <= 0) return;
+
+    let rafId: number;
+
+    const updateProgress = () => {
+      const time = progressTimeRef.current;
+      const realtimeProgress = clipDuration > 0 
+        ? Math.min(Math.max((time % clipDuration) / clipDuration, 0), 1) 
+        : 0;
+
+      if (progressFillRef.current) {
+        progressFillRef.current.style.transform = `scaleX(${realtimeProgress})`;
+      }
+
+      rafId = requestAnimationFrame(updateProgress);
+    };
+
+    rafId = requestAnimationFrame(updateProgress);
+
+    return () => cancelAnimationFrame(rafId);
+  }, [enableRealtimeUpdate, progressTimeRef, clipDuration]);
 
   const handleMarkerEnter = (event: MouseEvent<HTMLDivElement>, items: MarkerEntry[]) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -207,7 +241,8 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
         {/* 進度填充層（保持裁切以符合圓角） */}
         <div className="absolute inset-0 rounded-full overflow-hidden">
           <div
-            className={`h-full rounded-full transition-transform duration-100 ease-linear ${getProgressColor(state, theme)}`}
+            ref={enableRealtimeUpdate ? progressFillRef : undefined}
+            className={`h-full rounded-full ${enableRealtimeUpdate ? '' : 'transition-transform duration-100 ease-linear'} ${getProgressColor(state, theme)}`}
             style={{
               width: '100%',
               transform: `scaleX(${clampedProgress / 100})`,

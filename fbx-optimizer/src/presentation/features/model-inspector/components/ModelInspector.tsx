@@ -652,6 +652,8 @@ export default function ModelInspector({
                                             clipDuration={animationClip.duration}
                                             className="mt-2"
                                             theme={theme}
+                                            progressTimeRef={isCurrentClip && progressTimeRef ? progressTimeRef : undefined}
+                                            enableRealtimeUpdate={isCurrentClip && !!progressTimeRef}
                                         />
                                     </div>
                                 );
