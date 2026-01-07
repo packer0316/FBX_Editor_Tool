@@ -562,8 +562,16 @@ function App() {
     activeSidebarPanel !== 'none'
   );
 
-  // 處理檔案上傳（多模型版本）
+  // 處理檔案上傳（多模型版本，支援 .jr3d 專案檔案）
   const handleFileUpload = async (files: FileList) => {
+    // 檢查是否有 .jr3d 專案檔案
+    const jr3dFile = Array.from(files).find(file => file.name.toLowerCase().endsWith('.jr3d'));
+    if (jr3dFile) {
+      // 如果是專案檔案，調用載入專案邏輯
+      await handleLoadProject(jr3dFile);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { instance, iniResult } = await LoadModelUseCase.executeAndCreateInstance(files);
@@ -1475,6 +1483,38 @@ function App() {
     <div
       className={`h-screen overflow-hidden ${currentTheme.bg} ${currentTheme.text} flex flex-col`}
     >
+      {/* 專案載入進度遮罩層（全域，阻擋所有互動） */}
+      {isProjectProcessing && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[999999] flex items-center justify-center">
+          <div className="bg-gray-900/95 border border-white/10 rounded-2xl p-8 w-[400px] shadow-2xl">
+            <div className="flex items-center gap-4 mb-6">
+              <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                <svg className="w-6 h-6 text-blue-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white text-lg font-bold">載入專案中</h3>
+                <p className="text-gray-400 text-sm">{projectProgressMessage || '請稍候...'}</p>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-400">進度</span>
+                <span className="text-white font-mono">{Math.round(projectProgress)}%</span>
+              </div>
+              <div className="h-2 bg-gray-700 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-blue-500 transition-all duration-300 ease-out"
+                  style={{ width: `${projectProgress}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FBX 拖放覆蓋層已移至預覽區內 */}
 
       <div className="flex-1 flex overflow-hidden relative">
@@ -1701,7 +1741,7 @@ function App() {
                       </div>
                     </div>
                     <h3 className="text-2xl font-bold text-white mb-2">釋放滑鼠以上傳檔案</h3>
-                    <p className="text-gray-400">支援 FBX 模型與貼圖檔案</p>
+                    <p className="text-gray-400">支援 FBX 模型、貼圖檔案與 .jr3d 專案檔</p>
                   </div>
                 </div>
               )}
