@@ -484,10 +484,10 @@ describe('DirectorStore', () => {
       const store = useDirectorStore.getState();
       
       store.selectClip('clip-1');
-      expect(useDirectorStore.getState().ui.selectedClipId).toBe('clip-1');
+      expect(useDirectorStore.getState().ui.selectedClipIds).toContain('clip-1');
       
       store.selectClip(null);
-      expect(useDirectorStore.getState().ui.selectedClipId).toBeNull();
+      expect(useDirectorStore.getState().ui.selectedClipIds).toEqual([]);
     });
 
     it('removeClip 應該清除選取狀態', () => {
@@ -505,7 +505,7 @@ describe('DirectorStore', () => {
       store.selectClip(clip!.id);
       store.removeClip(clip!.id);
       
-      expect(useDirectorStore.getState().ui.selectedClipId).toBeNull();
+      expect(useDirectorStore.getState().ui.selectedClipIds).toEqual([]);
     });
   });
 });

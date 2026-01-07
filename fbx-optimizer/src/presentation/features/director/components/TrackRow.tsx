@@ -39,7 +39,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
   containerWidth,
   models = [],
 }) => {
-  const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui, clipboardClip, pasteClip } = useDirectorStore();
+  const { tracks, removeTrack, updateTrack, reorderTracks, removeClip, ui, clipboardClips, pasteClip } = useDirectorStore();
   
   // TODO-7: 虛擬化渲染 - 只渲染可視區域的 Clips
   const visibleClips = useMemo(() => {
@@ -134,17 +134,17 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
     closeContextMenu();
   }, [closeContextMenu]);
 
-  // 刪除選中的片段
+  // 刪除選中的片段（支援多選）
   const handleDeleteSelectedClip = useCallback(() => {
-    if (ui.selectedClipId) {
-      removeClip(ui.selectedClipId);
+    if (ui.selectedClipIds.length > 0) {
+      ui.selectedClipIds.forEach((clipId) => removeClip(clipId));
     }
     closeContextMenu();
-  }, [ui.selectedClipId, removeClip, closeContextMenu]);
+  }, [ui.selectedClipIds, removeClip, closeContextMenu]);
   
   // 貼上動畫到滑鼠位置
   const handlePasteClipAtMouse = useCallback(() => {
-    if (!clipboardClip || !trackRef.current || track.isLocked) return;
+    if (clipboardClips.length === 0 || !trackRef.current || track.isLocked) return;
     
     // 計算滑鼠右鍵位置相對於 track 起點的偏移
     const trackRect = trackRef.current.getBoundingClientRect();
@@ -153,7 +153,7 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
     
     pasteClip(track.id, pasteFrame);
     closeContextMenu();
-  }, [clipboardClip, track.id, track.isLocked, contextMenu.x, scrollOffsetX, pixelsPerFrame, pasteClip, closeContextMenu]);
+  }, [clipboardClips, track.id, track.isLocked, contextMenu.x, scrollOffsetX, pixelsPerFrame, pasteClip, closeContextMenu]);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     handleTrackDragOver(e, track.id);
@@ -257,9 +257,9 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
               </button>
               <button
                 onClick={handlePasteClipAtMouse}
-                disabled={!clipboardClip || track.isLocked}
+                disabled={clipboardClips.length === 0 || track.isLocked}
                 className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
-                  clipboardClip && !track.isLocked 
+                  clipboardClips.length > 0 && !track.isLocked 
                     ? 'text-gray-300 hover:bg-white/10' 
                     : 'text-gray-600 cursor-not-allowed'
                 }`}
@@ -399,9 +399,9 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
             <div className="h-px bg-white/10 my-1" />
             <button
               onClick={handlePasteClipAtMouse}
-              disabled={!clipboardClip || track.isLocked}
+              disabled={clipboardClips.length === 0 || track.isLocked}
               className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
-                clipboardClip && !track.isLocked 
+                clipboardClips.length > 0 && !track.isLocked 
                   ? 'text-gray-300 hover:bg-white/10' 
                   : 'text-gray-600 cursor-not-allowed'
               }`}
@@ -413,14 +413,14 @@ export const TrackRow: React.FC<TrackRowProps> = memo(({
             <div className="h-px bg-white/10 my-1" />
             <button
               onClick={handleDeleteSelectedClip}
-              disabled={!ui.selectedClipId}
+              disabled={ui.selectedClipIds.length === 0}
               className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
-                ui.selectedClipId ? 'text-red-400 hover:bg-red-500/10' : 'text-gray-600 cursor-not-allowed'
+                ui.selectedClipIds.length > 0 ? 'text-red-400 hover:bg-red-500/10' : 'text-gray-600 cursor-not-allowed'
               }`}
-              title={!ui.selectedClipId ? '請先選擇一個動畫片段' : ''}
+              title={ui.selectedClipIds.length === 0 ? '請先選擇一個動畫片段' : ''}
             >
               <Trash2 size={12} />
-              <span>刪除動畫</span>
+              <span>刪除動畫 {ui.selectedClipIds.length > 1 ? `(${ui.selectedClipIds.length})` : ''}</span>
             </button>
             <button
               onClick={() => { handleRemoveTrack(); closeContextMenu(); }}

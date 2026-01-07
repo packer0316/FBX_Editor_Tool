@@ -298,8 +298,11 @@ export interface DirectorUIState {
   /** 垂直捲動偏移（像素） */
   scrollOffsetY: number;
   
-  /** 當前選中的片段 ID */
-  selectedClipId: string | null;
+  /** 當前選中的片段 ID 列表（支援多選） */
+  selectedClipIds: string[];
+  
+  /** Shift 選取錨點 ID */
+  selectionAnchorId: string | null;
   
   /** 當前選中的軌道 ID */
   selectedTrackId: string | null;
@@ -312,6 +315,9 @@ export interface DirectorUIState {
   
   /** 片段吸附（Clip Snapping）開關 */
   clipSnapping: boolean;
+  
+  /** 多選拖曳狀態（讓所有選中的 clips 都能讀取偏移量） */
+  multiDragOffset: { x: number; y: number } | null;
 }
 
 /**

@@ -97,8 +97,8 @@ interface DirectorState {
   // UI 狀態
   ui: DirectorUIState;
   
-  // 剪貼簿（複製的 Clip）
-  clipboardClip: DirectorClip | null;
+  // 剪貼簿（複製的 Clips，支援多選複製）
+  clipboardClips: DirectorClip[];
 }
 
 interface DirectorActions {
@@ -116,6 +116,8 @@ interface DirectorActions {
   // 片段操作
   addClip: (params: CreateClipParams) => DirectorClip | null;
   moveClip: (params: MoveClipParams) => boolean;
+  /** 批量移動選中的 clips（用於多選拖曳） */
+  moveSelectedClips: (deltaFrames: number, trackOffset?: number) => void;
   removeClip: (clipId: string) => void;
   updateClip: (clipId: string, updates: Partial<Pick<DirectorClip, 'speed' | 'loop' | 'blendIn' | 'blendOut' | 'spineSkin' | 'trimStart' | 'trimEnd' | 'proceduralConfig'>>) => void;
   trimClip: (clipId: string, side: 'start' | 'end', frameDelta: number) => void;
@@ -144,10 +146,43 @@ interface DirectorActions {
   setScrollOffset: (x: number, y: number) => void;
   /** 合併更新 zoom 和 scrollOffset，避免雙重渲染導致閃爍 */
   setZoomWithScroll: (zoom: number, scrollX: number, scrollY: number) => void;
-  selectClip: (clipId: string | null) => void;
+  
+  // ========================================
+  // 選取控制（支援多選）
+  // ========================================
+  
+  /** 
+   * 選取單一片段
+   * @param clipId 片段 ID，null 表示清空選取
+   * @param options.ctrlKey 是否按住 Ctrl 鍵（加入/移除選取）
+   * @param options.shiftKey 是否按住 Shift 鍵（範圍選取）
+   */
+  selectClip: (clipId: string | null, options?: { ctrlKey?: boolean; shiftKey?: boolean }) => void;
+  
+  /** 批量選取多個片段 */
+  selectClips: (clipIds: string[]) => void;
+  
+  /** 清空所有選取 */
+  clearSelection: () => void;
+  
+  /** 全選所有片段 */
+  selectAllClips: () => void;
+  
+  /** 刪除所有選中的片段 */
+  removeSelectedClips: () => void;
+  
+  /** 複製所有選中的片段到剪貼簿 */
+  copySelectedClips: () => void;
+  
+  /** 貼上剪貼簿中的所有片段 */
+  pasteSelectedClips: (trackId: string, startFrame: number) => DirectorClip[];
+  
   selectTrack: (trackId: string | null) => void;
   setDragging: (isDragging: boolean, data?: DraggingClipData | null) => void;
   toggleClipSnapping: () => void;
+  
+  /** 設定多選拖曳偏移量（用於視覺同步） */
+  setMultiDragOffset: (offset: { x: number; y: number } | null) => void;
   
   // 工具方法
   getClipById: (clipId: string) => DirectorClip | null;
@@ -208,11 +243,13 @@ const initialUIState: DirectorUIState = {
   zoom: 1,
   scrollOffsetX: 0,
   scrollOffsetY: 0,
-  selectedClipId: null,
+  selectedClipIds: [],
+  selectionAnchorId: null,
   selectedTrackId: null,
   isDragging: false,
   draggingClipData: null,
   clipSnapping: true,  // 預設開啟片段吸附
+  multiDragOffset: null,
 };
 
 const initialState: DirectorState = {
@@ -220,7 +257,7 @@ const initialState: DirectorState = {
   timeline: initialTimelineState,
   tracks: [],
   ui: initialUIState,
-  clipboardClip: null,
+  clipboardClips: [],
 };
 
 // ============================================================================
@@ -527,6 +564,94 @@ export const useDirectorStore = create<DirectorStore>()(
         return true;
       },
       
+      moveSelectedClips: (deltaFrames: number, trackOffset?: number) => {
+        const { tracks, ui, timeline } = get();
+        if (ui.selectedClipIds.length === 0) return;
+        
+        // 記錄歷史
+        recordHistory('moveSelectedClips', get);
+        
+        // 收集選中的 clips 及其資訊
+        const selectedClipsInfo: { clip: DirectorClip; sourceTrackId: string; sourceTrackIndex: number }[] = [];
+        for (let trackIndex = 0; trackIndex < tracks.length; trackIndex++) {
+          const track = tracks[trackIndex];
+          for (const clip of track.clips) {
+            if (ui.selectedClipIds.includes(clip.id)) {
+              selectedClipsInfo.push({ clip, sourceTrackId: track.id, sourceTrackIndex: trackIndex });
+            }
+          }
+        }
+        
+        if (selectedClipsInfo.length === 0) return;
+        
+        // 計算新的位置，每個 clip 根據自己的 track 位置加上偏移量
+        const updatedClips = selectedClipsInfo.map(({ clip, sourceTrackId, sourceTrackIndex }) => {
+          const effectiveDuration = (clip.trimEnd ?? clip.sourceAnimationDuration - 1) - (clip.trimStart ?? 0) + 1;
+          const newStartFrame = Math.max(0, clip.startFrame + deltaFrames);
+          
+          // 計算目標 track（根據偏移量）
+          let targetTrackId = sourceTrackId;
+          if (trackOffset !== undefined && trackOffset !== 0) {
+            const newTrackIndex = Math.max(0, Math.min(tracks.length - 1, sourceTrackIndex + trackOffset));
+            targetTrackId = tracks[newTrackIndex].id;
+          }
+          
+          return {
+            ...clip,
+            trackId: targetTrackId,
+            startFrame: newStartFrame,
+            endFrame: newStartFrame + effectiveDuration - 1,
+            _sourceTrackId: sourceTrackId, // 用於追蹤來源
+          };
+        });
+        
+        // 檢查是否有任何目標 track 被鎖定
+        if (trackOffset !== undefined && trackOffset !== 0) {
+          for (const updatedClip of updatedClips) {
+            const targetTrack = tracks.find((t) => t.id === updatedClip.trackId);
+            if (targetTrack?.isLocked) return; // 任一目標被鎖定就不執行
+          }
+        }
+        
+        // 自動擴展時間軸
+        const maxEndFrame = Math.max(...updatedClips.map((c) => c.endFrame));
+        const minTotalFrames = Math.ceil(maxEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
+        set(
+          (state) => {
+            // 先從所有 track 中移除選中的 clips
+            let newTracks = state.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.filter((c) => !state.ui.selectedClipIds.includes(c.id)),
+            }));
+            
+            // 再將更新後的 clips 加入目標 track
+            for (const updatedClip of updatedClips) {
+              const trackIndex = newTracks.findIndex((t) => t.id === updatedClip.trackId);
+              if (trackIndex !== -1) {
+                // 移除暫時欄位
+                const { _sourceTrackId, ...clipWithoutTemp } = updatedClip;
+                newTracks[trackIndex] = {
+                  ...newTracks[trackIndex],
+                  clips: [...newTracks[trackIndex].clips, clipWithoutTemp],
+                };
+              }
+            }
+            
+            return {
+              tracks: newTracks,
+              timeline: {
+                ...state.timeline,
+                totalFrames: newTotalFrames,
+              },
+            };
+          },
+          undefined,
+          'moveSelectedClips'
+        );
+      },
+      
       removeClip: (clipId: string) => {
         // 記錄歷史
         recordHistory('removeClip', get);
@@ -539,7 +664,7 @@ export const useDirectorStore = create<DirectorStore>()(
             })),
             ui: {
               ...state.ui,
-              selectedClipId: state.ui.selectedClipId === clipId ? null : state.ui.selectedClipId,
+              selectedClipIds: state.ui.selectedClipIds.filter((id) => id !== clipId),
             },
           }),
           undefined,
@@ -679,7 +804,7 @@ export const useDirectorStore = create<DirectorStore>()(
         const clip = get().getClipById(clipId);
         if (clip) {
           set(
-            { clipboardClip: { ...clip } },
+            { clipboardClips: [{ ...clip }] },
             undefined,
             'copyClip'
           );
@@ -687,8 +812,11 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       pasteClip: (trackId: string, startFrame: number) => {
-        const { clipboardClip, tracks, timeline } = get();
-        if (!clipboardClip) return null;
+        const { clipboardClips, tracks, timeline } = get();
+        if (clipboardClips.length === 0) return null;
+        
+        // 取第一個剪貼簿中的 clip（單選貼上）
+        const clipboardClip = clipboardClips[0];
         
         const track = tracks.find((t) => t.id === trackId);
         if (!track || track.isLocked) return null;
@@ -726,7 +854,7 @@ export const useDirectorStore = create<DirectorStore>()(
             },
             ui: {
               ...state.ui,
-              selectedClipId: newClip.id,
+              selectedClipIds: [newClip.id],
             },
           }),
           undefined,
@@ -1040,14 +1168,228 @@ export const useDirectorStore = create<DirectorStore>()(
         );
       },
       
-      selectClip: (clipId: string | null) => {
+      selectClip: (clipId: string | null, options?: { ctrlKey?: boolean; shiftKey?: boolean }) => {
+        const { tracks, ui } = get();
+        const { ctrlKey = false, shiftKey = false } = options || {};
+        
+        if (clipId === null) {
+          // 清空選取
+          set(
+            (state) => ({
+              ui: { 
+                ...state.ui, 
+                selectedClipIds: [],
+                selectionAnchorId: null,
+              },
+            }),
+            undefined,
+            'selectClip:clear'
+          );
+          return;
+        }
+        
+        if (ctrlKey) {
+          // Ctrl + 點擊：切換選取狀態
+          const isAlreadySelected = ui.selectedClipIds.includes(clipId);
+          set(
+            (state) => ({
+              ui: { 
+                ...state.ui, 
+                selectedClipIds: isAlreadySelected
+                  ? state.ui.selectedClipIds.filter((id) => id !== clipId)
+                  : [...state.ui.selectedClipIds, clipId],
+                selectionAnchorId: clipId,
+              },
+            }),
+            undefined,
+            'selectClip:ctrl'
+          );
+        } else if (shiftKey && ui.selectionAnchorId) {
+          // Shift + 點擊：範圍選取
+          // 取得所有 clips 並按時間排序
+          const allClips = tracks.flatMap((t) => t.clips).sort((a, b) => a.startFrame - b.startFrame);
+          const anchorIndex = allClips.findIndex((c) => c.id === ui.selectionAnchorId);
+          const targetIndex = allClips.findIndex((c) => c.id === clipId);
+          
+          if (anchorIndex !== -1 && targetIndex !== -1) {
+            const startIdx = Math.min(anchorIndex, targetIndex);
+            const endIdx = Math.max(anchorIndex, targetIndex);
+            const rangeClipIds = allClips.slice(startIdx, endIdx + 1).map((c) => c.id);
+            
+            set(
+              (state) => ({
+                ui: { 
+                  ...state.ui, 
+                  selectedClipIds: rangeClipIds,
+                  // 保持 anchor 不變
+                },
+              }),
+              undefined,
+              'selectClip:shift'
+            );
+          }
+        } else {
+          // 一般點擊：單選
+          set(
+            (state) => ({
+              ui: { 
+                ...state.ui, 
+                selectedClipIds: [clipId],
+                selectionAnchorId: clipId,
+              },
+            }),
+            undefined,
+            'selectClip'
+          );
+        }
+      },
+      
+      selectClips: (clipIds: string[]) => {
         set(
           (state) => ({
-            ui: { ...state.ui, selectedClipId: clipId },
+            ui: { 
+              ...state.ui, 
+              selectedClipIds: clipIds,
+              selectionAnchorId: clipIds.length > 0 ? clipIds[0] : null,
+            },
           }),
           undefined,
-          'selectClip'
+          'selectClips'
         );
+      },
+      
+      clearSelection: () => {
+        set(
+          (state) => ({
+            ui: { 
+              ...state.ui, 
+              selectedClipIds: [],
+              selectionAnchorId: null,
+            },
+          }),
+          undefined,
+          'clearSelection'
+        );
+      },
+      
+      selectAllClips: () => {
+        const { tracks } = get();
+        const allClipIds = tracks.flatMap((t) => t.clips.map((c) => c.id));
+        set(
+          (state) => ({
+            ui: { 
+              ...state.ui, 
+              selectedClipIds: allClipIds,
+              selectionAnchorId: allClipIds.length > 0 ? allClipIds[0] : null,
+            },
+          }),
+          undefined,
+          'selectAllClips'
+        );
+      },
+      
+      removeSelectedClips: () => {
+        const { ui } = get();
+        if (ui.selectedClipIds.length === 0) return;
+        
+        // 記錄歷史
+        recordHistory('removeSelectedClips', get);
+        
+        set(
+          (state) => ({
+            tracks: state.tracks.map((t) => ({
+              ...t,
+              clips: t.clips.filter((c) => !state.ui.selectedClipIds.includes(c.id)),
+            })),
+            ui: {
+              ...state.ui,
+              selectedClipIds: [],
+              selectionAnchorId: null,
+            },
+          }),
+          undefined,
+          'removeSelectedClips'
+        );
+      },
+      
+      copySelectedClips: () => {
+        const { tracks, ui } = get();
+        if (ui.selectedClipIds.length === 0) return;
+        
+        // 收集選中的 clips
+        const selectedClips: DirectorClip[] = [];
+        for (const track of tracks) {
+          for (const clip of track.clips) {
+            if (ui.selectedClipIds.includes(clip.id)) {
+              selectedClips.push({ ...clip });
+            }
+          }
+        }
+        
+        // 按 startFrame 排序
+        selectedClips.sort((a, b) => a.startFrame - b.startFrame);
+        
+        set(
+          { clipboardClips: selectedClips },
+          undefined,
+          'copySelectedClips'
+        );
+      },
+      
+      pasteSelectedClips: (trackId: string, startFrame: number) => {
+        const { clipboardClips, tracks, timeline } = get();
+        if (clipboardClips.length === 0) return [];
+        
+        const track = tracks.find((t) => t.id === trackId);
+        if (!track || track.isLocked) return [];
+        
+        // 記錄歷史
+        recordHistory('pasteSelectedClips', get);
+        
+        // 計算相對偏移（以第一個 clip 為基準）
+        const baseStartFrame = Math.min(...clipboardClips.map((c) => c.startFrame));
+        
+        // 建立新的 clips
+        const newClips: DirectorClip[] = clipboardClips.map((clipboardClip) => {
+          const relativeOffset = clipboardClip.startFrame - baseStartFrame;
+          const effectiveDuration = (clipboardClip.trimEnd ?? clipboardClip.sourceAnimationDuration - 1) - (clipboardClip.trimStart ?? 0) + 1;
+          const newStartFrame = startFrame + relativeOffset;
+          
+          return {
+            ...clipboardClip,
+            id: generateId(),
+            trackId,
+            startFrame: newStartFrame,
+            endFrame: newStartFrame + effectiveDuration - 1,
+          };
+        });
+        
+        // 計算新的時間軸長度
+        const maxEndFrame = Math.max(...newClips.map((c) => c.endFrame));
+        const minTotalFrames = Math.ceil(maxEndFrame * 1.1);
+        const newTotalFrames = Math.max(timeline.totalFrames, minTotalFrames);
+        
+        set(
+          (state) => ({
+            tracks: state.tracks.map((t) =>
+              t.id === trackId
+                ? { ...t, clips: [...t.clips, ...newClips] }
+                : t
+            ),
+            timeline: {
+              ...state.timeline,
+              totalFrames: newTotalFrames,
+            },
+            ui: {
+              ...state.ui,
+              selectedClipIds: newClips.map((c) => c.id),
+            },
+          }),
+          undefined,
+          'pasteSelectedClips'
+        );
+        
+        return newClips;
       },
       
       selectTrack: (trackId: string | null) => {
@@ -1077,6 +1419,16 @@ export const useDirectorStore = create<DirectorStore>()(
           }),
           undefined,
           'toggleClipSnapping'
+        );
+      },
+      
+      setMultiDragOffset: (offset: { x: number; y: number } | null) => {
+        set(
+          (state) => ({
+            ui: { ...state.ui, multiDragOffset: offset },
+          }),
+          undefined,
+          'setMultiDragOffset'
         );
       },
       

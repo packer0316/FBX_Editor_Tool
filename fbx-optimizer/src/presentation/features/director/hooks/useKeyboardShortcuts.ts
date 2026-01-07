@@ -20,12 +20,12 @@ interface UseKeyboardShortcutsOptions {
  * 
  * 快捷鍵列表：
  * - Space: 播放/暫停
- * - Delete/Backspace: 刪除選中片段
+ * - Delete/Backspace: 刪除選中片段（支援多選）
  * - ←/→: 前後移動 1 幀
  * - Shift + ←/→: 前後移動 10 幀
  * - Home: 跳到開頭
  * - End: 跳到結尾
- * - ESC: 關閉 Director Mode
+ * - ESC: 取消選取 / 關閉 Director Mode
  * - +/=: 放大時間軸
  * - -: 縮小時間軸
  * - Ctrl+0: 重設縮放為 100%
@@ -34,6 +34,8 @@ interface UseKeyboardShortcutsOptions {
  * - Alt+X: 清除區間
  * - Ctrl+Z: 上一步（Undo）
  * - Ctrl+Y / Ctrl+Shift+Z: 下一步（Redo）
+ * - Ctrl+A: 全選所有片段
+ * - Ctrl+C: 複製選中片段
  */
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
   const { enabled = true } = options;
@@ -53,6 +55,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     clearLoopRegion,
     undo,
     redo,
+    // 多選相關
+    selectAllClips,
+    clearSelection,
+    copySelectedClips,
+    removeSelectedClips,
   } = useDirectorStore();
   
   const { canUndo, canRedo } = useDirectorHistoryStore();
@@ -76,10 +83,10 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       case 'Delete':
       case 'Backspace':
-        // 刪除選中片段
-        if (ui.selectedClipId) {
+        // 刪除選中片段（支援多選）
+        if (ui.selectedClipIds.length > 0) {
           e.preventDefault();
-          removeClip(ui.selectedClipId);
+          removeSelectedClips();
         }
         break;
 
@@ -123,7 +130,12 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
 
       case 'Escape':
         e.preventDefault();
-        exitDirectorMode();
+        // 如果有選取，先清空選取；否則退出導演模式
+        if (ui.selectedClipIds.length > 0) {
+          clearSelection();
+        } else {
+          exitDirectorMode();
+        }
         break;
 
       // TODO-10: 鍵盤縮放快捷鍵
@@ -198,10 +210,30 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         }
         break;
 
+      case 'a':
+      case 'A':
+        // Ctrl+A: 全選所有片段
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          selectAllClips();
+        }
+        break;
+
+      case 'c':
+      case 'C':
+        // Ctrl+C: 複製選中的片段
+        if (e.ctrlKey || e.metaKey) {
+          if (ui.selectedClipIds.length > 0) {
+            e.preventDefault();
+            copySelectedClips();
+          }
+        }
+        break;
+
       default:
         break;
     }
-  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode, setInPoint, setOutPoint, clearLoopRegion, undo, redo, canUndo, canRedo]);
+  }, [enabled, isDirectorMode, timeline, ui.selectedClipIds, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, removeSelectedClips, exitDirectorMode, setInPoint, setOutPoint, clearLoopRegion, undo, redo, canUndo, canRedo, selectAllClips, clearSelection, copySelectedClips]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -222,6 +254,9 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       { key: 'End', description: '跳到結尾' },
       { key: 'I', description: '設定入點' },
       { key: 'O', description: '設定出點' },
+      { key: 'Ctrl + A', description: '全選所有片段' },
+      { key: 'Ctrl + C', description: '複製選中片段' },
+      { key: 'Escape', description: '取消選取 / 退出' },
       { key: 'Alt + X', description: '清除區間' },
       { key: 'Ctrl + Z', description: '上一步' },
       { key: 'Ctrl + Y', description: '下一步' },

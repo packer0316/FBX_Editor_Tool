@@ -27,7 +27,7 @@ interface TimelineEditorProps {
 export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const headerContainerRef = useRef<HTMLDivElement>(null);
-  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame, copyClip, pasteClip, clipboardClip, removeClip, getClipById } = useDirectorStore();
+  const { tracks, timeline, ui, addTrack, setScrollOffset, setZoom, setZoomWithScroll, setCurrentFrame, copyClip, pasteClip, clipboardClips, removeClip, getClipById, selectClips, clearSelection } = useDirectorStore();
   const loopRegion = useLoopRegion();
   
   // 軌道名稱欄位寬度狀態
@@ -44,6 +44,12 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
   // TODO-9: 縮放視覺回饋
   const [showZoomToast, setShowZoomToast] = useState(false);
   const toastTimeoutRef = useRef<number>();
+  
+  // 框選功能狀態
+  const [isMarqueeSelecting, setIsMarqueeSelecting] = useState(false);
+  const [marqueeStart, setMarqueeStart] = useState<{ x: number; y: number } | null>(null);
+  const [marqueeEnd, setMarqueeEnd] = useState<{ x: number; y: number } | null>(null);
+  const trackContentRef = useRef<HTMLDivElement>(null);
   
   // ============================================
   // TODO-2: 防止 Store ↔ DOM 無限循環的 Ref
@@ -200,19 +206,19 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
         return;
       }
       
-      // Ctrl+C / Cmd+C：複製選中的 clip
+      // Ctrl+C / Cmd+C：複製選中的 clip（暫時只複製第一個）
       if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-        if (ui.selectedClipId) {
+        if (ui.selectedClipIds.length > 0) {
           e.preventDefault();
-          copyClip(ui.selectedClipId);
+          copyClip(ui.selectedClipIds[0]);
         }
       }
       
       // Ctrl+V / Cmd+V：貼上 clip（緊接在原片段後方）
       if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-        if (clipboardClip && ui.selectedClipId) {
+        if (clipboardClips.length > 0 && ui.selectedClipIds.length > 0) {
           e.preventDefault();
-          const selectedClip = getClipById(ui.selectedClipId);
+          const selectedClip = getClipById(ui.selectedClipIds[0]);
           if (selectedClip) {
             const pasteFrame = selectedClip.endFrame + 1;
             pasteClip(selectedClip.trackId, pasteFrame);
@@ -220,18 +226,19 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
         }
       }
       
-      // Delete / Backspace：刪除選中的 clip
+      // Delete / Backspace：刪除選中的 clips
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (ui.selectedClipId) {
+        if (ui.selectedClipIds.length > 0) {
           e.preventDefault();
-          removeClip(ui.selectedClipId);
+          // 刪除所有選中的 clips
+          ui.selectedClipIds.forEach((clipId) => removeClip(clipId));
         }
       }
     };
     
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [ui.selectedClipId, clipboardClip, copyClip, pasteClip, removeClip, getClipById]);
+  }, [ui.selectedClipIds, clipboardClips, copyClip, pasteClip, removeClip, getClipById]);
 
   // 縮放按鈕處理（TODO-4: 使用固定倍率縮放）
   const handleZoomIn = useCallback(() => {
@@ -243,6 +250,102 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
     const newZoom = Math.max(MIN_ZOOM, ui.zoom / ZOOM_BUTTON_FACTOR);
     setZoom(newZoom);
   }, [ui.zoom, setZoom]);
+
+  // ============================================
+  // 框選功能
+  // ============================================
+  
+  const TRACK_HEIGHT = 48; // Track 高度（與 TrackRow 一致）
+  
+  const handleMarqueeMouseDown = useCallback((e: React.MouseEvent) => {
+    // 只有在空白區域點擊時才開始框選（不是在 clip 上）
+    const target = e.target as HTMLElement;
+    if (target.closest('[role="button"]') || e.button !== 0) return;
+    
+    const rect = trackContentRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const x = e.clientX - rect.left + ui.scrollOffsetX;
+    const y = e.clientY - rect.top;
+    
+    setIsMarqueeSelecting(true);
+    setMarqueeStart({ x, y });
+    setMarqueeEnd({ x, y });
+    
+    // 如果沒有按 Ctrl 鍵，清空現有選取
+    if (!e.ctrlKey && !e.metaKey) {
+      clearSelection();
+    }
+  }, [ui.scrollOffsetX, clearSelection]);
+  
+  useEffect(() => {
+    if (!isMarqueeSelecting) return;
+    
+    const handleMouseMove = (e: MouseEvent) => {
+      const rect = trackContentRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      
+      const x = e.clientX - rect.left + ui.scrollOffsetX;
+      const y = e.clientY - rect.top;
+      
+      setMarqueeEnd({ x, y });
+    };
+    
+    const handleMouseUp = () => {
+      if (marqueeStart && marqueeEnd) {
+        // 計算框選範圍
+        const left = Math.min(marqueeStart.x, marqueeEnd.x);
+        const right = Math.max(marqueeStart.x, marqueeEnd.x);
+        const top = Math.min(marqueeStart.y, marqueeEnd.y);
+        const bottom = Math.max(marqueeStart.y, marqueeEnd.y);
+        
+        // 找出與框選範圍相交的 clips
+        const selectedIds: string[] = [];
+        
+        tracks.forEach((track, trackIndex) => {
+          const trackTop = trackIndex * TRACK_HEIGHT;
+          const trackBottom = trackTop + TRACK_HEIGHT;
+          
+          // 檢查 track 是否與框選範圍在 Y 軸上相交
+          if (trackBottom > top && trackTop < bottom) {
+            track.clips.forEach((clip) => {
+              const clipLeft = clip.startFrame * pixelsPerFrame;
+              const clipRight = clip.endFrame * pixelsPerFrame;
+              
+              // 檢查 clip 是否與框選範圍在 X 軸上相交
+              if (clipRight > left && clipLeft < right) {
+                selectedIds.push(clip.id);
+              }
+            });
+          }
+        });
+        
+        if (selectedIds.length > 0) {
+          selectClips(selectedIds);
+        }
+      }
+      
+      setIsMarqueeSelecting(false);
+      setMarqueeStart(null);
+      setMarqueeEnd(null);
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isMarqueeSelecting, marqueeStart, marqueeEnd, tracks, pixelsPerFrame, ui.scrollOffsetX, selectClips]);
+  
+  // 計算框選矩形的顯示位置
+  const marqueeRect = isMarqueeSelecting && marqueeStart && marqueeEnd ? {
+    left: Math.min(marqueeStart.x, marqueeEnd.x) - ui.scrollOffsetX,
+    top: Math.min(marqueeStart.y, marqueeEnd.y),
+    width: Math.abs(marqueeEnd.x - marqueeStart.x),
+    height: Math.abs(marqueeEnd.y - marqueeStart.y),
+  } : null;
 
   // Header 寬度調整
   const handleHeaderResizeStart = useCallback((e: React.MouseEvent) => {
@@ -444,6 +547,7 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
           )}
           
           <div
+            ref={trackContentRef}
             className="relative"
             style={{ 
               width: timelineWidth, 
@@ -451,7 +555,21 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({ models = [] }) =
               // TODO-8: 縮放時禁用動畫，停止後平滑過渡
               transition: isZooming ? 'none' : 'width 0.15s ease-out',
             }}
+            onMouseDown={handleMarqueeMouseDown}
           >
+            {/* 框選矩形 */}
+            {marqueeRect && (
+              <div
+                className="absolute bg-blue-500/20 border border-blue-500/50 pointer-events-none z-50"
+                style={{
+                  left: marqueeRect.left,
+                  top: marqueeRect.top,
+                  width: marqueeRect.width,
+                  height: marqueeRect.height,
+                }}
+              />
+            )}
+            
             {/* 區間播放背景區域 */}
             {loopRegion.inPoint !== null && loopRegion.outPoint !== null && (
               <div

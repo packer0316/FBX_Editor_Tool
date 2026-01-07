@@ -69,7 +69,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   isLocked,
   models = [],
 }) => {
-  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline, copyClip, pasteClip, clipboardClip, trimClip, beginDragOperation } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, moveSelectedClips, tracks, updateClip, timeline, copyClip, pasteClip, clipboardClips, trimClip, beginDragOperation, setMultiDragOffset } = useDirectorStore();
   const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -159,7 +159,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     items: MarkerEntry[];
   } | null>(null);
   
-  const isSelected = ui.selectedClipId === clip.id;
+  const isSelected = ui.selectedClipIds.includes(clip.id);
   
   // 計算剪裁後的有效長度
   const effectiveDuration = (clip.trimEnd ?? clip.sourceAnimationDuration - 1) - (clip.trimStart ?? 0) + 1;
@@ -305,8 +305,9 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
 
   const handleClick = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
-    selectClip(clip.id);
-  }, [selectClip, clip.id]);
+    // 選取邏輯已經在 handleMouseDown 中處理，這裡不需要重複處理
+    // 只保留 stopPropagation 防止事件冒泡
+  }, []);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -322,21 +323,24 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     // Ctrl+V 或 Cmd+V：貼上 clip（緊接在原片段後方）
     if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
       e.preventDefault();
-      if (clipboardClip) {
+      if (clipboardClips.length > 0) {
         const pasteFrame = clip.endFrame + 1;
         pasteClip(clip.trackId, pasteFrame);
       }
     }
-  }, [removeClip, clip.id, copyClip, clipboardClip, pasteClip, clip.trackId, clip.endFrame]);
+  }, [removeClip, clip.id, copyClip, clipboardClips, pasteClip, clip.trackId, clip.endFrame]);
 
   // 右鍵選單處理
   const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    selectClip(clip.id);
+    // 如果右鍵點擊的 clip 不在選取中，則單獨選取它
+    if (!ui.selectedClipIds.includes(clip.id)) {
+      selectClip(clip.id);
+    }
     setContextMenu({ visible: true, x: e.clientX, y: e.clientY });
     setShowSkinSubmenu(false);
-  }, [selectClip, clip.id]);
+  }, [selectClip, clip.id, ui.selectedClipIds]);
   
   const closeContextMenu = useCallback(() => {
     setContextMenu({ visible: false, x: 0, y: 0 });
@@ -359,12 +363,12 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   }, [copyClip, clip.id, closeContextMenu]);
   
   const handlePasteClipAtMouse = useCallback(() => {
-    if (!clipboardClip) return;
+    if (clipboardClips.length === 0) return;
     // 計算滑鼠右鍵位置對應的幀數
     const mouseFrame = Math.round(contextMenu.x / pixelsPerFrame);
     pasteClip(clip.trackId, mouseFrame);
     closeContextMenu();
-  }, [clipboardClip, contextMenu.x, pixelsPerFrame, pasteClip, clip.trackId, closeContextMenu]);
+  }, [clipboardClips, contextMenu.x, pixelsPerFrame, pasteClip, clip.trackId, closeContextMenu]);
 
   // 剪裁邊緣拖曳處理
   const handleTrimStart = useCallback((e: React.MouseEvent, side: 'start' | 'end') => {
@@ -457,6 +461,30 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     e.preventDefault();
     e.stopPropagation();
     
+    const isCtrlPressed = e.ctrlKey || e.metaKey;
+    const isAlreadySelected = ui.selectedClipIds.includes(clip.id);
+    
+    // Ctrl + 點擊已選取的 clip：切換選取狀態（不開始拖曳）
+    if (isCtrlPressed && isAlreadySelected) {
+      selectClip(clip.id, { ctrlKey: true, shiftKey: false });
+      return; // 不開始拖曳
+    }
+    
+    // Ctrl + 點擊未選取的 clip：加入選取
+    if (isCtrlPressed && !isAlreadySelected) {
+      selectClip(clip.id, { ctrlKey: true, shiftKey: false });
+    }
+    
+    // Shift + 點擊：範圍選取
+    if (e.shiftKey) {
+      selectClip(clip.id, { ctrlKey: false, shiftKey: true });
+    }
+    
+    // 如果點擊的 clip 不在選取中且沒有修飾鍵，則單選它
+    if (!isAlreadySelected && !isCtrlPressed && !e.shiftKey) {
+      selectClip(clip.id);
+    }
+    
     dragStartX.current = e.clientX;
     dragStartY.current = e.clientY;
     originalStartFrame.current = clip.startFrame;
@@ -465,8 +493,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     setDragOffset(0);
     setDragOffsetY(0);
     setTargetTrackId(null);
-    selectClip(clip.id);
-  }, [isLocked, clip.startFrame, clip.trackId, clip.id, selectClip]);
+  }, [isLocked, clip.startFrame, clip.trackId, clip.id, selectClip, ui.selectedClipIds]);
 
   // Track 高度常數（與 TrackRow 一致）
   const TRACK_HEIGHT = 48; // px
@@ -479,6 +506,12 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       const deltaY = e.clientY - dragStartY.current;
       setDragOffset(deltaX);
       setDragOffsetY(deltaY);
+      
+      // 如果是多選拖曳，更新 store 中的偏移量讓其他 clips 也能顯示移動
+      const isMultiDrag = ui.selectedClipIds.length > 1 && ui.selectedClipIds.includes(clip.id);
+      if (isMultiDrag) {
+        setMultiDragOffset({ x: deltaX, y: deltaY });
+      }
       
       // 計算目標 track（根據垂直偏移）
       const trackOffset = Math.round(deltaY / TRACK_HEIGHT);
@@ -496,41 +529,67 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     const handleMouseUp = () => {
       setIsDragging(false);
       
-      // 計算最終水平位置
-      const rawFrame = Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame));
-      let finalFrame = rawFrame;
-      
-      // 只有開啟吸附功能時才應用吸附
-      if (ui.clipSnapping) {
-        const snapThreshold = 5;
-        finalFrame = snapToClipEdges(rawFrame, tracks, snapThreshold, clip.id);
-        if (finalFrame === rawFrame) {
-          finalFrame = snapToGrid(rawFrame, 1);
-        }
-      }
+      // 計算幀偏移量
+      const deltaFrames = Math.round(dragOffset / pixelsPerFrame);
       
       // 計算最終 track
       const trackOffset = Math.round(dragOffsetY / TRACK_HEIGHT);
       const currentTrackIndex = tracks.findIndex(t => t.id === originalTrackId.current);
       const newTrackIndex = Math.max(0, Math.min(tracks.length - 1, currentTrackIndex + trackOffset));
-      const finalTrackId = tracks[newTrackIndex]?.id ?? clip.trackId;
+      const finalTrackId = trackOffset !== 0 ? tracks[newTrackIndex]?.id : undefined;
       
-      // 檢查目標 track 是否被鎖定
-      const targetTrack = tracks.find(t => t.id === finalTrackId);
-      const isTargetLocked = targetTrack?.isLocked ?? false;
+      // 判斷是多選拖曳還是單選拖曳
+      const isMultiDrag = ui.selectedClipIds.length > 1 && ui.selectedClipIds.includes(clip.id);
       
-      // 只有位置或 track 改變才更新（且目標 track 未鎖定）
-      if ((finalFrame !== clip.startFrame || finalTrackId !== clip.trackId) && !isTargetLocked) {
-        moveClip({
-          clipId: clip.id,
-          newTrackId: finalTrackId,
-          newStartFrame: finalFrame,
-        });
+      if (isMultiDrag) {
+        // 多選拖曳：移動所有選中的 clips，傳遞 track 偏移量而非具體 track ID
+        if (deltaFrames !== 0 || trackOffset !== 0) {
+          moveSelectedClips(deltaFrames, trackOffset);
+        }
+      } else {
+        // 單選拖曳：使用原有邏輯
+        
+        // 檢查目標 track 是否被鎖定
+        if (finalTrackId) {
+          const targetTrack = tracks.find(t => t.id === finalTrackId);
+          if (targetTrack?.isLocked) {
+            setDragOffset(0);
+            setDragOffsetY(0);
+            setTargetTrackId(null);
+            setMultiDragOffset(null);
+            return;
+          }
+        }
+        
+        const rawFrame = Math.max(0, originalStartFrame.current + deltaFrames);
+        let finalFrame = rawFrame;
+        
+        // 只有開啟吸附功能時才應用吸附
+        if (ui.clipSnapping) {
+          const snapThreshold = 5;
+          finalFrame = snapToClipEdges(rawFrame, tracks, snapThreshold, clip.id);
+          if (finalFrame === rawFrame) {
+            finalFrame = snapToGrid(rawFrame, 1);
+          }
+        }
+        
+        const targetTrackForSingle = finalTrackId ?? clip.trackId;
+        
+        if (finalFrame !== clip.startFrame || targetTrackForSingle !== clip.trackId) {
+          moveClip({
+            clipId: clip.id,
+            newTrackId: targetTrackForSingle,
+            newStartFrame: finalFrame,
+          });
+        }
       }
       
       setDragOffset(0);
       setDragOffsetY(0);
       setTargetTrackId(null);
+      
+      // 清除多選拖曳偏移量
+      setMultiDragOffset(null);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -540,7 +599,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset, dragOffsetY, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks, ui.clipSnapping]);
+  }, [isDragging, dragOffset, dragOffsetY, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, moveSelectedClips, tracks, ui.clipSnapping, ui.selectedClipIds, setMultiDragOffset]);
 
   return (
     <>
@@ -567,15 +626,25 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         onMouseDown={handleMouseDown}
         onContextMenu={handleContextMenu}
         className={`absolute top-1 bottom-1 rounded flex flex-col justify-center overflow-hidden select-none
-          ${isSelected ? 'ring-2 ring-white/50' : ''}
+          ${isSelected ? 'ring-[3px] ring-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.6)]' : ''}
           ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab'}
-          ${isDragging ? 'cursor-grabbing opacity-90' : 'hover:brightness-110'}
+          ${isDragging || (isSelected && ui.multiDragOffset && !isDragging) ? 'cursor-grabbing opacity-90' : 'hover:brightness-110'}
           ${isDragging && targetTrackId ? 'ring-2 ring-cyan-400 shadow-lg shadow-cyan-500/30' : ''}
           ${isTrimming ? 'z-50' : ''}
           ${showSnapIndicator ? 'ring-1 ring-amber-400' : ''}
           transition-colors duration-100`}
         style={{
-          left,
+          left: (() => {
+            // 如果自己在拖曳中，使用本地的 dragOffset
+            if (isDragging) {
+              return left;
+            }
+            // 如果是選中的 clip 且有多選拖曳偏移量（其他 clip 正在拖曳），跟隨偏移
+            if (isSelected && ui.multiDragOffset) {
+              return left + ui.multiDragOffset.x;
+            }
+            return left;
+          })(),
           width: Math.max(width, 20),
           // 程式動作漸層樣式
           ...(clip.sourceType === 'procedural' && clip.proceduralType === 'fadeIn' ? {
@@ -585,12 +654,17 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
           } : {
             backgroundColor: clip.color,
           }),
-          transition: isDragging || isTrimming ? 'none' : undefined,
-          // 跨 track 拖曳時的垂直偏移
-          ...(isDragging && dragOffsetY !== 0 ? {
-            transform: `translateY(${dragOffsetY}px)`,
-            zIndex: 100,
-          } : {}),
+          transition: isDragging || isTrimming || (isSelected && ui.multiDragOffset) ? 'none' : undefined,
+          // 跨 track 拖曳時的垂直偏移（自己拖曳或跟隨多選拖曳）
+          ...(() => {
+            if (isDragging && dragOffsetY !== 0) {
+              return { transform: `translateY(${dragOffsetY}px)`, zIndex: 100 };
+            }
+            if (isSelected && ui.multiDragOffset && ui.multiDragOffset.y !== 0) {
+              return { transform: `translateY(${ui.multiDragOffset.y}px)`, zIndex: 100 };
+            }
+            return {};
+          })(),
         }}
       >
         {/* 左邊緣剪裁手柄 */}
@@ -982,9 +1056,9 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
             {/* 貼上片段 */}
             <button
               onClick={handlePasteClipAtMouse}
-              disabled={!clipboardClip}
+              disabled={clipboardClips.length === 0}
               className={`w-full px-3 py-1.5 text-left text-xs flex items-center gap-2 ${
-                clipboardClip 
+                clipboardClips.length > 0 
                   ? 'text-gray-300 hover:bg-white/10' 
                   : 'text-gray-600 cursor-not-allowed'
               }`}
