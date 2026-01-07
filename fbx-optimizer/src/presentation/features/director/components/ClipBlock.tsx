@@ -69,7 +69,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   isLocked,
   models = [],
 }) => {
-  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline, copyClip, pasteClip, clipboardClip, trimClip } = useDirectorStore();
+  const { ui, selectClip, removeClip, moveClip, tracks, updateClip, timeline, copyClip, pasteClip, clipboardClip, trimClip, beginDragOperation } = useDirectorStore();
   const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
@@ -369,13 +369,16 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     e.preventDefault();
     e.stopPropagation();
     
+    // 開始拖拉時記錄當前狀態，這樣 Undo 會還原到拖拉前的狀態
+    beginDragOperation('trimClip');
+    
     trimStartX.current = e.clientX;
     originalTrimStart.current = clip.trimStart ?? 0;
     originalTrimEnd.current = clip.trimEnd ?? clip.sourceAnimationDuration - 1;
     setIsTrimming(true);
     setTrimSide(side);
     selectClip(clip.id);
-  }, [isLocked, clip.trimStart, clip.trimEnd, clip.sourceAnimationDuration, clip.id, selectClip]);
+  }, [isLocked, clip.trimStart, clip.trimEnd, clip.sourceAnimationDuration, clip.id, selectClip, beginDragOperation]);
   
   // 判斷是否為程式動作（所有程式動作都可調整時長）
   const isProcedural = clip.sourceType === 'procedural';

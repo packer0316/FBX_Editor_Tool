@@ -26,6 +26,7 @@ import {
   DEFAULT_TOTAL_FRAMES,
   PROCEDURAL_ANIMATION_PRESETS,
 } from '../../domain/entities/director/director.types';
+import { useDirectorHistoryStore, type HistoryState } from './directorHistoryStore';
 
 // ============================================================================
 // 工具函數
@@ -57,6 +58,26 @@ const getNextColor = (): string => {
   const color = TRACK_COLORS[colorIndex % TRACK_COLORS.length];
   colorIndex++;
   return color;
+};
+
+/**
+ * 記錄歷史狀態的輔助函數
+ * 在執行編輯操作前調用，保存操作前的狀態
+ */
+const recordHistory = (actionName: string, getState: () => DirectorState) => {
+  const historyStore = useDirectorHistoryStore.getState();
+  const state = getState();
+  
+  const editableState: HistoryState = {
+    tracks: JSON.parse(JSON.stringify(state.tracks)),
+    timeline: {
+      totalFrames: state.timeline.totalFrames,
+      fps: state.timeline.fps,
+      loopRegion: { ...state.timeline.loopRegion },
+    },
+  };
+  
+  historyStore.pushState(editableState, actionName);
 };
 
 // ============================================================================
@@ -137,6 +158,29 @@ interface DirectorActions {
   
   // 重置
   reset: () => void;
+  
+  // ========================================
+  // 歷史記錄（Undo/Redo）
+  // ========================================
+  
+  /** 取得當前可編輯狀態（用於歷史記錄） */
+  getEditableState: () => HistoryState;
+  
+  /** 套用歷史狀態（用於 Undo/Redo） */
+  applyHistoryState: (historyState: HistoryState) => void;
+  
+  /** 執行 Undo */
+  undo: () => void;
+  
+  /** 執行 Redo */
+  redo: () => void;
+  
+  /**
+   * 開始拖拉操作
+   * 在 mousedown 時調用，記錄當前狀態
+   * 拖拉過程中的操作（如 trimClip）不會記錄歷史
+   */
+  beginDragOperation: (actionName: string) => void;
 }
 
 type DirectorStore = DirectorState & DirectorActions;
@@ -206,6 +250,10 @@ export const useDirectorStore = create<DirectorStore>()(
         // 如果沒有 track，自動創建 4 個預設 track
         let newTracks = tracks;
         if (tracks.length === 0) {
+          // 清空歷史記錄，確保預設 track 不會被 Undo
+          // 這樣用戶無法 Undo 到沒有 track 的狀態
+          useDirectorHistoryStore.getState().clear();
+          
           newTracks = Array.from({ length: 4 }, (_, i) => ({
             id: generateId(),
             name: `Track ${i + 1}`,
@@ -242,6 +290,9 @@ export const useDirectorStore = create<DirectorStore>()(
       // ========================================
       
       addTrack: (name?: string) => {
+        // 記錄歷史
+        recordHistory('addTrack', get);
+        
         const { tracks } = get();
         const newTrack: DirectorTrack = {
           id: generateId(),
@@ -262,6 +313,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       removeTrack: (trackId: string) => {
+        // 記錄歷史
+        recordHistory('removeTrack', get);
+        
         set(
           (state) => ({
             tracks: state.tracks
@@ -278,6 +332,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       updateTrack: (trackId, updates) => {
+        // 記錄歷史
+        recordHistory('updateTrack', get);
+        
         set(
           (state) => ({
             tracks: state.tracks.map((t) =>
@@ -290,6 +347,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       reorderTracks: (trackIds: string[]) => {
+        // 記錄歷史
+        recordHistory('reorderTracks', get);
+        
         set(
           (state) => {
             const trackMap = new Map(state.tracks.map((t) => [t.id, t]));
@@ -318,6 +378,9 @@ export const useDirectorStore = create<DirectorStore>()(
         if (!track || track.isLocked) {
           return null;
         }
+        
+        // 記錄歷史
+        recordHistory('addClip', get);
         
         const newClip: DirectorClip = {
           id: generateId(),
@@ -402,6 +465,9 @@ export const useDirectorStore = create<DirectorStore>()(
           return false;
         }
         
+        // 記錄歷史
+        recordHistory('moveClip', get);
+        
         // 計算有效時長（考慮 trim）
         const effectiveDuration = (sourceClip.trimEnd ?? sourceClip.sourceAnimationDuration - 1) 
           - (sourceClip.trimStart ?? 0) + 1;
@@ -460,6 +526,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       removeClip: (clipId: string) => {
+        // 記錄歷史
+        recordHistory('removeClip', get);
+        
         set(
           (state) => ({
             tracks: state.tracks.map((t) => ({
@@ -477,6 +546,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       updateClip: (clipId, updates) => {
+        // 記錄歷史
+        recordHistory('updateClip', get);
+        
         set(
           (state) => ({
             tracks: state.tracks.map((t) => ({
@@ -505,6 +577,10 @@ export const useDirectorStore = create<DirectorStore>()(
         }
         
         if (!targetClip) return;
+        
+        // 注意：trimClip 不記錄歷史
+        // 歷史記錄由 UI 層在 mousedown 時調用 beginDragOperation 處理
+        // 這樣拖拉過程中的中間狀態不會被記錄
         
         // 程式化動畫的特殊處理：直接調整時長（所有程式動作都可調整）
         if (targetClip.sourceType === 'procedural') {
@@ -614,6 +690,9 @@ export const useDirectorStore = create<DirectorStore>()(
         
         const track = tracks.find((t) => t.id === trackId);
         if (!track || track.isLocked) return null;
+        
+        // 記錄歷史
+        recordHistory('pasteClip', get);
         
         // 計算剪裁後的有效長度
         const effectiveDuration = (clipboardClip.trimEnd ?? clipboardClip.sourceAnimationDuration - 1) - (clipboardClip.trimStart ?? 0) + 1;
@@ -736,6 +815,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       setFps: (fps: number) => {
+        // 記錄歷史
+        recordHistory('setFps', get);
+        
         const clampedFps = Math.max(1, Math.min(fps, 120));
         
         set(
@@ -748,6 +830,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       setTotalFrames: (frames: number) => {
+        // 記錄歷史
+        recordHistory('setTotalFrames', get);
+        
         const clampedFrames = Math.max(1, frames);
         
         set(
@@ -768,6 +853,9 @@ export const useDirectorStore = create<DirectorStore>()(
       // ========================================
       
       setInPoint: (frame: number | null) => {
+        // 記錄歷史
+        recordHistory('setInPoint', get);
+        
         const { timeline } = get();
         let inPoint = frame;
         
@@ -812,6 +900,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       setOutPoint: (frame: number | null) => {
+        // 記錄歷史
+        recordHistory('setOutPoint', get);
+        
         const { timeline } = get();
         let outPoint = frame;
         
@@ -856,6 +947,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       clearLoopRegion: () => {
+        // 記錄歷史
+        recordHistory('clearLoopRegion', get);
+        
         set(
           (state) => ({
             timeline: {
@@ -873,6 +967,9 @@ export const useDirectorStore = create<DirectorStore>()(
       },
       
       toggleLoopRegion: () => {
+        // 記錄歷史
+        recordHistory('toggleLoopRegion', get);
+        
         set(
           (state) => ({
             timeline: {
@@ -1036,6 +1133,9 @@ export const useDirectorStore = create<DirectorStore>()(
        * 當模型被刪除時呼叫，清理該模型在時間軸上的所有片段
        */
       removeClipsByModelId: (modelId: string) => {
+        // 記錄歷史
+        recordHistory('removeClipsByModelId', get);
+        
         const { tracks } = get();
         const newTracks = tracks.map(track => ({
           ...track,
@@ -1051,7 +1151,82 @@ export const useDirectorStore = create<DirectorStore>()(
       
       reset: () => {
         colorIndex = 0;
+        // 清空歷史記錄
+        useDirectorHistoryStore.getState().clear();
         set(initialState, undefined, 'reset');
+      },
+      
+      // ========================================
+      // 歷史記錄（Undo/Redo）
+      // ========================================
+      
+      getEditableState: () => {
+        const state = get();
+        return {
+          tracks: JSON.parse(JSON.stringify(state.tracks)),
+          timeline: {
+            totalFrames: state.timeline.totalFrames,
+            fps: state.timeline.fps,
+            loopRegion: { ...state.timeline.loopRegion },
+          },
+        };
+      },
+      
+      applyHistoryState: (historyState: HistoryState) => {
+        set(
+          (state) => ({
+            tracks: historyState.tracks,
+            timeline: {
+              ...state.timeline,
+              totalFrames: historyState.timeline.totalFrames,
+              fps: historyState.timeline.fps,
+              loopRegion: historyState.timeline.loopRegion,
+            },
+          }),
+          undefined,
+          'applyHistoryState'
+        );
+      },
+      
+      undo: () => {
+        const historyStore = useDirectorHistoryStore.getState();
+        if (!historyStore.canUndo()) return;
+        
+        // 設定旗標避免遞迴記錄
+        historyStore.setIsUndoRedoing(true);
+        
+        const currentState = get().getEditableState();
+        const previousState = historyStore.undo(currentState);
+        
+        if (previousState) {
+          get().applyHistoryState(previousState);
+        }
+        
+        historyStore.setIsUndoRedoing(false);
+      },
+      
+      redo: () => {
+        const historyStore = useDirectorHistoryStore.getState();
+        if (!historyStore.canRedo()) return;
+        
+        // 設定旗標避免遞迴記錄
+        historyStore.setIsUndoRedoing(true);
+        
+        const currentState = get().getEditableState();
+        const nextState = historyStore.redo(currentState);
+        
+        if (nextState) {
+          get().applyHistoryState(nextState);
+        }
+        
+        historyStore.setIsUndoRedoing(false);
+      },
+      
+      beginDragOperation: (actionName: string) => {
+        // 在拖拉開始時記錄當前狀態
+        // 這樣拖拉過程中的中間狀態不會被記錄
+        // 只有 mousedown 時的狀態會被記錄
+        recordHistory(actionName, get);
       },
     }),
     { name: 'director-store' }

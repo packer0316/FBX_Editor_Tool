@@ -4,6 +4,7 @@
 
 import { useEffect, useCallback } from 'react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { useDirectorHistoryStore } from '../../../stores/directorHistoryStore';
 import { MIN_ZOOM, MAX_ZOOM } from '../../../../domain/entities/director/director.types';
 
 // TODO-10: 鍵盤縮放倍率
@@ -31,6 +32,8 @@ interface UseKeyboardShortcutsOptions {
  * - I: 設定入點（In Point）
  * - O: 設定出點（Out Point）
  * - Alt+X: 清除區間
+ * - Ctrl+Z: 上一步（Undo）
+ * - Ctrl+Y / Ctrl+Shift+Z: 下一步（Redo）
  */
 export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) {
   const { enabled = true } = options;
@@ -48,7 +51,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     setInPoint,
     setOutPoint,
     clearLoopRegion,
+    undo,
+    redo,
   } = useDirectorStore();
+  
+  const { canUndo, canRedo } = useDirectorHistoryStore();
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
     if (!enabled || !isDirectorMode) return;
@@ -161,10 +168,40 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         }
         break;
 
+      case 'z':
+      case 'Z':
+        // Ctrl+Z: Undo, Ctrl+Shift+Z: Redo
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          if (e.shiftKey) {
+            // Ctrl+Shift+Z: Redo
+            if (canRedo()) {
+              redo();
+            }
+          } else {
+            // Ctrl+Z: Undo
+            if (canUndo()) {
+              undo();
+            }
+          }
+        }
+        break;
+
+      case 'y':
+      case 'Y':
+        // Ctrl+Y: Redo
+        if (e.ctrlKey || e.metaKey) {
+          e.preventDefault();
+          if (canRedo()) {
+            redo();
+          }
+        }
+        break;
+
       default:
         break;
     }
-  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode, setInPoint, setOutPoint, clearLoopRegion]);
+  }, [enabled, isDirectorMode, timeline, ui.selectedClipId, ui.zoom, play, pause, setCurrentFrame, setZoom, removeClip, exitDirectorMode, setInPoint, setOutPoint, clearLoopRegion, undo, redo, canUndo, canRedo]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -186,6 +223,8 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       { key: 'I', description: '設定入點' },
       { key: 'O', description: '設定出點' },
       { key: 'Alt + X', description: '清除區間' },
+      { key: 'Ctrl + Z', description: '上一步' },
+      { key: 'Ctrl + Y', description: '下一步' },
       { key: 'ESC', description: '關閉導演模式' },
     ],
   };

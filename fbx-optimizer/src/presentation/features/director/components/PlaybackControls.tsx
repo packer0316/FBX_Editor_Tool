@@ -3,8 +3,9 @@
  */
 
 import React, { useCallback, memo } from 'react';
-import { Play, Pause, Square, Repeat, SkipBack, SkipForward, Brackets, X } from 'lucide-react';
+import { Play, Pause, Square, Repeat, SkipBack, SkipForward, Brackets, X, Undo2, Redo2 } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
+import { useCanUndo, useCanRedo } from '../../../stores/directorHistoryStore';
 import { directorEventBus } from '../../../../infrastructure/events';
 import { formatFrameTime } from '../../../../utils/director/directorUtils';
 
@@ -22,7 +23,13 @@ export const PlaybackControls: React.FC = memo(() => {
     setOutPoint,
     clearLoopRegion,
     toggleLoopRegion,
+    undo,
+    redo,
   } = useDirectorStore();
+  
+  // Undo/Redo 狀態
+  const canUndo = useCanUndo();
+  const canRedo = useCanRedo();
 
   const handlePlayPause = useCallback(() => {
     if (timeline.isPlaying) {
@@ -93,13 +100,51 @@ export const PlaybackControls: React.FC = memo(() => {
     toggleLoopRegion();
   }, [toggleLoopRegion]);
 
+  // Undo/Redo 處理
+  const handleUndo = useCallback(() => {
+    undo();
+  }, [undo]);
+
+  const handleRedo = useCallback(() => {
+    redo();
+  }, [redo]);
+
   // 判斷是否有有效區間
   const hasValidLoopRegion = timeline.loopRegion.inPoint !== null && timeline.loopRegion.outPoint !== null;
 
   return (
     <div className="h-10 flex items-center justify-between px-4 border-t border-white/10 bg-gray-800/50">
-      {/* 左側：播放控制按鈕 */}
+      {/* 左側：Undo/Redo + 播放控制按鈕 */}
       <div className="flex items-center gap-1">
+        {/* Undo/Redo 按鈕 */}
+        <button
+          onClick={handleUndo}
+          disabled={!canUndo}
+          className={`p-1.5 rounded transition-colors ${
+            canUndo
+              ? 'hover:bg-white/10 text-gray-400 hover:text-white'
+              : 'text-gray-600 cursor-not-allowed'
+          }`}
+          title="上一步 (Ctrl+Z)"
+        >
+          <Undo2 size={16} />
+        </button>
+
+        <button
+          onClick={handleRedo}
+          disabled={!canRedo}
+          className={`p-1.5 rounded transition-colors ${
+            canRedo
+              ? 'hover:bg-white/10 text-gray-400 hover:text-white'
+              : 'text-gray-600 cursor-not-allowed'
+          }`}
+          title="下一步 (Ctrl+Y)"
+        >
+          <Redo2 size={16} />
+        </button>
+
+        <div className="w-px h-5 bg-white/10 mx-2" />
+
         <button
           onClick={handleSkipToStart}
           className="p-1.5 rounded hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
