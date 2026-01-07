@@ -132,8 +132,10 @@ interface DirectorActions {
   setTotalFrames: (frames: number) => void;
   
   // 區間播放控制
-  setInPoint: (frame: number | null) => void;
-  setOutPoint: (frame: number | null) => void;
+  /** 設定入點，skipHistory=true 時不記錄歷史（用於拖拉過程） */
+  setInPoint: (frame: number | null, skipHistory?: boolean) => void;
+  /** 設定出點，skipHistory=true 時不記錄歷史（用於拖拉過程） */
+  setOutPoint: (frame: number | null, skipHistory?: boolean) => void;
   clearLoopRegion: () => void;
   toggleLoopRegion: () => void;
   
@@ -852,9 +854,11 @@ export const useDirectorStore = create<DirectorStore>()(
       // 區間播放控制
       // ========================================
       
-      setInPoint: (frame: number | null) => {
-        // 記錄歷史
-        recordHistory('setInPoint', get);
+      setInPoint: (frame: number | null, skipHistory = false) => {
+        // 記錄歷史（拖拉過程中跳過）
+        if (!skipHistory) {
+          recordHistory('setInPoint', get);
+        }
         
         const { timeline } = get();
         let inPoint = frame;
@@ -899,9 +903,11 @@ export const useDirectorStore = create<DirectorStore>()(
         );
       },
       
-      setOutPoint: (frame: number | null) => {
-        // 記錄歷史
-        recordHistory('setOutPoint', get);
+      setOutPoint: (frame: number | null, skipHistory = false) => {
+        // 記錄歷史（拖拉過程中跳過）
+        if (!skipHistory) {
+          recordHistory('setOutPoint', get);
+        }
         
         const { timeline } = get();
         let outPoint = frame;

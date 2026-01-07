@@ -136,6 +136,9 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
     e.stopPropagation();
     e.preventDefault();
     
+    // 在拖拉開始前記錄歷史狀態，這樣整個拖拉操作只會產生一條歷史記錄
+    useDirectorStore.getState().beginDragOperation('dragLoopRegion');
+    
     setDragType(type);
     dragStartRef.current = {
       x: e.clientX,
@@ -149,10 +152,10 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
       
       if (type === 'in' && dragStartRef.current.inPoint !== null) {
         const newIn = Math.max(0, dragStartRef.current.inPoint + deltaFrames);
-        setInPoint(newIn);
+        setInPoint(newIn, true); // skipHistory=true，拖拉過程中不記錄
       } else if (type === 'out' && dragStartRef.current.outPoint !== null) {
         const newOut = Math.min(totalFrames, dragStartRef.current.outPoint + deltaFrames);
-        setOutPoint(newOut);
+        setOutPoint(newOut, true); // skipHistory=true，拖拉過程中不記錄
       } else if (type === 'region' && dragStartRef.current.inPoint !== null && dragStartRef.current.outPoint !== null) {
         const regionLength = dragStartRef.current.outPoint - dragStartRef.current.inPoint;
         let newIn = dragStartRef.current.inPoint + deltaFrames;
@@ -168,8 +171,8 @@ export const TimelineRuler: React.FC<TimelineRulerProps> = memo(({
           newIn = totalFrames - regionLength;
         }
         
-        setInPoint(newIn);
-        setOutPoint(newOut);
+        setInPoint(newIn, true);  // skipHistory=true
+        setOutPoint(newOut, true); // skipHistory=true
       }
     };
 
