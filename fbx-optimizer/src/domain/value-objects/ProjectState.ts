@@ -31,13 +31,16 @@ export const PROJECT_FILE_EXTENSION = '.jr3d';
  * 控制匯出時要包含哪些資料
  */
 export interface ExportOptions {
-  /** 3D 模型（必選，永遠 true） */
-  include3DModels: true;
+  /** 3D 模型 */
+  include3DModels: boolean;
   
-  /** 動作切割 & 導演模式編排 */
+  /** 2D 圖層（Layers、Spine、圖片等） */
+  include2D: boolean;
+  
+  /** 動作切割 & 導演模式編排（需要至少勾選 3D 或 2D） */
   includeAnimations: boolean;
   
-  /** Shader 設定 */
+  /** Shader 設定（需要勾選 3D） */
   includeShader: boolean;
   
   /** Audio 音效（預留，暫時 false） */
@@ -53,6 +56,7 @@ export interface ExportOptions {
 export function createDefaultExportOptions(): ExportOptions {
   return {
     include3DModels: true,
+    include2D: true,
     includeAnimations: true,
     includeShader: true,
     includeAudio: false,
@@ -414,6 +418,208 @@ export interface SerializableDirectorState {
 }
 
 // ============================================================================
+// 可序列化 2D 圖層元素
+// ============================================================================
+
+import type { LayerType } from './Layer';
+import type {
+  Element2DType,
+  Element2DPosition,
+  Element2DSize,
+  SpineFitMode,
+} from './Element2D';
+
+/**
+ * 可序列化的 2D 元素基礎介面
+ * 
+ * 與 Element2DBase 相同，用於匯出/載入
+ */
+export interface SerializableElement2DBase {
+  /** 唯一識別碼 */
+  id: string;
+  /** 元素名稱 */
+  name: string;
+  /** 元素類型 */
+  type: Element2DType;
+  /** 顯示狀態 */
+  visible: boolean;
+  /** 是否鎖定 */
+  locked: boolean;
+  /** 透明度 */
+  opacity: number;
+  /** 層內渲染順序 */
+  zIndex: number;
+  /** 位置設定 */
+  position: Element2DPosition;
+  /** 尺寸設定 */
+  size: Element2DSize;
+  /** 旋轉角度 */
+  rotation: number;
+  /** 建立時間 */
+  createdAt: number;
+  /** 更新時間 */
+  updatedAt: number;
+}
+
+/**
+ * 可序列化的文字元素
+ */
+export interface SerializableTextElement2D extends SerializableElement2DBase {
+  type: 'text';
+  content: string;
+  fontSize: number;
+  fontFamily: string;
+  fontWeight: number;
+  color: string;
+  textAlign: 'left' | 'center' | 'right';
+  lineHeight: number;
+  textShadow?: string;
+  showBackground: boolean;
+}
+
+/**
+ * 可序列化的圖片元素
+ * 
+ * 注意：src 改為相對路徑（指向 assets/images/），載入時轉回 Data URL
+ */
+export interface SerializableImageElement2D extends SerializableElement2DBase {
+  type: 'image';
+  /** 圖片相對路徑（如 "assets/images/{id}.png"） */
+  src: string;
+  objectFit: 'cover' | 'contain' | 'fill' | 'none';
+  borderRadius: number;
+  filter?: string;
+}
+
+/**
+ * 可序列化的形狀元素
+ */
+export interface SerializableShapeElement2D extends SerializableElement2DBase {
+  type: 'shape';
+  shape: 'rect' | 'circle' | 'line';
+  fillColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+  strokeDasharray?: string;
+}
+
+/**
+ * 可序列化的 HTML 元素
+ */
+export interface SerializableHtmlElement2D extends SerializableElement2DBase {
+  type: 'html';
+  html: string;
+  css?: string;
+}
+
+/**
+ * 可序列化的 Spine 元素
+ */
+export interface SerializableSpineElement2D extends SerializableElement2DBase {
+  type: 'spine';
+  /** Spine 實例 ID（對應 SerializableSpineInstance.id） */
+  spineInstanceId: string;
+  currentAnimation: string | null;
+  loop: boolean;
+  timeScale: number;
+  currentSkin: string | null;
+  scale: number;
+  fitMode: SpineFitMode;
+  flipX: boolean;
+  flipY: boolean;
+  isPlaying: boolean;
+  currentTime: number;
+}
+
+/**
+ * 可序列化的 2D 元素聯集型別
+ */
+export type SerializableElement2D =
+  | SerializableTextElement2D
+  | SerializableImageElement2D
+  | SerializableShapeElement2D
+  | SerializableHtmlElement2D
+  | SerializableSpineElement2D;
+
+/**
+ * 可序列化的 2D 圖層
+ */
+export interface SerializableLayer {
+  /** 唯一識別碼 */
+  id: string;
+  /** 層級名稱 */
+  name: string;
+  /** 層級類型 */
+  type: LayerType;
+  /** 排序優先權（>0 在 3D 前、=0 3D 層、<0 3D 後） */
+  priority: number;
+  /** 顯示狀態 */
+  visible: boolean;
+  /** 是否鎖定 */
+  locked: boolean;
+  /** 是否展開 */
+  expanded: boolean;
+  /** 整層透明度 */
+  opacity: number;
+  /** 子元素列表 */
+  children: SerializableElement2D[];
+  /** 建立時間 */
+  createdAt: number;
+  /** 更新時間 */
+  updatedAt: number;
+}
+
+// ============================================================================
+// 可序列化 Spine 實例
+// ============================================================================
+
+/**
+ * 可序列化的 Spine 實例
+ * 
+ * 用於保存 Spine 的 metadata 和播放狀態，原始檔案存放在 assets/spine/
+ */
+export interface SerializableSpineInstance {
+  /** 唯一識別碼 */
+  id: string;
+  
+  /** 顯示名稱 */
+  name: string;
+  
+  /** .skel 檔案名稱 */
+  skelFileName: string;
+  
+  /** .atlas 檔案名稱 */
+  atlasFileName: string;
+  
+  /** 圖片檔案名稱列表 */
+  imageFileNames: string[];
+  
+  /** 當前動畫名稱 */
+  currentAnimation: string | null;
+  
+  /** 當前 Skin 名稱 */
+  currentSkin: string | null;
+  
+  /** 是否循環 */
+  loop: boolean;
+  
+  /** 播放速度 */
+  timeScale: number;
+  
+  /** 是否正在播放 */
+  isPlaying: boolean;
+  
+  /** 當前時間（秒） */
+  currentTime: number;
+  
+  /** 建立時間 */
+  createdAt: number;
+  
+  /** 更新時間 */
+  updatedAt: number;
+}
+
+// ============================================================================
 // 全域設定
 // ============================================================================
 
@@ -474,6 +680,16 @@ export interface ProjectState {
   /** 全域設定 */
   globalSettings: GlobalSettings;
   
+  // ========================================
+  // 2D 圖層和 Spine 資料
+  // ========================================
+  
+  /** 2D 圖層列表（可選） */
+  layers?: SerializableLayer[];
+  
+  /** Spine 實例列表（可選） */
+  spineInstances?: SerializableSpineInstance[];
+  
   // 預留擴充欄位
   /** Shader 設定（未實作） */
   shader?: unknown;
@@ -483,9 +699,6 @@ export interface ProjectState {
   
   /** Effekseer 設定（未實作） */
   effekseer?: unknown;
-  
-  /** Spine 設定（未實作） */
-  spine?: unknown;
 }
 
 // ============================================================================

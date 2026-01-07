@@ -24,10 +24,16 @@ import {
   type SerializableTrack,
   type SerializableShaderGroup,
   type SerializableShaderFeature,
+  type SerializableLayer,
+  type SerializableElement2D,
+  type SerializableSpineInstance,
   type GlobalSettings,
   PROJECT_VERSION,
 } from '../../domain/value-objects/ProjectState';
 import type { ShaderGroup, ShaderFeature } from '../../domain/value-objects/ShaderFeature';
+import type { Layer } from '../../domain/value-objects/Layer';
+import type { Element2D, ImageElement2D } from '../../domain/value-objects/Element2D';
+import type { SpineInstance } from '../../domain/value-objects/SpineInstance';
 
 // ============================================================================
 // 匯出參數介面
@@ -62,6 +68,12 @@ export interface ExportProjectParams {
   
   /** 全域設定（可選） */
   globalSettings?: GlobalSettings;
+  
+  /** 2D 圖層列表（可選） */
+  layers?: Layer[];
+  
+  /** Spine 實例 Map（可選） */
+  spineInstances?: Map<string, SpineInstance>;
 }
 
 /**
@@ -167,6 +179,130 @@ function serializeDirectorState(
     },
     tracks: tracks.map(serializeTrack),
   };
+}
+
+// ============================================================================
+// 2D 圖層序列化函數
+// ============================================================================
+
+/**
+ * 2D 圖片檔案資訊（用於打包到 ZIP）
+ */
+interface Image2DFileInfo {
+  /** 元素 ID */
+  elementId: string;
+  /** Data URL */
+  dataUrl: string;
+  /** ZIP 內的相對路徑 */
+  relativePath: string;
+}
+
+/**
+ * 序列化 2D 元素
+ * 
+ * 將 ImageElement2D 的 Data URL 替換為相對路徑
+ */
+function serializeElement2D(
+  element: Element2D,
+  imageInfos: Image2DFileInfo[]
+): SerializableElement2D {
+  if (element.type === 'image') {
+    const imageElement = element as ImageElement2D;
+    
+    // 決定圖片格式（根據 Data URL 判斷）
+    let extension = 'png';
+    if (imageElement.src.startsWith('data:image/jpeg') || imageElement.src.startsWith('data:image/jpg')) {
+      extension = 'jpg';
+    } else if (imageElement.src.startsWith('data:image/webp')) {
+      extension = 'webp';
+    } else if (imageElement.src.startsWith('data:image/gif')) {
+      extension = 'gif';
+    }
+    
+    const relativePath = `assets/images/${element.id}.${extension}`;
+    
+    // 收集圖片資訊用於打包
+    imageInfos.push({
+      elementId: element.id,
+      dataUrl: imageElement.src,
+      relativePath,
+    });
+    
+    // 返回序列化後的元素（src 改為相對路徑）
+    return {
+      ...imageElement,
+      src: relativePath,
+    };
+  }
+  
+  // 其他類型元素直接返回
+  return element as SerializableElement2D;
+}
+
+/**
+ * 序列化 2D 圖層
+ */
+function serializeLayer(
+  layer: Layer,
+  imageInfos: Image2DFileInfo[]
+): SerializableLayer {
+  return {
+    id: layer.id,
+    name: layer.name,
+    type: layer.type,
+    priority: layer.priority,
+    visible: layer.visible,
+    locked: layer.locked,
+    expanded: layer.expanded,
+    opacity: layer.opacity,
+    children: layer.children.map(element => serializeElement2D(element, imageInfos)),
+    createdAt: layer.createdAt,
+    updatedAt: layer.updatedAt,
+  };
+}
+
+/**
+ * 序列化所有 2D 圖層
+ */
+function serializeLayers(
+  layers: Layer[],
+  imageInfos: Image2DFileInfo[]
+): SerializableLayer[] {
+  return layers.map(layer => serializeLayer(layer, imageInfos));
+}
+
+/**
+ * 序列化 Spine 實例
+ */
+function serializeSpineInstance(instance: SpineInstance): SerializableSpineInstance {
+  return {
+    id: instance.id,
+    name: instance.name,
+    skelFileName: instance.skelFileName,
+    atlasFileName: instance.atlasFileName,
+    imageFileNames: instance.imageFileNames,
+    currentAnimation: instance.currentAnimation,
+    currentSkin: instance.currentSkin,
+    loop: instance.loop,
+    timeScale: instance.timeScale,
+    isPlaying: instance.isPlaying,
+    currentTime: instance.currentTime,
+    createdAt: instance.createdAt,
+    updatedAt: instance.updatedAt,
+  };
+}
+
+/**
+ * Data URL 轉 Uint8Array
+ */
+function dataUrlToUint8Array(dataUrl: string): Uint8Array {
+  const base64 = dataUrl.split(',')[1];
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
 }
 
 /**
@@ -313,14 +449,19 @@ export class ExportProjectUseCase {
       directorTracks,
       directorTimeline,
       globalSettings = {},
+      layers = [],
+      spineInstances,
     } = params;
 
     try {
-      // 檢查是否有模型
-      if (models.length === 0) {
+      // 檢查是否有內容可匯出
+      const has3DContent = exportOptions.include3DModels && models.length > 0;
+      const has2DContent = exportOptions.include2D && (layers.length > 0 || (spineInstances && spineInstances.size > 0));
+      
+      if (!has3DContent && !has2DContent) {
         return {
           success: false,
-          error: '沒有模型可匯出',
+          error: '沒有內容可匯出（請確認有 3D 模型或 2D 圖層）',
         };
       }
 
@@ -339,59 +480,118 @@ export class ExportProjectUseCase {
       };
       zip.file('manifest.json', JSON.stringify(manifest, null, 2));
 
-      // 2. 收集模型檔案並建立資料夾
+      // 2. 收集模型檔案並建立資料夾（僅當 include3DModels 時）
       const serializedModels: SerializableModelState[] = [];
       
-      for (const model of models) {
-        const modelFolder = zip.folder(`models/${model.id}`);
-        
-        if (!modelFolder) {
-          console.warn(`無法建立模型資料夾: ${model.id}`);
-          continue;
-        }
-
-        // 加入 FBX 檔案
-        if (model.file) {
-          modelFolder.file(model.file.name, model.file);
-        } else {
-          console.warn(`模型 ${model.name} 沒有原始檔案`);
-        }
-
-        // 加入模型貼圖檔案（載入時保存的原始貼圖）
-        const textureFiles = this.extractTextureFiles(model);
-        const texturePaths: string[] = [];
-        
-        for (const textureFile of textureFiles) {
-          modelFolder.file(textureFile.name, textureFile);
-          texturePaths.push(textureFile.name);
-        }
-
-        // 收集 Shader 貼圖資訊
-        const shaderTextureInfos: ShaderTextureInfo[] = [];
-        
-        // 序列化模型狀態（含 Shader）
-        const serializedModel = serializeModelState(
-          model, 
-          exportOptions.includeAnimations,
-          exportOptions.includeShader,
-          shaderTextureInfos
-        );
-        serializedModel.texturePaths = texturePaths;
-        
-        // 加入 Shader 貼圖到 ZIP
-        if (exportOptions.includeShader && shaderTextureInfos.length > 0) {
-          console.log(`📦 模型 ${model.name} 有 ${shaderTextureInfos.length} 個 Shader 貼圖`);
+      if (exportOptions.include3DModels) {
+        for (const model of models) {
+          const modelFolder = zip.folder(`models/${model.id}`);
           
-          for (const textureInfo of shaderTextureInfos) {
-            modelFolder.file(textureInfo.relativePath, textureInfo.file);
-            console.log(`  🖼️ 加入 Shader 貼圖: ${textureInfo.relativePath}`);
+          if (!modelFolder) {
+            console.warn(`無法建立模型資料夾: ${model.id}`);
+            continue;
           }
+
+          // 加入 FBX 檔案
+          if (model.file) {
+            modelFolder.file(model.file.name, model.file);
+          } else {
+            console.warn(`模型 ${model.name} 沒有原始檔案`);
+          }
+
+          // 加入模型貼圖檔案（載入時保存的原始貼圖）
+          const textureFiles = this.extractTextureFiles(model);
+          const texturePaths: string[] = [];
+          
+          for (const textureFile of textureFiles) {
+            modelFolder.file(textureFile.name, textureFile);
+            texturePaths.push(textureFile.name);
+          }
+
+          // 收集 Shader 貼圖資訊
+          const shaderTextureInfos: ShaderTextureInfo[] = [];
+          
+          // 序列化模型狀態（含 Shader）
+          const serializedModel = serializeModelState(
+            model, 
+            exportOptions.includeAnimations,
+            exportOptions.includeShader,
+            shaderTextureInfos
+          );
+          serializedModel.texturePaths = texturePaths;
+          
+          // 加入 Shader 貼圖到 ZIP
+          if (exportOptions.includeShader && shaderTextureInfos.length > 0) {
+            console.log(`📦 模型 ${model.name} 有 ${shaderTextureInfos.length} 個 Shader 貼圖`);
+            
+            for (const textureInfo of shaderTextureInfos) {
+              modelFolder.file(textureInfo.relativePath, textureInfo.file);
+              console.log(`  🖼️ 加入 Shader 貼圖: ${textureInfo.relativePath}`);
+            }
+          }
+          
+          serializedModels.push(serializedModel);
         }
-        
-        serializedModels.push(serializedModel);
       }
 
-      // 3. 建立 project-state.json
+      // 3. 處理 2D 圖層和圖片（僅當 include2D 時）
+      const imageInfos: Image2DFileInfo[] = [];
+      let serializedLayers: SerializableLayer[] | undefined;
+      let serializedSpineInstances: SerializableSpineInstance[] | undefined;
+      
+      if (exportOptions.include2D) {
+        if (layers.length > 0) {
+          console.log(`📦 匯出 ${layers.length} 個 2D 圖層...`);
+          serializedLayers = serializeLayers(layers, imageInfos);
+          
+          // 將圖片檔案加入 ZIP
+          for (const imageInfo of imageInfos) {
+            const imageData = dataUrlToUint8Array(imageInfo.dataUrl);
+            zip.file(imageInfo.relativePath, imageData);
+            console.log(`  🖼️ 加入 2D 圖片: ${imageInfo.relativePath}`);
+          }
+        }
+      
+        // 4. 處理 Spine 實例
+        if (spineInstances && spineInstances.size > 0) {
+          console.log(`📦 匯出 ${spineInstances.size} 個 Spine 實例...`);
+          serializedSpineInstances = [];
+          
+          for (const [instanceId, instance] of spineInstances) {
+            // 序列化 Spine metadata
+            serializedSpineInstances.push(serializeSpineInstance(instance));
+            
+            // 打包原始檔案（如果有）
+            if (instance.rawData) {
+              const spineFolder = zip.folder(`assets/spine/${instanceId}`);
+              
+              if (spineFolder) {
+                // 加入 .skel 檔案
+                spineFolder.file('skeleton.skel', instance.rawData.skelData);
+                console.log(`  📄 加入 Spine skel: assets/spine/${instanceId}/skeleton.skel`);
+                
+                // 加入 .atlas 檔案
+                spineFolder.file('skeleton.atlas', instance.rawData.atlasText);
+                console.log(`  📄 加入 Spine atlas: assets/spine/${instanceId}/skeleton.atlas`);
+                
+                // 加入圖片檔案
+                const texturesFolder = spineFolder.folder('textures');
+                if (texturesFolder) {
+                  for (const [fileName, dataUrl] of instance.rawData.images) {
+                    const imageData = dataUrlToUint8Array(dataUrl);
+                    texturesFolder.file(fileName, imageData);
+                    console.log(`  🖼️ 加入 Spine 貼圖: assets/spine/${instanceId}/textures/${fileName}`);
+                  }
+                }
+              }
+            } else {
+              console.warn(`  ⚠️ Spine 實例 ${instance.name} 沒有原始資料，無法匯出`);
+            }
+          }
+        }
+      } // end of include2D
+
+      // 5. 建立 project-state.json
       const projectState: ProjectState = {
         version: PROJECT_VERSION,
         name: projectName,
@@ -403,10 +603,12 @@ export class ExportProjectUseCase {
           ? serializeDirectorState(directorTracks, directorTimeline)
           : undefined,
         globalSettings,
+        layers: serializedLayers,
+        spineInstances: serializedSpineInstances,
       };
       zip.file('project-state.json', JSON.stringify(projectState, null, 2));
 
-      // 4. 生成 ZIP Blob
+      // 6. 生成 ZIP Blob
       const blob = await zip.generateAsync({
         type: 'blob',
         compression: 'DEFLATE',

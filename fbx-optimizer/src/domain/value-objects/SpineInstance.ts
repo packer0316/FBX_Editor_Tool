@@ -79,6 +79,26 @@ export interface SpineSkeletonInfo {
 }
 
 // ============================================================================
+// 原始資料（用於匯出）
+// ============================================================================
+
+/**
+ * Spine 原始二進位資料
+ * 
+ * 保存載入時的原始檔案資料，用於專案匯出時重新打包。
+ */
+export interface SpineRawData {
+  /** .skel 二進位資料 */
+  skelData: ArrayBuffer;
+  
+  /** .atlas 文字內容 */
+  atlasText: string;
+  
+  /** 圖片資料 Map（檔名 -> Data URL） */
+  images: Map<string, string>;
+}
+
+// ============================================================================
 // Spine 實例
 // ============================================================================
 
@@ -129,6 +149,9 @@ export interface SpineInstance {
   
   /** 更新時間 */
   updatedAt: number;
+  
+  /** 原始二進位資料（用於匯出，可選） */
+  rawData?: SpineRawData;
 }
 
 // ============================================================================
@@ -143,15 +166,22 @@ const generateSpineId = (): string => {
 };
 
 /**
- * 建立 Spine 實例
+ * 建立 Spine 實例參數
  */
-export const createSpineInstance = (params: {
+export interface CreateSpineInstanceParams {
   name: string;
   skelFileName: string;
   atlasFileName: string;
   imageFileNames: string[];
   skeletonInfo: SpineSkeletonInfo;
-}): SpineInstance => {
+  /** 可選：原始二進位資料（用於匯出） */
+  rawData?: SpineRawData;
+}
+
+/**
+ * 建立 Spine 實例
+ */
+export const createSpineInstance = (params: CreateSpineInstanceParams): SpineInstance => {
   const now = Date.now();
   const defaultAnimation = params.skeletonInfo.animations[0]?.name ?? null;
   const defaultSkin = params.skeletonInfo.skins[0]?.name ?? null;
@@ -171,6 +201,7 @@ export const createSpineInstance = (params: {
     timeScale: 1.0,
     createdAt: now,
     updatedAt: now,
+    rawData: params.rawData,
   };
 };
 

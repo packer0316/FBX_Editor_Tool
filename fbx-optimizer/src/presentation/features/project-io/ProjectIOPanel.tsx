@@ -7,8 +7,8 @@
  * - 載入按鈕
  */
 
-import React, { useState, useRef } from 'react';
-import { X, Download, Upload, Package, Film, Palette, Volume2, Sparkles, Loader2 } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { X, Download, Upload, Package, Film, Palette, Volume2, Sparkles, Loader2, Layers } from 'lucide-react';
 import type { ThemeStyle } from '../../hooks/useTheme';
 import { createDefaultExportOptions, type ExportOptions } from '../../../domain/value-objects/ProjectState';
 
@@ -29,8 +29,8 @@ export interface ProjectIOPanelProps {
   /** 載入專案回調 */
   onLoad: (file: File) => Promise<boolean>;
   
-  /** 是否有模型可匯出 */
-  hasModels: boolean;
+  /** 是否有模型可匯出（舊版相容，現在不使用） */
+  hasModels?: boolean;
   
   /** 主題樣式 */
   theme: ThemeStyle;
@@ -54,7 +54,7 @@ export default function ProjectIOPanel({
   onClose,
   onExport,
   onLoad,
-  hasModels,
+  // hasModels is deprecated, now use include3DModels/include2D options
   theme,
   isProcessing = false,
   progress = 0,
@@ -68,14 +68,39 @@ export default function ProjectIOPanel({
   
   // 載入檔案 input ref
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // 依賴邏輯：當 3D 和 2D 都取消時，自動取消相關選項
+  useEffect(() => {
+    // 如果 3D 和 2D 都沒勾選，取消動作選項
+    if (!exportOptions.include3DModels && !exportOptions.include2D) {
+      if (exportOptions.includeAnimations) {
+        setExportOptions(prev => ({ ...prev, includeAnimations: false }));
+      }
+    }
+    // 如果 3D 沒勾選，取消 Shader 選項
+    if (!exportOptions.include3DModels) {
+      if (exportOptions.includeShader) {
+        setExportOptions(prev => ({ ...prev, includeShader: false }));
+      }
+    }
+  }, [exportOptions.include3DModels, exportOptions.include2D]);
+  
+  // 計算是否可以勾選動作選項（需要 3D 或 2D 至少一個）
+  const canSelectAnimations = exportOptions.include3DModels || exportOptions.include2D;
+  
+  // 計算是否可以勾選 Shader 選項（需要 3D）
+  const canSelectShader = exportOptions.include3DModels;
+  
+  // 計算是否可以匯出（至少要選一個 3D 或 2D）
+  const canExport = exportOptions.include3DModels || exportOptions.include2D;
 
   // 如果面板未開啟，不渲染
   if (!isOpen) return null;
 
   // 處理匯出
   const handleExport = async () => {
-    if (!hasModels) {
-      alert('沒有模型可匯出');
+    if (!canExport) {
+      alert('請至少勾選 3D 模型或 2D 圖層');
       return;
     }
     
@@ -162,21 +187,44 @@ export default function ProjectIOPanel({
               匯出選項
             </label>
             <div className="space-y-2">
-              {/* 3D 模型（必選） */}
-              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border`}>
+              {/* 3D 模型 */}
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-pointer hover:bg-white/5 transition-colors`}>
                 <input
                   type="checkbox"
-                  checked={true}
-                  disabled={true}
+                  checked={exportOptions.include3DModels}
+                  onChange={(e) => setExportOptions({
+                    ...exportOptions,
+                    include3DModels: e.target.checked,
+                  })}
+                  disabled={isProcessing}
                   className="w-4 h-4 rounded accent-blue-500"
                 />
                 <Package className="w-4 h-4 text-blue-400" />
                 <span className={theme.text}>3D 模型</span>
-                <span className="ml-auto text-xs text-gray-500">必選</span>
+              </label>
+
+              {/* 2D 圖層 */}
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-pointer hover:bg-white/5 transition-colors`}>
+                <input
+                  type="checkbox"
+                  checked={exportOptions.include2D}
+                  onChange={(e) => setExportOptions({
+                    ...exportOptions,
+                    include2D: e.target.checked,
+                  })}
+                  disabled={isProcessing}
+                  className="w-4 h-4 rounded accent-blue-500"
+                />
+                <Layers className="w-4 h-4 text-cyan-400" />
+                <span className={theme.text}>2D 圖層（Spine、圖片、文字）</span>
               </label>
 
               {/* 動作 & 導演模式 */}
-              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-pointer hover:bg-white/5 transition-colors`}>
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border transition-colors ${
+                canSelectAnimations 
+                  ? 'cursor-pointer hover:bg-white/5' 
+                  : 'opacity-50 cursor-not-allowed'
+              }`}>
                 <input
                   type="checkbox"
                   checked={exportOptions.includeAnimations}
@@ -184,15 +232,22 @@ export default function ProjectIOPanel({
                     ...exportOptions,
                     includeAnimations: e.target.checked,
                   })}
-                  disabled={isProcessing}
+                  disabled={isProcessing || !canSelectAnimations}
                   className="w-4 h-4 rounded accent-blue-500"
                 />
                 <Film className="w-4 h-4 text-green-400" />
                 <span className={theme.text}>動作 & 導演模式編排</span>
+                {!canSelectAnimations && (
+                  <span className="ml-auto text-xs text-gray-500">需勾選 3D 或 2D</span>
+                )}
               </label>
 
               {/* Shader */}
-              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-pointer hover:bg-white/5 transition-colors`}>
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border transition-colors ${
+                canSelectShader 
+                  ? 'cursor-pointer hover:bg-white/5' 
+                  : 'opacity-50 cursor-not-allowed'
+              }`}>
                 <input
                   type="checkbox"
                   checked={exportOptions.includeShader}
@@ -200,11 +255,14 @@ export default function ProjectIOPanel({
                     ...exportOptions,
                     includeShader: e.target.checked,
                   })}
-                  disabled={isProcessing}
+                  disabled={isProcessing || !canSelectShader}
                   className="w-4 h-4 rounded accent-blue-500"
                 />
                 <Palette className="w-4 h-4 text-purple-400" />
                 <span className={theme.text}>Shader 配置</span>
+                {!canSelectShader && (
+                  <span className="ml-auto text-xs text-gray-500">需勾選 3D</span>
+                )}
               </label>
             </div>
           </div>
@@ -264,9 +322,9 @@ export default function ProjectIOPanel({
         <div className={`flex gap-3 px-5 py-4 border-t ${theme.panelBorder}`}>
           <button
             onClick={handleExport}
-            disabled={isProcessing || !hasModels}
+            disabled={isProcessing || !canExport}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-all
-              ${hasModels && !isProcessing
+              ${canExport && !isProcessing
                 ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/30'
                 : 'bg-gray-700 text-gray-500 cursor-not-allowed'
               }`}

@@ -25,9 +25,18 @@ import {
   type SerializableDirectorState,
   type SerializableShaderGroup,
   type SerializableShaderFeature,
+  type SerializableLayer,
+  type SerializableElement2D,
+  type SerializableSpineInstance,
+  type SerializableImageElement2D,
   isVersionCompatible,
 } from '../../domain/value-objects/ProjectState';
 import type { ShaderGroup, ShaderFeature } from '../../domain/value-objects/ShaderFeature';
+import type { Layer } from '../../domain/value-objects/Layer';
+import type { Element2D, ImageElement2D } from '../../domain/value-objects/Element2D';
+import type { SpineInstance, SpineRawData } from '../../domain/value-objects/SpineInstance';
+import { getSpineRuntimeAdapter } from '../../infrastructure/spine';
+import { createSpineInstance } from '../../domain/value-objects/SpineInstance';
 
 // ============================================================================
 // 載入參數介面
@@ -51,6 +60,15 @@ export interface LoadProjectCallbacks {
   
   /** 設定進度 */
   onProgress?: (progress: number, message: string) => void;
+  
+  /** 設定 2D 圖層（可選） */
+  setLayers?: (layers: Layer[]) => void;
+  
+  /** 新增 Spine 實例（可選） */
+  addSpineInstance?: (instance: SpineInstance) => void;
+  
+  /** 清空所有 Spine 實例（可選） */
+  clearSpineInstances?: () => void;
 }
 
 /**
@@ -129,6 +147,9 @@ export interface LoadProjectResult {
   
   /** 動作 ID 映射表（舊customId → 新customId） */
   clipIdMap?: Map<string, string>;
+  
+  /** Spine ID 映射表（舊ID → 新ID） */
+  spineIdMap?: Map<string, string>;
 }
 
 // ============================================================================
@@ -151,6 +172,7 @@ export class LoadProjectUseCase {
   ): Promise<LoadProjectResult> {
     const modelIdMap = new Map<string, string>();
     const clipIdMap = new Map<string, string>();
+    const spineIdMap = new Map<string, string>();
 
     try {
       // 1. 解壓縮 ZIP
@@ -238,16 +260,47 @@ export class LoadProjectUseCase {
           }
         }
 
-        // 9. 還原導演模式
-        if (projectState.director && directorCallbacks) {
-          modelCallbacks.onProgress?.(90, '正在還原導演模式...');
-          this.restoreDirectorMode(
-            projectState.director,
-            modelIdMap,
-            clipIdMap,
-            directorCallbacks
-          );
+      }
+
+      // 9. 還原 Spine 實例（必須在導演模式之前，因為導演模式需要 spineIdMap）
+      if (projectState.spineInstances && projectState.spineInstances.length > 0) {
+        modelCallbacks.onProgress?.(88, '正在還原 Spine 實例...');
+        
+        // 先清空現有 Spine 實例
+        modelCallbacks.clearSpineInstances?.();
+        
+        for (const savedSpine of projectState.spineInstances) {
+          try {
+            const newSpine = await this.restoreSpineInstance(zip, savedSpine);
+            if (newSpine) {
+              spineIdMap.set(savedSpine.id, newSpine.id);
+              modelCallbacks.addSpineInstance?.(newSpine);
+              console.log(`✅ Spine 實例還原成功: ${savedSpine.name} (${savedSpine.id} -> ${newSpine.id})`);
+            }
+          } catch (error) {
+            console.error(`❌ 還原 Spine 實例失敗: ${savedSpine.name}`, error);
+          }
         }
+      }
+
+      // 10. 還原 2D 圖層（也需要 spineIdMap）
+      if (projectState.layers && projectState.layers.length > 0 && modelCallbacks.setLayers) {
+        modelCallbacks.onProgress?.(92, '正在還原 2D 圖層...');
+        const restoredLayers = await this.restoreLayers(zip, projectState.layers, spineIdMap);
+        modelCallbacks.setLayers(restoredLayers);
+        console.log(`✅ 還原 ${restoredLayers.length} 個 2D 圖層`);
+      }
+
+      // 11. 還原導演模式（在 Spine 和 2D 圖層之後，確保 spineIdMap 已正確填充）
+      if (projectState.director && directorCallbacks) {
+        modelCallbacks.onProgress?.(96, '正在還原導演模式...');
+        this.restoreDirectorMode(
+          projectState.director,
+          modelIdMap,
+          clipIdMap,
+          directorCallbacks,
+          spineIdMap
+        );
       }
 
       modelCallbacks.onProgress?.(100, '載入完成！');
@@ -257,6 +310,7 @@ export class LoadProjectUseCase {
         projectState,
         modelIdMap,
         clipIdMap,
+        spineIdMap,
       };
     } catch (error) {
       console.error('載入專案失敗:', error);
@@ -499,13 +553,213 @@ export class LoadProjectUseCase {
   }
 
   /**
+   * 還原 Spine 實例
+   */
+  private static async restoreSpineInstance(
+    zip: JSZip,
+    savedSpine: SerializableSpineInstance
+  ): Promise<SpineInstance | null> {
+    const spineFolderPath = `assets/spine/${savedSpine.id}`;
+    
+    // 讀取 .skel 檔案
+    const skelFile = zip.file(`${spineFolderPath}/skeleton.skel`);
+    if (!skelFile) {
+      console.warn(`找不到 Spine skel 檔案: ${spineFolderPath}/skeleton.skel`);
+      return null;
+    }
+    const skelData = await skelFile.async('arraybuffer');
+    
+    // 讀取 .atlas 檔案
+    const atlasFile = zip.file(`${spineFolderPath}/skeleton.atlas`);
+    if (!atlasFile) {
+      console.warn(`找不到 Spine atlas 檔案: ${spineFolderPath}/skeleton.atlas`);
+      return null;
+    }
+    const atlasText = await atlasFile.async('string');
+    
+    // 讀取圖片檔案
+    const images = new Map<string, HTMLImageElement>();
+    const imageDataUrls = new Map<string, string>();
+    
+    for (const imageFileName of savedSpine.imageFileNames) {
+      const imagePath = `${spineFolderPath}/textures/${imageFileName}`;
+      const imageFile = zip.file(imagePath);
+      
+      if (imageFile) {
+        const imageBlob = await imageFile.async('blob');
+        const dataUrl = await this.blobToDataUrl(imageBlob);
+        const img = await this.loadImage(dataUrl);
+        images.set(imageFileName, img);
+        imageDataUrls.set(imageFileName, dataUrl);
+      } else {
+        console.warn(`找不到 Spine 圖片: ${imagePath}`);
+      }
+    }
+    
+    // 載入到 Runtime
+    const adapter = getSpineRuntimeAdapter();
+    const instanceId = `spine_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    const skeletonInfo = await adapter.load({
+      id: instanceId,
+      skelData,
+      atlasText,
+      images,
+    });
+    
+    // 建立 SpineRawData
+    const rawData: SpineRawData = {
+      skelData: skelData.slice(0),
+      atlasText,
+      images: imageDataUrls,
+    };
+    
+    // 建立 SpineInstance
+    const instance = createSpineInstance({
+      name: savedSpine.name,
+      skelFileName: savedSpine.skelFileName,
+      atlasFileName: savedSpine.atlasFileName,
+      imageFileNames: savedSpine.imageFileNames,
+      skeletonInfo,
+      rawData,
+    });
+    
+    // 覆寫 ID 以匹配 Runtime
+    (instance as { id: string }).id = instanceId;
+    
+    // 還原播放狀態
+    (instance as SpineInstance).currentAnimation = savedSpine.currentAnimation;
+    (instance as SpineInstance).currentSkin = savedSpine.currentSkin;
+    (instance as SpineInstance).loop = savedSpine.loop;
+    (instance as SpineInstance).timeScale = savedSpine.timeScale;
+    (instance as SpineInstance).isPlaying = savedSpine.isPlaying;
+    (instance as SpineInstance).currentTime = savedSpine.currentTime;
+    
+    return instance;
+  }
+
+  /**
+   * 還原 2D 圖層
+   */
+  private static async restoreLayers(
+    zip: JSZip,
+    savedLayers: SerializableLayer[],
+    spineIdMap: Map<string, string>
+  ): Promise<Layer[]> {
+    const restoredLayers: Layer[] = [];
+    
+    for (const savedLayer of savedLayers) {
+      const restoredChildren: Element2D[] = [];
+      
+      for (const savedElement of savedLayer.children) {
+        const restoredElement = await this.restoreElement2D(zip, savedElement, spineIdMap);
+        if (restoredElement) {
+          restoredChildren.push(restoredElement);
+        }
+      }
+      
+      const restoredLayer: Layer = {
+        id: savedLayer.id,
+        name: savedLayer.name,
+        type: savedLayer.type,
+        priority: savedLayer.priority,
+        visible: savedLayer.visible,
+        locked: savedLayer.locked,
+        expanded: savedLayer.expanded,
+        opacity: savedLayer.opacity,
+        children: restoredChildren,
+        createdAt: savedLayer.createdAt,
+        updatedAt: savedLayer.updatedAt,
+      };
+      
+      restoredLayers.push(restoredLayer);
+    }
+    
+    return restoredLayers;
+  }
+
+  /**
+   * 還原 2D 元素
+   */
+  private static async restoreElement2D(
+    zip: JSZip,
+    savedElement: SerializableElement2D,
+    spineIdMap: Map<string, string>
+  ): Promise<Element2D | null> {
+    if (savedElement.type === 'image') {
+      // 圖片元素：從 ZIP 讀取圖片並轉為 Data URL
+      const imageElement = savedElement as SerializableImageElement2D;
+      const imagePath = imageElement.src; // 相對路徑如 "assets/images/{id}.png"
+      const imageFile = zip.file(imagePath);
+      
+      if (imageFile) {
+        const imageBlob = await imageFile.async('blob');
+        const dataUrl = await this.blobToDataUrl(imageBlob);
+        
+        return {
+          ...imageElement,
+          src: dataUrl,
+        } as ImageElement2D;
+      } else {
+        console.warn(`找不到 2D 圖片: ${imagePath}`);
+        return null;
+      }
+    }
+    
+    if (savedElement.type === 'spine') {
+      // Spine 元素：更新 spineInstanceId 映射
+      const spineElement = savedElement as Element2D & { spineInstanceId: string };
+      const newSpineId = spineIdMap.get(spineElement.spineInstanceId);
+      
+      if (newSpineId) {
+        return {
+          ...spineElement,
+          spineInstanceId: newSpineId,
+        };
+      } else {
+        console.warn(`找不到 Spine 實例映射: ${spineElement.spineInstanceId}`);
+        // 仍然返回元素，但 spineInstanceId 可能無效
+        return spineElement as Element2D;
+      }
+    }
+    
+    // 其他類型元素直接返回
+    return savedElement as Element2D;
+  }
+
+  /**
+   * Blob 轉 Data URL
+   */
+  private static blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /**
+   * 載入圖片
+   */
+  private static loadImage(src: string): Promise<HTMLImageElement> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = src;
+    });
+  }
+
+  /**
    * 還原導演模式
    */
   private static restoreDirectorMode(
     savedDirector: SerializableDirectorState,
     modelIdMap: Map<string, string>,
     clipIdMap: Map<string, string>,
-    callbacks: DirectorCallbacks
+    callbacks: DirectorCallbacks,
+    spineIdMap: Map<string, string> = new Map()
   ): void {
     // 1. 重置導演模式
     callbacks.reset();
@@ -539,15 +793,24 @@ export class LoadProjectUseCase {
 
       // 還原片段
       for (const savedClip of savedTrack.clips) {
-        // 程式動作特殊處理
+        // 類型特殊處理
         const isProcedural = savedClip.sourceType === 'procedural';
+        const isSpine = savedClip.sourceType === 'spine';
         
-        // 映射新的 ID（程式動作也需要映射 modelId）
-        const newModelId = modelIdMap.get(savedClip.sourceModelId);
+        // 根據類型映射 ID
+        let newModelId: string | undefined;
+        if (isSpine) {
+          // Spine 片段：sourceModelId 是 Spine 實例的 ID，需要從 spineIdMap 查找
+          newModelId = spineIdMap.get(savedClip.sourceModelId) || savedClip.sourceModelId;
+        } else {
+          // 普通 3D 模型片段：從 modelIdMap 查找
+          newModelId = modelIdMap.get(savedClip.sourceModelId);
+        }
+        
         const newClipId = clipIdMap.get(savedClip.sourceAnimationId);
 
         if (!newModelId) {
-          console.warn('無法還原片段，找不到對應的模型:', savedClip.sourceModelId);
+          console.warn('無法還原片段，找不到對應的模型/實例:', savedClip.sourceModelId, '類型:', savedClip.sourceType);
           continue;
         }
 
@@ -557,15 +820,19 @@ export class LoadProjectUseCase {
           sourceType: savedClip.sourceType,
           sourceModelId: newModelId,
           sourceModelName: savedClip.sourceModelName,
-          sourceAnimationId: isProcedural 
-            ? savedClip.sourceAnimationId  // 程式動作使用原始 ID
-            : (newClipId || savedClip.sourceAnimationId),
+          sourceAnimationId: isSpine
+            ? savedClip.sourceAnimationId  // Spine 動畫名稱不變
+            : (isProcedural 
+                ? savedClip.sourceAnimationId  // 程式動作使用原始 ID
+                : (newClipId || savedClip.sourceAnimationId)),
           sourceAnimationName: savedClip.sourceAnimationName,
           sourceAnimationDuration: savedClip.sourceAnimationDuration,
           startFrame: savedClip.startFrame,
           color: savedClip.color,
-          // Spine 相關
-          spineInstanceId: savedClip.spineInstanceId,
+          // Spine 相關（更新 ID 映射）
+          spineInstanceId: savedClip.spineInstanceId 
+            ? (spineIdMap.get(savedClip.spineInstanceId) || savedClip.spineInstanceId)
+            : undefined,
           spineLayerId: savedClip.spineLayerId,
           spineElementId: savedClip.spineElementId,
           // 程式動作類型

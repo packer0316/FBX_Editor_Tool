@@ -19,6 +19,7 @@ import {
   createSpineInstance,
   type SpineInstance,
   type SpineSkeletonInfo,
+  type SpineRawData,
 } from '../../domain/value-objects/SpineInstance';
 
 // ============================================================================
@@ -80,12 +81,14 @@ export class LoadSpineUseCase {
       throw new Error('請提供至少一個圖片檔案（.png 或 .jpg）');
     }
 
-    // 3. 讀取檔案內容
-    const [skelData, atlasText, images] = await Promise.all([
+    // 3. 讀取檔案內容（同時保存原始資料用於匯出）
+    const [skelData, atlasText, imagesResult] = await Promise.all([
       this.readAsArrayBuffer(classified.skelFile),
       this.readAsText(classified.atlasFile),
-      this.loadImages(classified.imageFiles),
+      this.loadImagesWithDataUrls(classified.imageFiles),
     ]);
+
+    const { images, imageDataUrls } = imagesResult;
 
     // 4. 載入到 Runtime
     const adapter = getSpineRuntimeAdapter();
@@ -98,7 +101,14 @@ export class LoadSpineUseCase {
       images,
     });
 
-    // 5. 建立 SpineInstance
+    // 5. 建立 SpineRawData（用於專案匯出）
+    const rawData: SpineRawData = {
+      skelData: skelData.slice(0), // 複製一份以避免被 Runtime 修改
+      atlasText,
+      images: imageDataUrls,
+    };
+
+    // 6. 建立 SpineInstance
     const instanceName = name ?? classified.skelFile.name.replace(/\.skel$/i, '');
     const instance = createSpineInstance({
       name: instanceName,
@@ -106,12 +116,13 @@ export class LoadSpineUseCase {
       atlasFileName: classified.atlasFile.name,
       imageFileNames: classified.imageFiles.map(f => f.name),
       skeletonInfo,
+      rawData,
     });
 
     // 覆寫 ID 以匹配 Runtime
     (instance as { id: string }).id = instanceId;
 
-    console.log(`[LoadSpineUseCase] 載入成功: ${instance.name}`);
+    console.log(`[LoadSpineUseCase] 載入成功: ${instance.name} (含原始資料)`);
 
     return {
       instance,
@@ -178,20 +189,34 @@ export class LoadSpineUseCase {
   }
 
   /**
-   * 載入圖片
+   * 載入圖片（同時返回 HTMLImageElement 和 Data URL）
    */
-  private static async loadImages(files: File[]): Promise<Map<string, HTMLImageElement>> {
+  private static async loadImagesWithDataUrls(files: File[]): Promise<{
+    images: Map<string, HTMLImageElement>;
+    imageDataUrls: Map<string, string>;
+  }> {
     const images = new Map<string, HTMLImageElement>();
+    const imageDataUrls = new Map<string, string>();
 
     await Promise.all(
       files.map(async (file) => {
         const dataUrl = await this.readAsDataURL(file);
         const img = await this.loadImage(dataUrl);
         images.set(file.name, img);
+        imageDataUrls.set(file.name, dataUrl);
       })
     );
 
-    return images;
+    return { images, imageDataUrls };
+  }
+
+  /**
+   * 載入圖片（僅返回 HTMLImageElement）
+   * @deprecated 使用 loadImagesWithDataUrls 替代
+   */
+  private static async loadImages(files: File[]): Promise<Map<string, HTMLImageElement>> {
+    const result = await this.loadImagesWithDataUrls(files);
+    return result.images;
   }
 
   /**

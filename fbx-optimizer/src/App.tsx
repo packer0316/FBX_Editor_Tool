@@ -685,6 +685,9 @@ function App() {
           cameraFar: cameraSettings.far,
           showGrid,
         },
+        // 2D 圖層和 Spine 實例
+        layers,
+        spineInstances,
       });
 
       if (result) {
@@ -700,7 +703,7 @@ function App() {
     } finally {
       setIsProjectProcessing(false);
     }
-  }, [models, cameraSettings, showGrid]);
+  }, [models, cameraSettings, showGrid, layers, spineInstances]);
 
   // Project IO: 載入專案
   const handleLoadProject = useCallback(async (file: File): Promise<boolean> => {
@@ -725,6 +728,11 @@ function App() {
             setProjectProgress(progress);
             setProjectProgressMessage(message);
           },
+          // 2D 圖層回調
+          setLayers,
+          // Spine 實例回調
+          addSpineInstance,
+          clearSpineInstances: cleanupAllSpineInstances,
         },
         {
           reset: directorStore.reset,
@@ -773,7 +781,7 @@ function App() {
     } finally {
       setIsProjectProcessing(false);
     }
-  }, [models, addModel, updateModel, getModel, removeModel, setActiveModelId]);
+  }, [models, addModel, updateModel, getModel, removeModel, setActiveModelId, setLayers, addSpineInstance, cleanupAllSpineInstances]);
 
   // 追蹤是否正在同步，避免循環更新
   const isSyncingRef = useRef(false);
