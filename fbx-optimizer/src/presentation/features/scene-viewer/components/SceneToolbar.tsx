@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw, Camera, Video, Square, Monitor, X, Clapperboard, Eye, EyeOff } from 'lucide-react';
 import { useDirectorStore } from '../../../stores/directorStore';
 import { type ThemeStyle } from '../../../hooks/useTheme';
@@ -256,28 +257,14 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                 </button>
             </div>
 
-            {/* 自訂尺寸對話框 */}
-            {showCustomDialog && (
+            {/* 自訂尺寸對話框 - 使用 Portal 渲染到 body，避免被父元素限制 */}
+            {showCustomDialog && createPortal(
                 <div 
-                    className="bg-black/40 backdrop-blur-sm z-[99999] animate-fade-in"
-                    style={{ 
-                        position: 'fixed', 
-                        top: 0, 
-                        left: 0, 
-                        right: 0, 
-                        bottom: 0,
-                    }}
+                    className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[99999] animate-fade-in flex items-center justify-center"
                     onClick={() => setShowCustomDialog(false)}
                 >
                     <div 
                         className={`${theme.panelBg} ${theme.panelBorder} border rounded-2xl shadow-2xl p-8 w-[360px]`}
-                        style={{
-                            position: 'absolute',
-                            top: '50%',
-                            left: '50%',
-                            marginTop: '0px', // 原本 400px 似乎是錯誤的定位
-                            transform: 'translate(-50%, -50%)'
-                        }}
                         onClick={(e) => e.stopPropagation()}
                     >
                         <div className="flex items-center justify-between mb-6">
@@ -335,7 +322,8 @@ const SceneToolbar: React.FC<SceneToolbarProps> = ({
                             </div>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </div>
     );
