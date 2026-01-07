@@ -283,6 +283,14 @@ function serializeModelState(
     isLoopEnabled: model.isLoopEnabled,
     shaderGroups,
     isShaderEnabled,
+    // 視圖快照（相機+模型狀態）
+    viewSnapshots: model.viewSnapshots && model.viewSnapshots.length > 0
+      ? model.viewSnapshots
+      : undefined,
+    // Transform 快照（位置、旋轉、縮放、透明度）
+    transformSnapshots: model.transformSnapshots && model.transformSnapshots.length > 0
+      ? model.transformSnapshots
+      : undefined,
   };
 }
 

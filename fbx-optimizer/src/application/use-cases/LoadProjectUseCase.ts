@@ -347,6 +347,10 @@ export class LoadProjectUseCase {
       visible: savedModel.visible,
       opacity: savedModel.opacity,
       isLoopEnabled: savedModel.isLoopEnabled,
+      // 還原視圖快照（相機+模型狀態）
+      viewSnapshots: savedModel.viewSnapshots || [],
+      // 還原 Transform 快照（位置、旋轉、縮放、透明度）
+      transformSnapshots: savedModel.transformSnapshots || [],
     });
   }
 

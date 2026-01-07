@@ -145,6 +145,91 @@ export interface SerializableShaderGroup {
 }
 
 // ============================================================================
+// 可序列化視圖快照
+// ============================================================================
+
+/**
+ * 可序列化的視圖快照
+ * 
+ * 用於保存相機和模型的狀態設定，讓用戶可以快速切換到預設的視角
+ */
+export interface SerializableViewSnapshot {
+  /** 唯一識別碼 */
+  id: string;
+  
+  /** 快照名稱 */
+  name: string;
+  
+  /** 創建時間戳 */
+  createdAt: number;
+  
+  // 相機狀態
+  /** 相機位置 [x, y, z] */
+  cameraPosition: [number, number, number];
+  
+  /** 相機目標點 [x, y, z] (OrbitControls target) */
+  cameraTarget: [number, number, number];
+  
+  /** 相機 FOV（透視模式） */
+  cameraFov: number;
+  
+  /** 是否為正交相機 */
+  cameraIsOrthographic: boolean;
+  
+  /** 正交相機縮放值 */
+  cameraOrthoZoom: number;
+  
+  // 模型狀態
+  /** 模型位置 [x, y, z] */
+  modelPosition: [number, number, number];
+  
+  /** 模型旋轉 [x, y, z] (度數) */
+  modelRotation: [number, number, number];
+  
+  /** 模型縮放 [x, y, z] */
+  modelScale: [number, number, number];
+  
+  /** 動畫播放時間（秒） */
+  animationTime: number;
+}
+
+// ============================================================================
+// 可序列化 Transform 快照
+// ============================================================================
+
+/**
+ * 可序列化的 Transform 快照
+ * 
+ * 用於保存模型的 Transform 狀態（位置、旋轉、縮放、透明度），
+ * 讓用戶可以快速重置或切換到預設的狀態
+ */
+export interface SerializableTransformSnapshot {
+  /** 唯一識別碼 */
+  id: string;
+  
+  /** 快照名稱 */
+  name: string;
+  
+  /** 創建時間戳 */
+  createdAt: number;
+  
+  /** 是否為預設快照（載入時的初始狀態，不可刪除） */
+  isDefault: boolean;
+  
+  /** 模型位置 [x, y, z] */
+  position: [number, number, number];
+  
+  /** 模型旋轉 [x, y, z] (度數) */
+  rotation: [number, number, number];
+  
+  /** 模型縮放（等比） */
+  scale: number;
+  
+  /** 模型透明度 (0-1) */
+  opacity: number;
+}
+
+// ============================================================================
 // 可序列化模型狀態
 // ============================================================================
 
@@ -199,6 +284,13 @@ export interface SerializableModelState {
   
   /** Shader 是否啟用（主開關） */
   isShaderEnabled?: boolean;
+  
+  // 快照設定
+  /** 視圖快照列表（相機+模型狀態） */
+  viewSnapshots?: SerializableViewSnapshot[];
+  
+  /** Transform 快照列表（位置、旋轉、縮放、透明度） */
+  transformSnapshots?: SerializableTransformSnapshot[];
   
   // 預留擴充欄位（暫不序列化）
   // audioTracks?: SerializableAudioTrack[];
