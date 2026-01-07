@@ -73,8 +73,12 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
   const spineInstances = useSpineStore((state) => state.instances);
   const [isDragging, setIsDragging] = useState(false);
   const [dragOffset, setDragOffset] = useState(0);
+  const [dragOffsetY, setDragOffsetY] = useState(0); // 垂直拖曳偏移
+  const [targetTrackId, setTargetTrackId] = useState<string | null>(null); // 目標 track
   const dragStartX = useRef(0);
+  const dragStartY = useRef(0);
   const originalStartFrame = useRef(clip.startFrame);
+  const originalTrackId = useRef(clip.trackId);
   
   // 剪裁狀態
   const [isTrimming, setIsTrimming] = useState(false);
@@ -454,24 +458,45 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
     e.stopPropagation();
     
     dragStartX.current = e.clientX;
+    dragStartY.current = e.clientY;
     originalStartFrame.current = clip.startFrame;
+    originalTrackId.current = clip.trackId;
     setIsDragging(true);
     setDragOffset(0);
+    setDragOffsetY(0);
+    setTargetTrackId(null);
     selectClip(clip.id);
-  }, [isLocked, clip.startFrame, clip.id, selectClip]);
+  }, [isLocked, clip.startFrame, clip.trackId, clip.id, selectClip]);
+
+  // Track 高度常數（與 TrackRow 一致）
+  const TRACK_HEIGHT = 48; // px
 
   useEffect(() => {
     if (!isDragging) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const delta = e.clientX - dragStartX.current;
-      setDragOffset(delta);
+      const deltaX = e.clientX - dragStartX.current;
+      const deltaY = e.clientY - dragStartY.current;
+      setDragOffset(deltaX);
+      setDragOffsetY(deltaY);
+      
+      // 計算目標 track（根據垂直偏移）
+      const trackOffset = Math.round(deltaY / TRACK_HEIGHT);
+      const currentTrackIndex = tracks.findIndex(t => t.id === originalTrackId.current);
+      const newTrackIndex = Math.max(0, Math.min(tracks.length - 1, currentTrackIndex + trackOffset));
+      const newTargetTrack = tracks[newTrackIndex];
+      
+      if (newTargetTrack && newTargetTrack.id !== originalTrackId.current) {
+        setTargetTrackId(newTargetTrack.id);
+      } else {
+        setTargetTrackId(null);
+      }
     };
 
     const handleMouseUp = () => {
       setIsDragging(false);
       
-      // 計算最終位置
+      // 計算最終水平位置
       const rawFrame = Math.max(0, originalStartFrame.current + Math.round(dragOffset / pixelsPerFrame));
       let finalFrame = rawFrame;
       
@@ -484,16 +509,28 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         }
       }
       
-      // 只有位置改變才更新
-      if (finalFrame !== clip.startFrame) {
+      // 計算最終 track
+      const trackOffset = Math.round(dragOffsetY / TRACK_HEIGHT);
+      const currentTrackIndex = tracks.findIndex(t => t.id === originalTrackId.current);
+      const newTrackIndex = Math.max(0, Math.min(tracks.length - 1, currentTrackIndex + trackOffset));
+      const finalTrackId = tracks[newTrackIndex]?.id ?? clip.trackId;
+      
+      // 檢查目標 track 是否被鎖定
+      const targetTrack = tracks.find(t => t.id === finalTrackId);
+      const isTargetLocked = targetTrack?.isLocked ?? false;
+      
+      // 只有位置或 track 改變才更新（且目標 track 未鎖定）
+      if ((finalFrame !== clip.startFrame || finalTrackId !== clip.trackId) && !isTargetLocked) {
         moveClip({
           clipId: clip.id,
-          newTrackId: clip.trackId,
+          newTrackId: finalTrackId,
           newStartFrame: finalFrame,
         });
       }
       
       setDragOffset(0);
+      setDragOffsetY(0);
+      setTargetTrackId(null);
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -503,7 +540,7 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, dragOffset, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks, ui.clipSnapping]);
+  }, [isDragging, dragOffset, dragOffsetY, pixelsPerFrame, clip.id, clip.trackId, clip.startFrame, moveClip, tracks, ui.clipSnapping]);
 
   return (
     <>
@@ -532,7 +569,8 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
         className={`absolute top-1 bottom-1 rounded flex flex-col justify-center overflow-hidden select-none
           ${isSelected ? 'ring-2 ring-white/50' : ''}
           ${isLocked ? 'cursor-not-allowed opacity-70' : 'cursor-grab'}
-          ${isDragging ? 'cursor-grabbing opacity-90 z-50' : 'hover:brightness-110'}
+          ${isDragging ? 'cursor-grabbing opacity-90' : 'hover:brightness-110'}
+          ${isDragging && targetTrackId ? 'ring-2 ring-cyan-400 shadow-lg shadow-cyan-500/30' : ''}
           ${isTrimming ? 'z-50' : ''}
           ${showSnapIndicator ? 'ring-1 ring-amber-400' : ''}
           transition-colors duration-100`}
@@ -548,6 +586,11 @@ export const ClipBlock: React.FC<ClipBlockProps> = memo(({
             backgroundColor: clip.color,
           }),
           transition: isDragging || isTrimming ? 'none' : undefined,
+          // 跨 track 拖曳時的垂直偏移
+          ...(isDragging && dragOffsetY !== 0 ? {
+            transform: `translateY(${dragOffsetY}px)`,
+            zIndex: 100,
+          } : {}),
         }}
       >
         {/* 左邊緣剪裁手柄 */}
