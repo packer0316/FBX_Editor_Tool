@@ -737,10 +737,19 @@ function App() {
         setProjectProgressMessage('載入完成！');
         
         // 設定第一個模型為活動模型
+        // 使用 setTimeout 確保所有 updateModel 的狀態更新都已完成
+        // 這樣同步 useEffect 執行時，activeModel 會包含最新的 shaderGroups 和 createdClips
         if (result.modelIdMap && result.modelIdMap.size > 0) {
           const firstNewModelId = result.modelIdMap.values().next().value;
           if (firstNewModelId) {
-            setActiveModelId(firstNewModelId);
+            // 先重置 activeModelId，強制同步 ref 也重置
+            setActiveModelId(null);
+            // 使用 requestAnimationFrame + setTimeout 確保 React 完成所有狀態更新
+            requestAnimationFrame(() => {
+              setTimeout(() => {
+                setActiveModelId(firstNewModelId);
+              }, 0);
+            });
           }
         }
       } else {
