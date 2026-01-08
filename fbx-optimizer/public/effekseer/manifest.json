@@ -1,5 +1,5 @@
 {
-  "generated": "2026-01-08T13:57:48.619Z",
+  "generated": "2026-01-08T17:58:48.660Z",
   "root": {
     "efk": [
       {
@@ -8,10 +8,6 @@
       }
     ],
     "subdirs": {
-      "124": {
-        "efk": [],
-        "subdirs": {}
-      },
       "Boss": {
         "efk": [
           {
@@ -145,14 +141,6 @@
         ],
         "subdirs": {}
       },
-      "DDD123": {
-        "efk": [],
-        "subdirs": {}
-      },
-      "JR TEST_251224": {
-        "efk": [],
-        "subdirs": {}
-      },
       "JR_test_251224": {
         "efk": [
           {
@@ -160,10 +148,6 @@
             "path": "JR_test_251224/FortuneExposure_pivot.efk"
           }
         ],
-        "subdirs": {}
-      },
-      "new DT3": {
-        "efk": [],
         "subdirs": {}
       },
       "Resources": {
@@ -219,10 +203,6 @@
             "subdirs": {}
           }
         }
-      },
-      "TStest": {
-        "efk": [],
-        "subdirs": {}
       }
     }
   }

@@ -1,7 +1,7 @@
 {
   "name": "jr-3d-viewer",
   "private": true,
-  "version": "1.4.0",
+  "version": "1.4.5",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -20,6 +20,8 @@
   "build": {
     "appId": "com.jr3d.viewer",
     "productName": "JR 3D Viewer",
+    "artifactName": "JR-3D-Viewer-Setup-${version}.${ext}",
+    "icon": "build/favicon.ico",
     "directories": {
       "output": "release"
     },
@@ -31,23 +33,32 @@
       {
         "from": "public/",
         "to": "public/",
-        "filter": ["**/*"]
+        "filter": [
+          "**/*"
+        ]
       }
     ],
     "win": {
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ],
-      "signAndEditExecutable": false
+      "icon": "build/favicon.ico"
     },
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "packer0316",
+      "repo": "FBX_Editor_Tool"
     }
   },
   "dependencies": {
@@ -56,6 +67,7 @@
     "@types/three": "^0.181.0",
     "autoprefixer": "^10.4.22",
     "clsx": "^2.1.1",
+    "electron-updater": "^6.7.3",
     "html2canvas": "^1.4.1",
     "jszip": "^3.10.1",
     "lamejs": "^1.2.1",
