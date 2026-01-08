@@ -317,6 +317,15 @@ autoUpdater.on('update-not-available', () => {
 autoUpdater.on('error', (err) => {
   console.error('[AutoUpdater] 更新錯誤:', err);
   closeProgressWindow();
+  
+  // 如果是 404 錯誤（repo 為 private 或不存在），靜默處理不顯示彈窗
+  const errorMessage = err.message || '';
+  if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+    console.log('[AutoUpdater] 無法訪問更新伺服器（可能是私有 repo），跳過更新檢查');
+    return;
+  }
+  
+  // 其他錯誤才顯示彈窗
   dialog.showMessageBox({
     type: 'error',
     title: '更新錯誤',
