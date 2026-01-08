@@ -11,6 +11,7 @@ import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
+import { getEffekseerPath, fetchJsonResource } from '../../../../utils/environment';
 
 // 特效播放控制組件
 const EffectPlaybackControls = ({
@@ -498,7 +499,7 @@ const EffectCard = ({
 
             if (!context) throw new Error('Effekseer Context 未初始化');
 
-            const effectUrl = `/effekseer/${localPath}`;
+            const effectUrl = getEffekseerPath(localPath);
             const baseDir = effectUrl.substring(0, effectUrl.lastIndexOf('/') + 1);
             console.log('[EffectCard] 📂 Base Directory:', baseDir);
 
@@ -508,7 +509,11 @@ const EffectCard = ({
                 
                 // 計算完整 URL
                 let fullUrl = path;
-                if (!path.startsWith('/') && !path.startsWith('http')) {
+                // 檢查是否已經是完整 URL（避免重複拼接）
+                const isAbsoluteUrl = path.startsWith('/') || 
+                                      path.startsWith('http') || 
+                                      path.startsWith('app-resource://');
+                if (!isAbsoluteUrl) {
                     // 相對路徑，拼接基礎目錄
                     fullUrl = baseDir + path;
                 }
@@ -1143,11 +1148,11 @@ const EffectCard = ({
                                         {/* 資源列表 */}
                                         <div className="flex-1 max-h-[300px] overflow-y-auto">
                                             {item.resourceStatus.map((resource, idx) => {
-                                                const effectDir = `/effekseer/${localPath.substring(0, localPath.lastIndexOf('/') + 1)}`;
+                                                const effectDir = getEffekseerPath(localPath.substring(0, localPath.lastIndexOf('/') + 1));
                                                 // 處理路徑：如果已經是完整路徑就直接使用，否則拼接 effectDir
                                                 let imageUrl: string | null = null;
                                                 if (resource.type === 'image' && resource.exists) {
-                                                    if (resource.path.startsWith('/effekseer/') || resource.path.startsWith('http')) {
+                                                    if (resource.path.startsWith('/effekseer/') || resource.path.includes('/effekseer/') || resource.path.startsWith('http')) {
                                                         // 已經是完整路徑
                                                         imageUrl = resource.path;
                                                     } else if (resource.path.startsWith('/')) {
@@ -1774,9 +1779,8 @@ export default function EffectTestPanel({
     // 刷新資料夾列表
     const refreshFolderList = async () => {
         try {
-            // 加上時間戳避免快取
-            const res = await fetch(`/effekseer/manifest.json?t=${Date.now()}`);
-            const manifest = await res.json();
+            // 使用支援 Electron 的載入函數
+            const manifest = await fetchJsonResource(`${getEffekseerPath('manifest.json')}?t=${Date.now()}`);
             const folders = Object.keys(manifest.root?.subdirs || {});
             setAvailableFolders(folders);
             console.log('✅ [EffectTestPanel] 資料夾列表已更新，共', folders.length, '個資料夾:', folders);
@@ -1809,9 +1813,8 @@ export default function EffectTestPanel({
         setShowFolderDropdown(false);
 
         try {
-            // 加上時間戳避免快取
-            const res = await fetch(`/effekseer/manifest.json?t=${Date.now()}`);
-            const manifest = await res.json();
+            // 使用支援 Electron 的載入函數
+            const manifest = await fetchJsonResource(`${getEffekseerPath('manifest.json')}?t=${Date.now()}`);
             
             const folderData = manifest.root?.subdirs?.[folderName];
             if (!folderData) {
@@ -1980,7 +1983,7 @@ export default function EffectTestPanel({
                 
                 // 1. 添加 .efk 檔案
                 const efkPath = effect.path;
-                const efkUrl = `/effekseer/${efkPath}`;
+                const efkUrl = getEffekseerPath(efkPath);
                 
                 if (!addedFiles.has(efkPath)) {
                     try {
@@ -2015,13 +2018,14 @@ export default function EffectTestPanel({
                                 ? efkPath.substring(0, efkPath.lastIndexOf('/') + 1) 
                                 : '';
                             resourcePath = effectDir + resourcePath;
-                        } else if (resourcePath.startsWith('/effekseer/')) {
-                            resourcePath = resourcePath.replace('/effekseer/', '');
+                        } else if (resourcePath.includes('/effekseer/')) {
+                            // 移除 effekseer 路徑前綴（相容網頁和 Electron 兩種格式）
+                            resourcePath = resourcePath.replace(/.*\/effekseer\//, '');
                         }
 
                         if (!addedFiles.has(resourcePath) && resource.exists) {
                             try {
-                                const resourceUrl = `/effekseer/${resourcePath}`;
+                                const resourceUrl = getEffekseerPath(resourcePath);
                                 const response = await fetch(resourceUrl);
                                 if (response.ok) {
                                     const blob = await response.blob();

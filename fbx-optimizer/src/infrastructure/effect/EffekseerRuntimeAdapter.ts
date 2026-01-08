@@ -24,6 +24,7 @@
  */
 import * as THREE from 'three';
 import { composeEffekseerMatrix } from './effekseerTransformUtils';
+import { getEffekseerPath } from '../../utils/environment';
 
 export class EffekseerRuntimeAdapter {
     public effekseerContext: effekseer.EffekseerContext | null = null; // 公開以供相機矩陣同步
@@ -76,10 +77,13 @@ export class EffekseerRuntimeAdapter {
 
         // 初始化 WebAssembly Runtime（只需一次，用於載入 effekseer.wasm）
         if (!this.isRuntimeInitialized) {
+            const wasmPath = getEffekseerPath('effekseer.wasm');
+            console.log(`[EffekseerRuntimeAdapter] WASM 路徑: ${wasmPath}`);
+            
             await new Promise<void>((resolve, reject) => {
                 try {
                     effekseer.initRuntime(
-                        '/effekseer/effekseer.wasm',
+                        wasmPath,
                         () => {
                             console.log('[EffekseerRuntimeAdapter] WASM 載入完成');
                             resolve();

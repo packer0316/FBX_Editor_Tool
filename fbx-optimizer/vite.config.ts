@@ -131,11 +131,25 @@ function autoGenerateEfkManifest() {
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: './', // 重要：使用相對路徑，確保 Electron 打包後能正確載入資源
   plugins: [
     react(),
     autoGenerateEfkManifest() // 添加自動生成插件
   ],
   define: {
     __APP_VERSION__: JSON.stringify(packageJson.version),
+  },
+  build: {
+    outDir: 'dist',
+    assetsDir: 'assets',
+    // 確保資源使用相對路徑
+    rollupOptions: {
+      output: {
+        // 確保 chunk 和 asset 使用相對路徑
+        chunkFileNames: 'assets/[name]-[hash].js',
+        entryFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+      },
+    },
   },
 })

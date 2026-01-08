@@ -3,15 +3,52 @@
   "private": true,
   "version": "1.4.0",
   "type": "module",
+  "main": "dist-electron/main.js",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "efk:manifest": "node scripts/generate-efk-manifest.js"
+    "efk:manifest": "node scripts/generate-efk-manifest.js",
+    "electron:dev": "concurrently \"cross-env VITE_PORT=5173 vite --port 5173 --strictPort\" \"wait-on http://localhost:5173 && cross-env NODE_ENV=development DEV_PORT=5173 electron .\"",
+    "electron:build": "npm run build && tsc -p electron/tsconfig.json && electron-builder",
+    "electron:preview": "npm run build && tsc -p electron/tsconfig.json && cross-env NODE_ENV=production electron ."
+  },
+  "build": {
+    "appId": "com.jr3d.viewer",
+    "productName": "JR 3D Viewer",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "public/",
+        "to": "public/",
+        "filter": ["**/*"]
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -40,6 +77,10 @@
     "@types/react": "^19.2.5",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
+    "electron": "^39.2.7",
+    "electron-builder": "^26.4.0",
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
@@ -48,6 +89,7 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4",
-    "vitest": "^4.0.14"
+    "vitest": "^4.0.14",
+    "wait-on": "^9.0.3"
   }
 }
