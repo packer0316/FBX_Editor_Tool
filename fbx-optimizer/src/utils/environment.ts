@@ -68,13 +68,17 @@ export function getEffekseerPath(subPath: string): string {
   
   // 移除開頭的斜線（如果有的話）
   const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+  // ⚠️ 重要：路徑中可能包含空白或特殊字元（例如 "09. Flow RimOpacity 01.efkmat"）
+  // 在 Electron 自訂協議 / 瀏覽器 fetch 中，未 encode 的 URL 可能導致 404 或解析錯誤
+  // encodeURI 會保留 '/'，但會把空白等字元 encode 成 %20
+  const encodedSubPath = encodeURI(cleanSubPath);
   
   if (base) {
-    return `${base}/effekseer/${cleanSubPath}`;
+    return `${base}/effekseer/${encodedSubPath}`;
   }
   
   // 網頁模式使用絕對路徑
-  return `/effekseer/${cleanSubPath}`;
+  return `/effekseer/${encodedSubPath}`;
 }
 
 /**

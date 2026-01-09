@@ -235,6 +235,13 @@ export interface EffectItem {
 
     // Resource Status (載入時追蹤的資源狀態)
     resourceStatus?: ResourceStatus[];
+
+    /**
+     * 特效來源：
+     * - public: 來自 public/effekseer（可用 getEffekseerPath + fetch 取得）
+     * - uploaded: 來自「上傳特效資料夾」（只能用記憶體中的 File 來匯出）
+     */
+    sourceType?: 'public' | 'uploaded';
 }
 
 // 向量輸入組件
@@ -1724,6 +1731,17 @@ export default function EffectTestPanel({
     // 全域資源快取：特效路徑 -> 資源列表（解決 Effekseer 內部快取導致重複載入無法追蹤資源的問題）
     const [effectResourceCache, setEffectResourceCache] = useState<Map<string, ResourceStatus[]>>(new Map());
 
+    /**
+     * 上傳特效資料夾快取（只存在於記憶體）
+     * key = effectId
+     * value.files = 用戶上傳的檔案清單（用於匯出時直接打包，不再走 fetch app-resource://）
+     * value.zipPathByFileName = 匯出 zip 內的相對路徑（通常取 webkitRelativePath）
+     */
+    const uploadedEffectCacheRef = useRef<Map<string, {
+        files: File[];
+        zipPathByFileName: Map<string, string>;
+    }>>(new Map());
+
     // 檢查 Runtime 狀態
     useEffect(() => {
         const checkReady = () => setIsRuntimeReady(isEffekseerRuntimeReady());
@@ -1997,6 +2015,21 @@ export default function EffectTestPanel({
                         scale: 1.0
                     });
 
+                    // 建立匯出用的 zip 路徑映射（保留資料夾結構）
+                    const zipPathByFileName = new Map<string, string>();
+                    for (const f of relatedFiles) {
+                        const rel = ((f as any).webkitRelativePath || f.name) as string;
+                        const normalized = rel.replace(/\\/g, '/');
+                        // 以檔名為 key（匯出時用檔名找 zip path；若同名不同路徑，後者會覆寫）
+                        zipPathByFileName.set(f.name, normalized);
+                    }
+
+                    // 記錄到快取：匯出時直接打包這些檔案，不走 fetch public/effekseer
+                    uploadedEffectCacheRef.current.set(effectId, {
+                        files: relatedFiles,
+                        zipPathByFileName,
+                    });
+
                     // 新增特效卡片
                     const newEffect: EffectItem = {
                         id: effectId,
@@ -2015,6 +2048,7 @@ export default function EffectTestPanel({
                         boundBoneUuid: null,
                         triggers: [],
                         color: colors[i % colors.length],
+                        sourceType: 'uploaded',
                         resourceStatus: relatedFiles.map(f => ({
                             path: f.name,
                             exists: true,
@@ -2131,6 +2165,32 @@ export default function EffectTestPanel({
             for (const effect of loadedEffects) {
                 console.log(`[EffectTestPanel] 📂 處理特效: ${effect.name}`);
                 
+                // A) 上傳特效：直接從記憶體中的 File 打包（避免 fetch app-resource://public/effekseer/[上傳]... 404）
+                if (effect.sourceType === 'uploaded') {
+                    const pkg = uploadedEffectCacheRef.current.get(effect.id);
+                    if (!pkg) {
+                        failedFiles.push(effect.name);
+                        console.warn(`[EffectTestPanel] ⚠️ 找不到上傳特效的快取，無法匯出: ${effect.name}`);
+                        continue;
+                    }
+
+                    for (const file of pkg.files) {
+                        const zipPath = pkg.zipPathByFileName.get(file.name) || file.name;
+                        if (addedFiles.has(zipPath)) continue;
+                        try {
+                            const ab = await file.arrayBuffer();
+                            zip.file(zipPath, ab);
+                            addedFiles.add(zipPath);
+                            console.log(`[EffectTestPanel] ✅ 添加(上傳): ${zipPath}`);
+                        } catch (err) {
+                            failedFiles.push(zipPath);
+                            console.error(`[EffectTestPanel] ❌ 讀取上傳檔案失敗: ${zipPath}`, err);
+                        }
+                    }
+                    continue; // 上傳特效已全量打包，不需要再走 resourceStatus
+                }
+
+                // B) public/effekseer 特效：維持原本 fetch 下載打包流程
                 // 1. 添加 .efk 檔案
                 const efkPath = effect.path;
                 const efkUrl = getEffekseerPath(efkPath);
