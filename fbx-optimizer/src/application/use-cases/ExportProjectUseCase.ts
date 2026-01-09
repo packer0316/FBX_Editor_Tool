@@ -10,6 +10,7 @@
  */
 
 import JSZip from 'jszip';
+import * as THREE from 'three';
 import type { ModelInstance } from '../../domain/value-objects/ModelInstance';
 import type { DirectorTrack } from '../../domain/entities/director/director.types';
 import type { IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
@@ -27,6 +28,8 @@ import {
   type SerializableLayer,
   type SerializableElement2D,
   type SerializableSpineInstance,
+  type SerializableEffectItem,
+  type SerializableEffectTrigger,
   type GlobalSettings,
   PROJECT_VERSION,
 } from '../../domain/value-objects/ProjectState';
@@ -34,6 +37,9 @@ import type { ShaderGroup, ShaderFeature } from '../../domain/value-objects/Shad
 import type { Layer } from '../../domain/value-objects/Layer';
 import type { Element2D, ImageElement2D } from '../../domain/value-objects/Element2D';
 import type { SpineInstance } from '../../domain/value-objects/SpineInstance';
+import type { EffectItem } from '../../presentation/features/effect-panel/components/EffectTestPanel';
+import type { EffectTrigger } from '../../domain/value-objects/EffectTrigger';
+import { getEffekseerPath } from '../../utils/environment';
 
 // ============================================================================
 // 匯出參數介面
@@ -379,8 +385,163 @@ function serializeShaderGroup(
   };
 }
 
+// ============================================================================
+// Effekseer 特效序列化函數
+// ============================================================================
+
+/**
+ * Effekseer 特效檔案資訊（用於打包到 ZIP）
+ */
+interface EffectFileInfo {
+  /** 特效 ID */
+  effectId: string;
+  /** 檔案 */
+  file: File | Blob;
+  /** 檔案名稱 */
+  fileName: string;
+  /** ZIP 內的相對路徑 */
+  relativePath: string;
+}
+
+/**
+ * 序列化特效觸發器
+ */
+function serializeEffectTrigger(trigger: EffectTrigger): SerializableEffectTrigger {
+  return {
+    id: trigger.id,
+    clipId: trigger.clipId,
+    clipName: trigger.clipName,
+    frame: trigger.frame,
+    duration: trigger.duration,
+  };
+}
+
+/**
+ * 序列化特效項目
+ * 
+ * @param effect - 特效項目
+ * @param bones - 模型骨骼列表（用於將 UUID 轉為名稱）
+ * @param effectFileInfos - 收集特效檔案資訊（用於打包）
+ * @param modelId - 所屬模型 ID
+ * @returns 序列化後的特效項目
+ */
+async function serializeEffectItem(
+  effect: EffectItem,
+  bones: THREE.Object3D[],
+  effectFileInfos: EffectFileInfo[],
+  modelId: string
+): Promise<SerializableEffectItem> {
+  // 將骨骼 UUID 轉換為名稱
+  const boundBoneName = effect.boundBoneUuid
+    ? bones.find(b => b.uuid === effect.boundBoneUuid)?.name || null
+    : null;
+  
+  // 收集資源路徑
+  const resourcePaths: string[] = [];
+  
+  if (effect.sourceType === 'uploaded' && effect.rawFiles && effect.rawFiles.length > 0) {
+    // uploaded 類型：使用記憶體中的原始檔案
+    const effectFolderPath = `assets/effects/${modelId}/${effect.id}`;
+    
+    for (const file of effect.rawFiles) {
+      // 取得原始相對路徑或使用檔名
+      const originalPath = effect.zipPathByFileName?.get(file.name) || file.name;
+      // 只保留檔名部分（去掉上層資料夾）
+      const fileName = originalPath.split('/').pop() || file.name;
+      const relativePath = `${effectFolderPath}/${fileName}`;
+      
+      effectFileInfos.push({
+        effectId: effect.id,
+        file,
+        fileName,
+        relativePath,
+      });
+      
+      resourcePaths.push(relativePath);
+    }
+  } else if (effect.sourceType === 'public' || !effect.sourceType) {
+    // public 類型：從 public/effekseer 取得檔案
+    try {
+      const effectUrl = getEffekseerPath(effect.path);
+      const baseDir = effectUrl.substring(0, effectUrl.lastIndexOf('/') + 1);
+      const effectFolderPath = `assets/effects/${modelId}/${effect.id}`;
+      
+      // 取得主 .efk 檔案
+      const efkResponse = await fetch(effectUrl);
+      if (efkResponse.ok) {
+        const efkBlob = await efkResponse.blob();
+        const efkFileName = effect.path.split('/').pop() || 'effect.efk';
+        const efkRelativePath = `${effectFolderPath}/${efkFileName}`;
+        
+        effectFileInfos.push({
+          effectId: effect.id,
+          file: efkBlob,
+          fileName: efkFileName,
+          relativePath: efkRelativePath,
+        });
+        
+        resourcePaths.push(efkRelativePath);
+      }
+      
+      // 取得引用的資源檔案
+      if (effect.resourceStatus) {
+        for (const resource of effect.resourceStatus) {
+          if (!resource.exists) continue;
+          
+          try {
+            // 處理資源路徑
+            let resourceUrl = resource.path;
+            if (!resourceUrl.startsWith('/') && !resourceUrl.startsWith('http')) {
+              resourceUrl = baseDir + resource.path;
+            }
+            
+            const resourceResponse = await fetch(resourceUrl);
+            if (resourceResponse.ok) {
+              const resourceBlob = await resourceResponse.blob();
+              const resourceFileName = resource.path.split('/').pop() || resource.path;
+              const resourceRelativePath = `${effectFolderPath}/${resourceFileName}`;
+              
+              effectFileInfos.push({
+                effectId: effect.id,
+                file: resourceBlob,
+                fileName: resourceFileName,
+                relativePath: resourceRelativePath,
+              });
+              
+              resourcePaths.push(resourceRelativePath);
+            }
+          } catch (err) {
+            console.warn(`⚠️ 無法取得特效資源: ${resource.path}`, err);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn(`⚠️ 無法取得 public 特效: ${effect.path}`, err);
+    }
+  }
+  
+  return {
+    id: effect.id,
+    name: effect.name,
+    path: effect.path,
+    sourceType: effect.sourceType || 'public',
+    position: effect.position,
+    rotation: effect.rotation,
+    scale: effect.scale,
+    speed: effect.speed,
+    isVisible: effect.isVisible,
+    isLooping: effect.isLooping,
+    boundBoneName,
+    triggers: effect.triggers.map(serializeEffectTrigger),
+    color: effect.color,
+    resourcePaths: resourcePaths.length > 0 ? resourcePaths : undefined,
+  };
+}
+
 /**
  * 序列化模型狀態
+ * 
+ * 注意：effects 需要另外處理（因為需要 async 操作），這裡先不包含
  */
 function serializeModelState(
   model: ModelInstance,
@@ -427,6 +588,7 @@ function serializeModelState(
     transformSnapshots: model.transformSnapshots && model.transformSnapshots.length > 0
       ? model.transformSnapshots
       : undefined,
+    // effects 會在 execute() 中另外處理
   };
 }
 
@@ -528,6 +690,38 @@ export class ExportProjectUseCase {
               modelFolder.file(textureInfo.relativePath, textureInfo.file);
               console.log(`  🖼️ 加入 Shader 貼圖: ${textureInfo.relativePath}`);
             }
+          }
+          
+          // 處理 Effekseer 特效（當 includeEffekseer = true）
+          if (exportOptions.includeEffekseer && model.effects && model.effects.length > 0) {
+            console.log(`✨ 模型 ${model.name} 有 ${model.effects.length} 個特效`);
+            
+            const effectFileInfos: EffectFileInfo[] = [];
+            const serializedEffects: SerializableEffectItem[] = [];
+            
+            for (const effect of model.effects) {
+              try {
+                const serializedEffect = await serializeEffectItem(
+                  effect,
+                  model.bones,
+                  effectFileInfos,
+                  model.id
+                );
+                serializedEffects.push(serializedEffect);
+                console.log(`  ✅ 序列化特效: ${effect.name}`);
+              } catch (err) {
+                console.warn(`  ⚠️ 序列化特效失敗: ${effect.name}`, err);
+              }
+            }
+            
+            // 將特效檔案加入 ZIP
+            for (const fileInfo of effectFileInfos) {
+              zip.file(fileInfo.relativePath, fileInfo.file);
+              console.log(`  📁 加入特效檔案: ${fileInfo.relativePath}`);
+            }
+            
+            // 加入序列化後的特效到模型狀態
+            serializedModel.effects = serializedEffects;
           }
           
           serializedModels.push(serializedModel);

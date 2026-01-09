@@ -13,6 +13,7 @@
  */
 
 import JSZip from 'jszip';
+import * as THREE from 'three';
 import type { ModelInstance } from '../../domain/value-objects/ModelInstance';
 import type { IdentifiableClip } from '../../utils/clip/clipIdentifierUtils';
 import { AnimationClipService } from '../../domain/services/AnimationClipService';
@@ -23,8 +24,6 @@ import {
   type SerializableModelState,
   type SerializableClipInfo,
   type SerializableDirectorState,
-  type SerializableShaderGroup,
-  type SerializableShaderFeature,
   type SerializableLayer,
   type SerializableElement2D,
   type SerializableSpineInstance,
@@ -37,6 +36,9 @@ import type { Element2D, ImageElement2D } from '../../domain/value-objects/Eleme
 import type { SpineInstance, SpineRawData } from '../../domain/value-objects/SpineInstance';
 import { getSpineRuntimeAdapter } from '../../infrastructure/spine';
 import { createSpineInstance } from '../../domain/value-objects/SpineInstance';
+import type { EffectItem } from '../../presentation/features/effect-panel/components/EffectTestPanel';
+import type { EffectTrigger } from '../../domain/value-objects/EffectTrigger';
+import { LoadEffectUseCase } from './LoadEffectUseCase';
 
 // ============================================================================
 // 載入參數介面
@@ -245,6 +247,24 @@ export class LoadProjectUseCase {
         }
       }
 
+      // 7.5. 還原 Effekseer 特效（需要在 clipIdMap 填充後才能正確映射觸發器）
+      // 注意：這裡先收集，等 clipIdMap 完成後再執行
+      const effectRestoreTasks: Array<{
+        savedModel: SerializableModelState;
+        newModelId: string;
+        loadedModel: ModelInstance;
+      }> = [];
+      
+      if (projectState.exportOptions.includeEffekseer) {
+        for (const savedModel of projectState.models) {
+          const newModelId = modelIdMap.get(savedModel.id);
+          const loadedModel = loadedModels.get(savedModel.id);
+          if (newModelId && loadedModel && savedModel.effects && savedModel.effects.length > 0) {
+            effectRestoreTasks.push({ savedModel, newModelId, loadedModel });
+          }
+        }
+      }
+
       // 8. 還原切割動作（直接使用載入的模型實例，避免異步狀態問題）
       if (projectState.exportOptions.includeAnimations) {
         modelCallbacks.onProgress?.(80, '正在還原動作片段...');
@@ -259,7 +279,21 @@ export class LoadProjectUseCase {
             );
           }
         }
+      }
 
+      // 8.5. 還原 Effekseer 特效（現在 clipIdMap 已填充完成）
+      if (effectRestoreTasks.length > 0) {
+        modelCallbacks.onProgress?.(85, '正在還原 Effekseer 特效...');
+        for (const task of effectRestoreTasks) {
+          await this.restoreEffects(
+            zip,
+            task.savedModel,
+            task.newModelId,
+            task.loadedModel.bones,
+            clipIdMap,
+            modelCallbacks
+          );
+        }
       }
 
       // 9. 還原 Spine 實例（必須在導演模式之前，因為導演模式需要 spineIdMap）
@@ -550,6 +584,130 @@ export class LoadProjectUseCase {
     });
 
     console.log(`✅ Shader 配置還原完成: ${restoredGroups.length} 個組合`);
+  }
+
+  /**
+   * 還原 Effekseer 特效
+   * 
+   * @param zip - ZIP 檔案
+   * @param savedModel - 已保存的模型狀態
+   * @param newModelId - 新模型 ID
+   * @param newBones - 新模型的骨骼列表
+   * @param clipIdMap - 動作 ID 映射表
+   * @param callbacks - 回調函數
+   */
+  private static async restoreEffects(
+    zip: JSZip,
+    savedModel: SerializableModelState,
+    newModelId: string,
+    newBones: THREE.Object3D[],
+    clipIdMap: Map<string, string>,
+    callbacks: LoadProjectCallbacks
+  ): Promise<void> {
+    if (!savedModel.effects || savedModel.effects.length === 0) {
+      return;
+    }
+
+    console.log(`✨ 還原特效: ${savedModel.name}, ${savedModel.effects.length} 個特效`);
+
+    const restoredEffects: EffectItem[] = [];
+
+    for (const savedEffect of savedModel.effects) {
+      try {
+        // 將骨骼名稱轉換回 UUID
+        const boundBoneUuid = savedEffect.boundBoneName
+          ? newBones.find(b => b.name === savedEffect.boundBoneName)?.uuid || null
+          : null;
+
+        // 映射觸發器的 clipId
+        const restoredTriggers: EffectTrigger[] = savedEffect.triggers.map(t => ({
+          id: t.id,
+          clipId: clipIdMap.get(t.clipId) || t.clipId,
+          clipName: t.clipName,
+          frame: t.frame,
+          duration: t.duration,
+        }));
+
+        // 從 ZIP 讀取特效檔案（uploaded 類型）
+        let rawFiles: File[] | undefined;
+        let zipPathByFileName: Map<string, string> | undefined;
+        let isLoaded = false;
+
+        if (savedEffect.resourcePaths && savedEffect.resourcePaths.length > 0) {
+          // 從 ZIP 解壓檔案
+          rawFiles = [];
+          zipPathByFileName = new Map();
+          
+          // 收集所有檔案
+          const fileBlobs: { file: File; fileName: string }[] = [];
+          
+          for (const resourcePath of savedEffect.resourcePaths) {
+            const zipFile = zip.file(resourcePath);
+            if (zipFile) {
+              const blob = await zipFile.async('blob');
+              const fileName = resourcePath.split('/').pop() || resourcePath;
+              const mimeType = this.getMimeType(fileName);
+              const file = new File([blob], fileName, { type: mimeType });
+              rawFiles.push(file);
+              zipPathByFileName.set(fileName, resourcePath);
+              fileBlobs.push({ file, fileName });
+              console.log(`  📁 讀取特效檔案: ${resourcePath}`);
+            } else {
+              console.warn(`  ⚠️ 找不到特效檔案: ${resourcePath}`);
+            }
+          }
+          
+          // 載入到 Effekseer Runtime
+          if (rawFiles.length > 0) {
+            try {
+              await LoadEffectUseCase.execute({
+                id: savedEffect.id,
+                files: rawFiles,
+                scale: 1.0,
+              });
+              isLoaded = true;
+              console.log(`  ✅ 特效載入到 Runtime: ${savedEffect.name}`);
+            } catch (err) {
+              console.warn(`  ⚠️ 特效載入失敗: ${savedEffect.name}`, err);
+            }
+          }
+        }
+
+        // 建立還原的 EffectItem
+        const restoredEffect: EffectItem = {
+          id: savedEffect.id,
+          name: savedEffect.name,
+          path: savedEffect.path,
+          isLoaded,
+          isLoading: false,
+          isPlaying: false,
+          isLooping: savedEffect.isLooping,
+          loopIntervalId: null,
+          isVisible: savedEffect.isVisible,
+          position: savedEffect.position,
+          rotation: savedEffect.rotation,
+          scale: savedEffect.scale,
+          speed: savedEffect.speed,
+          boundBoneUuid,
+          triggers: restoredTriggers,
+          color: savedEffect.color,
+          sourceType: savedEffect.sourceType,
+          rawFiles,
+          zipPathByFileName,
+        };
+
+        restoredEffects.push(restoredEffect);
+        console.log(`  ✅ 特效還原成功: ${savedEffect.name} (骨骼綁定: ${savedEffect.boundBoneName || '無'})`);
+      } catch (err) {
+        console.error(`  ❌ 特效還原失敗: ${savedEffect.name}`, err);
+      }
+    }
+
+    // 更新模型的特效列表
+    if (restoredEffects.length > 0) {
+      callbacks.updateModel(newModelId, { effects: restoredEffects });
+      console.log(`✅ 特效還原完成: ${restoredEffects.length} 個特效`);
+    }
   }
 
   /**

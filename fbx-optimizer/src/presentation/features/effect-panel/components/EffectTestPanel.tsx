@@ -242,6 +242,18 @@ export interface EffectItem {
      * - uploaded: 來自「上傳特效資料夾」（只能用記憶體中的 File 來匯出）
      */
     sourceType?: 'public' | 'uploaded';
+    
+    /**
+     * 原始檔案（僅 uploaded 類型使用）
+     * 用於匯出時打包到 ZIP
+     */
+    rawFiles?: File[];
+    
+    /**
+     * ZIP 路徑映射（僅 uploaded 類型使用）
+     * key: 檔案名稱, value: ZIP 內相對路徑
+     */
+    zipPathByFileName?: Map<string, string>;
 }
 
 // 向量輸入組件
@@ -2053,7 +2065,10 @@ export default function EffectTestPanel({
                             path: f.name,
                             exists: true,
                             type: getResourceTypeFromName(f.name)
-                        }))
+                        })),
+                        // 儲存原始檔案供匯出使用
+                        rawFiles: relatedFiles,
+                        zipPathByFileName: zipPathByFileName,
                     };
 
                     setEffects(prev => [...prev, newEffect]);
@@ -2167,7 +2182,10 @@ export default function EffectTestPanel({
                     path: f.name,
                     exists: true,
                     type: getResourceTypeFromName(f.name)
-                }))
+                })),
+                // 🔥 儲存原始檔案供匯出使用
+                rawFiles: allFiles,
+                zipPathByFileName: zipPathByFileName,
             };
 
             setEffects(prev => [...prev, newEffect]);

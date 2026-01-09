@@ -77,10 +77,13 @@ export default function ProjectIOPanel({
         setExportOptions(prev => ({ ...prev, includeAnimations: false }));
       }
     }
-    // 如果 3D 沒勾選，取消 Shader 選項
+    // 如果 3D 沒勾選，取消 Shader 和 Effekseer 選項
     if (!exportOptions.include3DModels) {
       if (exportOptions.includeShader) {
         setExportOptions(prev => ({ ...prev, includeShader: false }));
+      }
+      if (exportOptions.includeEffekseer) {
+        setExportOptions(prev => ({ ...prev, includeEffekseer: false }));
       }
     }
   }, [exportOptions.include3DModels, exportOptions.include2D]);
@@ -90,6 +93,9 @@ export default function ProjectIOPanel({
   
   // 計算是否可以勾選 Shader 選項（需要 3D）
   const canSelectShader = exportOptions.include3DModels;
+  
+  // 計算是否可以勾選 Effekseer 選項（需要 3D）
+  const canSelectEffekseer = exportOptions.include3DModels;
   
   // 計算是否可以匯出（至少要選一個 3D 或 2D）
   const canExport = exportOptions.include3DModels || exportOptions.include2D;
@@ -264,6 +270,29 @@ export default function ProjectIOPanel({
                   <span className="ml-auto text-xs text-gray-500">需勾選 3D</span>
                 )}
               </label>
+
+              {/* Effekseer */}
+              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border transition-colors ${
+                canSelectEffekseer 
+                  ? 'cursor-pointer hover:bg-white/5' 
+                  : 'opacity-50 cursor-not-allowed'
+              }`}>
+                <input
+                  type="checkbox"
+                  checked={exportOptions.includeEffekseer}
+                  onChange={(e) => setExportOptions({
+                    ...exportOptions,
+                    includeEffekseer: e.target.checked,
+                  })}
+                  disabled={isProcessing || !canSelectEffekseer}
+                  className="w-4 h-4 rounded accent-blue-500"
+                />
+                <Sparkles className="w-4 h-4 text-cyan-400" />
+                <span className={theme.text}>Effekseer 特效</span>
+                {!canSelectEffekseer && (
+                  <span className="ml-auto text-xs text-gray-500">需勾選 3D</span>
+                )}
+              </label>
             </div>
           </div>
 
@@ -283,19 +312,6 @@ export default function ProjectIOPanel({
                 />
                 <Volume2 className="w-4 h-4 text-yellow-400" />
                 <span className="text-gray-500">Audio</span>
-                <span className="ml-auto text-xs text-gray-600">未實作</span>
-              </label>
-
-              {/* Effekseer */}
-              <label className={`flex items-center gap-3 p-3 rounded-lg ${theme.itemBg} ${theme.itemBorder} border cursor-not-allowed`}>
-                <input
-                  type="checkbox"
-                  checked={false}
-                  disabled={true}
-                  className="w-4 h-4 rounded"
-                />
-                <Sparkles className="w-4 h-4 text-cyan-400" />
-                <span className="text-gray-500">Effekseer</span>
                 <span className="ml-auto text-xs text-gray-600">未實作</span>
               </label>
             </div>

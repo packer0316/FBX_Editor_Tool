@@ -46,8 +46,8 @@ export interface ExportOptions {
   /** Audio 音效（預留，暫時 false） */
   includeAudio: false;
   
-  /** Effekseer 特效（預留，暫時 false） */
-  includeEffekseer: false;
+  /** Effekseer 特效 */
+  includeEffekseer: boolean;
 }
 
 /**
@@ -60,7 +60,7 @@ export function createDefaultExportOptions(): ExportOptions {
     includeAnimations: true,
     includeShader: true,
     includeAudio: false,
-    includeEffekseer: false,
+    includeEffekseer: true,
   };
 }
 
@@ -95,6 +95,85 @@ export interface SerializableClipInfo {
   
   /** 幀率 */
   fps: number;
+}
+
+// ============================================================================
+// 可序列化 Effekseer 特效
+// ============================================================================
+
+/**
+ * 可序列化的特效觸發器
+ * 
+ * 用於保存特效觸發設定，載入時會透過 clipIdMap 映射新的 clipId
+ */
+export interface SerializableEffectTrigger {
+  /** 觸發器唯一識別碼 */
+  id: string;
+  
+  /** 關聯的動作片段 ID（匯入時需映射） */
+  clipId: string;
+  
+  /** 動作片段名稱（顯示用） */
+  clipName: string;
+  
+  /** 觸發幀數 */
+  frame: number;
+  
+  /** 播放持續時間（秒），不設定則播放到特效自然結束 */
+  duration?: number;
+}
+
+/**
+ * 可序列化的特效項目
+ * 
+ * 用於保存 EffectItem 的配置，骨骼綁定使用名稱而非 UUID
+ */
+export interface SerializableEffectItem {
+  /** 唯一識別碼 */
+  id: string;
+  
+  /** 顯示名稱 */
+  name: string;
+  
+  /** 特效路徑（相對路徑，如 "Boss/Explosion.efk"） */
+  path: string;
+  
+  /** 特效來源類型 */
+  sourceType: 'public' | 'uploaded';
+  
+  // Transform 設定
+  /** 位置 [x, y, z] */
+  position: [number, number, number];
+  
+  /** 旋轉 [x, y, z] 度數 */
+  rotation: [number, number, number];
+  
+  /** 縮放 [x, y, z] */
+  scale: [number, number, number];
+  
+  /** 播放速度 */
+  speed: number;
+  
+  /** 是否可見 */
+  isVisible: boolean;
+  
+  /** 是否循環 */
+  isLooping: boolean;
+  
+  // 骨骼綁定（使用名稱而非 UUID，匯入時透過名稱查找 UUID）
+  /** 綁定的骨骼名稱（null 表示世界座標） */
+  boundBoneName: string | null;
+  
+  // 觸發器
+  /** 動畫觸發器列表 */
+  triggers: SerializableEffectTrigger[];
+  
+  /** 特效顏色（用於時間軸顯示） */
+  color: string;
+  
+  // uploaded 類型的資源路徑（ZIP 內相對路徑）
+  /** 資源檔案路徑列表（僅 uploaded 類型使用） */
+  resourcePaths?: string[];
 }
 
 // ============================================================================
@@ -296,9 +375,12 @@ export interface SerializableModelState {
   /** Transform 快照列表（位置、旋轉、縮放、透明度） */
   transformSnapshots?: SerializableTransformSnapshot[];
   
+  // Effekseer 特效設定（當 includeEffekseer = true）
+  /** 特效列表 */
+  effects?: SerializableEffectItem[];
+  
   // 預留擴充欄位（暫不序列化）
   // audioTracks?: SerializableAudioTrack[];
-  // effects?: SerializableEffectItem[];
 }
 
 // ============================================================================
