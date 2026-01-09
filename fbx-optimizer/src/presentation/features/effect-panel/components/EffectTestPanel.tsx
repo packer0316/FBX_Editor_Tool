@@ -2414,42 +2414,45 @@ export default function EffectTestPanel({
             
             {/* 按鈕工具列 */}
             <div className="flex items-center gap-2 flex-wrap">
-                {/* 停止所有播放中特效按鈕 */}
-                <button
-                    onClick={handleStopAllPlayingEffects}
-                    disabled={!isRuntimeReady}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-600/20 hover:bg-orange-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-orange-400 hover:text-orange-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-orange-600/30"
-                    title="停止所有正在播放的觸發特效"
-                >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    停止所有播放中特效
-                </button>
-                
-                {/* 打包匯出按鈕 */}
-                <button
-                    onClick={handleExportEffects}
-                    disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-green-600/30"
-                    title="打包匯出所有已載入的特效及其資源"
-                >
-                    {isExporting ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                        <Download className="w-3.5 h-3.5" />
-                    )}
-                    {isExporting ? '打包中...' : '打包匯出'}
-                </button>
-                
-                {/* 清除快取按鈕 */}
-                <button
-                    onClick={handleClearCache}
-                    disabled={!isRuntimeReady}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md text-xs font-medium transition-colors border border-red-600/30"
-                    title="清除所有特效快取（釋放記憶體）"
-                >
-                    <Trash className="w-3.5 h-3.5" />
-                    清除快取
-                </button>
+                {/* 圖示按鈕群組 */}
+                <div className="flex items-center gap-1.5">
+                    {/* 停止所有播放中特效按鈕 */}
+                    <button
+                        onClick={handleStopAllPlayingEffects}
+                        disabled={!isRuntimeReady}
+                        className="p-2 bg-orange-600/20 hover:bg-orange-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-orange-400 hover:text-orange-300 disabled:text-gray-500 rounded-md transition-colors border border-orange-600/30"
+                        title="停止所有播放中特效"
+                    >
+                        <Square className="w-4 h-4 fill-current" />
+                    </button>
+                    
+                    {/* 打包匯出按鈕 */}
+                    <button
+                        onClick={handleExportEffects}
+                        disabled={!isRuntimeReady || isExporting || effects.filter(e => e.isLoaded).length === 0}
+                        className="p-2 bg-green-600/20 hover:bg-green-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-green-400 hover:text-green-300 disabled:text-gray-500 rounded-md transition-colors border border-green-600/30"
+                        title="打包匯出所有已載入的特效"
+                    >
+                        {isExporting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                            <Download className="w-4 h-4" />
+                        )}
+                    </button>
+                    
+                    {/* 清除快取按鈕 */}
+                    <button
+                        onClick={handleClearCache}
+                        disabled={!isRuntimeReady}
+                        className="p-2 bg-red-600/20 hover:bg-red-600/30 disabled:bg-gray-700 disabled:cursor-not-allowed text-red-400 hover:text-red-300 disabled:text-gray-500 rounded-md transition-colors border border-red-600/30"
+                        title="清除所有特效快取"
+                    >
+                        <Trash className="w-4 h-4" />
+                    </button>
+                </div>
+
+                {/* 分隔線 */}
+                <div className="h-6 border-r border-gray-700" />
                 
                 {/* 上傳特效資料夾按鈕 */}
                 <button
@@ -2535,35 +2538,6 @@ export default function EffectTestPanel({
             {/* Footer Instructions */}
             <div className="mt-4 pt-4 border-t border-gray-700/50">
                 <div className="bg-gray-800/50 rounded-lg p-3 text-xs text-gray-400 border border-gray-700/50">
-                    <div className="flex items-center gap-2 mb-2 text-gray-300 font-medium">
-                        <AlertCircle className="w-3.5 h-3.5 text-blue-400" />
-                        使用說明
-                    </div>
-                    <ul className="space-y-1.5 pl-1 mb-3 pb-3 border-b border-gray-700/50">
-                        <li className="flex gap-2">
-                            <span className="text-gray-600">•</span>
-                            <span>將 .efk 和所有資源（.png, .efkmat 等）放到 <code className="bg-gray-700 px-1 py-0.5 rounded text-gray-300">fbx-optimizer/public/effekseer/</code>
-                                <button
-                                    onClick={() => {
-                                        navigator.clipboard.writeText('fbx-optimizer/public/effekseer/');
-                                        alert('✅ 路徑已複製到剪貼簿！\n\n請在專案資料夾中開啟：\nfbx-optimizer/public/effekseer/');
-                                    }}
-                                    className="inline-flex items-center ml-1 p-0.5 rounded hover:bg-gray-600 text-blue-400 hover:text-blue-300 transition-colors"
-                                    title="複製路徑"
-                                >
-                                    <FolderOpen className="w-3.5 h-3.5" />
-                                </button>
-                            </span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-gray-600">•</span>
-                            <span>保持原始資料夾結構，例如: <span className="text-gray-400">Texture/Particle.png</span></span>
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-gray-600">•</span>
-                            <span>輸入相對路徑，例如: <span className="text-green-400">BigExplosion_Orange.efk</span></span>
-                        </li>
-                    </ul>
                     <div className="flex items-center gap-2 mb-2 text-gray-300 font-medium">
                         <AlertCircle className="w-3.5 h-3.5 text-orange-400" />
                         操作提示
