@@ -286,10 +286,27 @@ autoUpdater.on('update-not-available', () => {
 autoUpdater.on('error', (err) => {
     console.error('[AutoUpdater] 更新錯誤:', err);
     closeProgressWindow();
-    // 如果是 404 錯誤（repo 為 private 或不存在），靜默處理不顯示彈窗
     const errorMessage = err.message || '';
-    if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
-        console.log('[AutoUpdater] 無法訪問更新伺服器（可能是私有 repo），跳過更新檢查');
+    // 靜默處理以下錯誤，不顯示彈窗：
+    // 1. 404 錯誤（repo 為 private 或不存在）
+    // 2. 網路連線錯誤（沒有網路、DNS 解析失敗、連線逾時等）
+    const silentErrors = [
+        '404',
+        'Not Found',
+        'ENOTFOUND', // DNS 查詢失敗（無法找到主機）
+        'ENETUNREACH', // 網路無法連線
+        'EAI_AGAIN', // DNS 暫時失敗
+        'ETIMEDOUT', // 連線逾時
+        'ECONNREFUSED', // 連線被拒絕
+        'ECONNRESET', // 連線被重置
+        'EHOSTUNREACH', // 主機無法連線
+        'net::ERR', // Chromium 網路錯誤
+        'getaddrinfo', // DNS 解析錯誤
+        'fetch failed', // fetch 失敗
+    ];
+    const isSilentError = silentErrors.some(keyword => errorMessage.includes(keyword));
+    if (isSilentError) {
+        console.log('[AutoUpdater] 無法連線到更新伺服器（網路問題或 repo 不可用），跳過更新檢查');
         return;
     }
     // 其他錯誤才顯示彈窗

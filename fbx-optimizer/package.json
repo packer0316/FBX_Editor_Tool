@@ -1,7 +1,7 @@
 {
   "name": "jr-3d-viewer",
   "private": true,
-  "version": "1.4.5",
+  "version": "1.4.6",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {

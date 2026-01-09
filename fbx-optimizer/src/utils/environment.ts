@@ -68,13 +68,17 @@ export function getEffekseerPath(subPath: string): string {
   
   // 移除開頭的斜線（如果有的話）
   const cleanSubPath = subPath.startsWith('/') ? subPath.slice(1) : subPath;
+  // ⚠️ 重要：路徑中可能包含空白或特殊字元（例如 "09. Flow RimOpacity 01.efkmat"）
+  // 在 Electron 自訂協議 / 瀏覽器 fetch 中，未 encode 的 URL 可能導致 404 或解析錯誤
+  // encodeURI 會保留 '/'，但會把空白等字元 encode 成 %20
+  const encodedSubPath = encodeURI(cleanSubPath);
   
   if (base) {
-    return `${base}/effekseer/${cleanSubPath}`;
+    return `${base}/effekseer/${encodedSubPath}`;
   }
   
   // 網頁模式使用絕對路徑
-  return `/effekseer/${cleanSubPath}`;
+  return `/effekseer/${encodedSubPath}`;
 }
 
 /**
@@ -133,6 +137,51 @@ export async function fetchJsonResource<T = any>(url: string): Promise<T> {
 }
 
 /**
+ * 在 Electron 環境中載入二進制資源（Blob）
+ * 用於下載圖片、efk 檔案等二進制資源
+ * 
+ * @param url - 資源 URL (可能是 app-resource:// 或普通 http/https)
+ * @returns Promise<Blob> - 資源的 Blob 物件
+ */
+export async function fetchBlobResource(url: string): Promise<Blob> {
+  if (!isElectron) {
+    // 瀏覽器環境直接使用 fetch
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${url}: ${response.statusText}`);
+    }
+    return response.blob();
+  }
+
+  // Electron 環境：使用 XMLHttpRequest 載入二進制資源
+  return new Promise<Blob>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    
+    console.log(`[fetchBlobResource] 載入資源: ${url}`);
+    
+    xhr.open('GET', url, true);
+    xhr.responseType = 'blob'; // 設定為 blob 類型
+    
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        console.log(`[fetchBlobResource] ✓ 載入成功: ${url}`);
+        resolve(xhr.response as Blob);
+      } else {
+        const error = `Failed to load ${url}: ${xhr.status} ${xhr.statusText}`;
+        console.error(`[fetchBlobResource] ✗ ${error}`);
+        reject(new Error(error));
+      }
+    };
+    xhr.onerror = () => {
+      const error = `Network error while loading ${url}`;
+      console.error(`[fetchBlobResource] ✗ ${error}`);
+      reject(new Error(error));
+    };
+    xhr.send();
+  });
+}
+
+/**
  * 環境資訊物件（方便一次性取得所有環境狀態）
  */
 export const Environment = {
@@ -144,11 +193,10 @@ export const Environment = {
   getEffekseerPath,
   fetchTextResource,
   fetchJsonResource,
+  fetchBlobResource,
 } as const;
 
 // 在控制台輸出當前環境（僅開發模式）
 if (isDev) {
   console.log(`[Environment] 運行環境: ${isElectron ? '🖥️ Electron' : '🌐 瀏覽器'}`);
 }
-
-
