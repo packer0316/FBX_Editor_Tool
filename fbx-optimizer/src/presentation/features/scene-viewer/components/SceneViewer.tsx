@@ -439,6 +439,12 @@ const Model = forwardRef<ModelRef, ModelProps>(
         const currentClipRef = useRef<THREE.AnimationClip | null>(null);
         const currentLoopRef = useRef<boolean>(loop);
         const initializedRef = useRef(false);
+        
+        // 用 ref 追蹤 initialTime，避免放入依賴數組
+        const initialTimeRef = useRef(initialTime);
+        useEffect(() => {
+            initialTimeRef.current = initialTime;
+        }, [initialTime]);
 
         useEffect(() => {
             if (mixerRef.current && clip) {
@@ -503,9 +509,11 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 // 根據 initialPlaying 設置初始播放狀態
                 action.paused = !initialPlaying;
                 isPlayingRef.current = initialPlaying;
-                // 設置初始時間位置（如果有的話）
-                if (initialTime !== undefined && initialTime !== null && !isNaN(initialTime)) {
-                    action.time = initialTime;
+                // 🔥 修復：只有在 clip 沒有變更時才使用 initialTime
+                // 當 clip 變更時，強制從 0 開始播放，避免使用舊的 currentTime 值
+                const currentInitialTime = initialTimeRef.current;
+                if (!clipChanged && currentInitialTime !== undefined && currentInitialTime !== null && !isNaN(currentInitialTime)) {
+                    action.time = currentInitialTime;
                 }
                 if (initialPlaying) {
                     action.play();
@@ -529,7 +537,10 @@ const Model = forwardRef<ModelRef, ModelProps>(
                 initializedRef.current = false;
                 isPlayingRef.current = false;
             }
-        }, [clip, model, loop, initialPlaying, initialTime]);
+        // 🔥 移除 initialTime 從依賴數組，避免播放過程中頻繁觸發
+        // initialTime 只在 clip 變化時使用一次（且只在 !clipChanged 時）
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, [clip, model, loop, initialPlaying]);
 
         useImperativeHandle(ref, () => ({
             play: () => {
@@ -648,7 +659,6 @@ const Model = forwardRef<ModelRef, ModelProps>(
             if (mixerRef.current && isPlayingRef.current) {
                 mixerRef.current.update(delta);
                 if (onTimeUpdateRef.current && actionRef.current) {
-                    // console.log('SceneViewer: sending time', actionRef.current.time);
                     onTimeUpdateRef.current(actionRef.current.time);
                     
                     // 將當前動畫時間存到 model.userData 中

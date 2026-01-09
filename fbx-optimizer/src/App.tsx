@@ -22,7 +22,6 @@ import { useDirectorSpineTrigger } from './presentation/features/director/hooks/
 import { useDirectorProceduralTrigger } from './presentation/features/director/hooks/useDirectorProceduralTrigger';
 import type { ActionSource } from './domain/entities/director/director.types';
 import { getClipId, getClipDisplayName } from './utils/clip/clipIdentifierUtils';
-import { optimizeAnimationClip } from './utils/optimizer';
 import { AudioController } from './infrastructure/audio/WebAudioAdapter';
 import { Loader2, Layers, Box, Wand2, Music, Sparkles } from 'lucide-react';
 import type { ShaderGroup } from './domain/value-objects/ShaderFeature';
@@ -578,8 +577,8 @@ function App() {
 
       // 優化動畫（如果有）
       if (instance.originalClip) {
-        const optimized = optimizeAnimationClip(instance.originalClip, instance.tolerance) as IdentifiableClip;
-        instance.optimizedClip = optimized;
+        const optimized = optimizeClip(instance.originalClip, instance.tolerance);
+        instance.optimizedClip = optimized ?? undefined;
         instance.duration = instance.originalClip.duration;
       }
 
@@ -1088,7 +1087,8 @@ function App() {
   const handleSelectClip = (clip: IdentifiableClip) => {
     setOriginalClip(clip);
     setDuration(clip.duration);
-    const optimized = optimizeAnimationClip(clip, tolerance) as IdentifiableClip;
+    // 🔥 使用帶快取的 optimizeClip，避免同一次點擊造成「先算一次、50ms 後又算一次」而觸發重複切換
+    const optimized = optimizeClip(clip, tolerance);
     setOptimizedClip(optimized);
     // 重置觸發狀態
     lastAudioTimeRef.current = 0;
@@ -1200,7 +1200,7 @@ function App() {
       // Revert to master clip when all clips are deleted
       setOriginalClip(masterClip);
       setDuration(masterClip.duration);
-      const optimized = optimizeAnimationClip(masterClip, tolerance) as IdentifiableClip;
+      const optimized = optimizeClip(masterClip, tolerance);
       setOptimizedClip(optimized);
       handleSeek(0);
       if (!isPlaying) handlePlayPause();
