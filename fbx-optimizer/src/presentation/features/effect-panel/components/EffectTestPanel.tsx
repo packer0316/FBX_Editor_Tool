@@ -3,6 +3,7 @@ import JSZip from 'jszip';
 import { createPortal } from 'react-dom';
 import * as THREE from 'three';
 import { PlayEffectUseCase } from '../../../../application/use-cases/PlayEffectUseCase';
+import { LoadEffectUseCase } from '../../../../application/use-cases/LoadEffectUseCase';
 import { isEffekseerRuntimeReady, getEffekseerRuntimeAdapter } from '../../../../application/use-cases/effectRuntimeStore';
 import { EffectHandleRegistry } from '../../../../infrastructure/effect/EffectHandleRegistry';
 import { composeEffekseerMatrix } from '../../../../infrastructure/effect/effekseerTransformUtils';
@@ -11,7 +12,7 @@ import { NumberInput } from '../../../../components/ui/NumberInput';
 import type { EffectTrigger } from '../../../../domain/value-objects/EffectTrigger';
 import { getClipId, getClipDisplayName, type IdentifiableClip } from '../../../../utils/clip/clipIdentifierUtils';
 import type { ThemeStyle } from '../../../../presentation/hooks/useTheme';
-import { getEffekseerPath, fetchJsonResource } from '../../../../utils/environment';
+import { getEffekseerPath, fetchJsonResource, fetchBlobResource, isElectron } from '../../../../utils/environment';
 
 // 特效播放控制組件
 const EffectPlaybackControls = ({
@@ -1869,8 +1870,25 @@ export default function EffectTestPanel({
         setShowFolderDropdown(false); // 關閉下拉選單
         console.log('🔄 [EffectTestPanel] 手動觸發重新掃描資料夾...');
         
+        // 在 Electron 打包環境中，無法重新掃描資料夾
+        // 因為 /api/efk/refresh-manifest 只存在於 Vite 開發伺服器
+        if (isElectron) {
+            // 在 Electron 中只能重新載入 manifest（無法重新掃描）
+            try {
+                await refreshFolderList();
+                console.log('✅ [EffectTestPanel] 資料夾列表已從 manifest 重新載入');
+                alert('ℹ️ 已重新載入資料夾列表\n\n注意：在已打包的應用程式中，無法動態掃描新增的資料夾。\n如需新增特效資料夾，請：\n1. 將新資料夾放入 public/effekseer/\n2. 執行 npm run efk:manifest 重新生成清單\n3. 重新打包應用程式');
+            } catch (err) {
+                console.error('❌ [EffectTestPanel] 重新載入 manifest 失敗:', err);
+                alert('❌ 載入失敗\n\n無法讀取資料夾清單');
+            } finally {
+                setIsRefreshingManifest(false);
+            }
+            return;
+        }
+        
         try {
-            // 呼叫 Vite 開發伺服器的 API
+            // 呼叫 Vite 開發伺服器的 API（僅開發模式可用）
             const response = await fetch('/api/efk/refresh-manifest', {
                 method: 'POST',
                 headers: {
@@ -1900,6 +1918,138 @@ export default function EffectTestPanel({
         } finally {
             setIsRefreshingManifest(false);
         }
+    };
+
+    // ============ 上傳特效資料夾功能 ============
+    const [isUploadingFolder, setIsUploadingFolder] = useState(false);
+    const folderUploadInputRef = useRef<HTMLInputElement>(null);
+
+    /**
+     * 處理上傳特效資料夾
+     * 允許用戶從電腦任意位置選擇包含 .efk 和資源的資料夾
+     */
+    const handleUploadEffectFolder = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const files = event.target.files;
+        if (!files || files.length === 0) return;
+
+        // 檢查 Runtime 狀態
+        if (!isEffekseerRuntimeReady()) {
+            alert('❌ Effekseer Runtime 尚未就緒，請等待左側狀態顯示為 "Runtime Ready"');
+            return;
+        }
+
+        setIsUploadingFolder(true);
+        console.log('[EffectTestPanel] 📂 開始處理上傳的資料夾，共', files.length, '個檔案');
+
+        try {
+            // 找出所有 .efk 檔案
+            const efkFiles: File[] = [];
+            const allFiles: File[] = [];
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                allFiles.push(file);
+                if (file.name.match(/\.(efk|efkefc|efkp)$/i)) {
+                    efkFiles.push(file);
+                }
+            }
+
+            if (efkFiles.length === 0) {
+                alert('❌ 找不到特效檔案！\n\n請選擇包含 .efk 檔案的資料夾。');
+                return;
+            }
+
+            console.log(`[EffectTestPanel] 找到 ${efkFiles.length} 個 .efk 檔案`);
+
+            // 預設顏色列表
+            const colors = ['#9333EA', '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#EC4899', '#8B5CF6', '#06B6D4'];
+
+            // 處理每個 .efk 檔案
+            for (let i = 0; i < efkFiles.length; i++) {
+                const efkFile = efkFiles[i];
+                const effectId = `effect_upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                const effectName = efkFile.name.replace(/\.(efk|efkefc|efkp)$/i, '');
+
+                // 找出同目錄下的相關資源（使用 webkitRelativePath 判斷）
+                const efkRelativePath = (efkFile as any).webkitRelativePath || efkFile.name;
+                const efkDir = efkRelativePath.includes('/') 
+                    ? efkRelativePath.substring(0, efkRelativePath.lastIndexOf('/') + 1)
+                    : '';
+
+                // 收集該 .efk 相關的資源檔案
+                const relatedFiles: File[] = [efkFile];
+                for (const file of allFiles) {
+                    if (file === efkFile) continue;
+                    const filePath = (file as any).webkitRelativePath || file.name;
+                    // 如果檔案在同一目錄或子目錄下
+                    if (filePath.startsWith(efkDir)) {
+                        relatedFiles.push(file);
+                    }
+                }
+
+                console.log(`[EffectTestPanel] 載入 ${effectName}，相關檔案: ${relatedFiles.length} 個`);
+
+                try {
+                    // 使用 LoadEffectUseCase 載入（會建立 resourceMap 自動重定向資源）
+                    await LoadEffectUseCase.execute({
+                        id: effectId,
+                        files: relatedFiles,
+                        scale: 1.0
+                    });
+
+                    // 新增特效卡片
+                    const newEffect: EffectItem = {
+                        id: effectId,
+                        name: effectName,
+                        path: `[上傳] ${effectName}`, // 標記為上傳的特效
+                        isLoaded: true, // 已經載入成功
+                        isLoading: false,
+                        isPlaying: false,
+                        isLooping: false,
+                        loopIntervalId: null,
+                        isVisible: true,
+                        position: [0, 0, 0],
+                        rotation: [0, 0, 0],
+                        scale: [1, 1, 1],
+                        speed: 1.0,
+                        boundBoneUuid: null,
+                        triggers: [],
+                        color: colors[i % colors.length],
+                        resourceStatus: relatedFiles.map(f => ({
+                            path: f.name,
+                            exists: true,
+                            type: getResourceTypeFromName(f.name)
+                        }))
+                    };
+
+                    setEffects(prev => [...prev, newEffect]);
+                    console.log(`[EffectTestPanel] ✅ 特效載入成功: ${effectName}`);
+                } catch (err) {
+                    console.error(`[EffectTestPanel] ❌ 載入特效失敗: ${effectName}`, err);
+                    alert(`❌ 載入特效失敗: ${effectName}\n\n${err instanceof Error ? err.message : String(err)}`);
+                }
+            }
+
+            alert(`✅ 上傳完成！\n\n已載入 ${efkFiles.length} 個特效。`);
+        } catch (err) {
+            console.error('[EffectTestPanel] 上傳資料夾失敗:', err);
+            alert(`❌ 上傳失敗！\n\n${err instanceof Error ? err.message : String(err)}`);
+        } finally {
+            setIsUploadingFolder(false);
+            // 重置 input 以便重複選擇同一資料夾
+            if (folderUploadInputRef.current) {
+                folderUploadInputRef.current.value = '';
+            }
+        }
+    };
+
+    // 輔助函數：根據檔名判斷資源類型
+    const getResourceTypeFromName = (name: string): 'image' | 'material' | 'model' | 'other' => {
+        const ext = name.split('.').pop()?.toLowerCase() || '';
+        if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'dds', 'tga'].includes(ext)) return 'image';
+        if (['efkmat'].includes(ext)) return 'material';
+        if (['efkmodel', 'fbx', 'obj'].includes(ext)) return 'model';
+        return 'other';
     };
 
     // 清除 Effekseer 快取
@@ -1987,16 +2137,11 @@ export default function EffectTestPanel({
                 
                 if (!addedFiles.has(efkPath)) {
                     try {
-                        const response = await fetch(efkUrl);
-                        if (response.ok) {
-                            const blob = await response.blob();
-                            zip.file(efkPath, blob);
-                            addedFiles.add(efkPath);
-                            console.log(`[EffectTestPanel] ✅ 添加: ${efkPath}`);
-                        } else {
-                            failedFiles.push(efkPath);
-                            console.warn(`[EffectTestPanel] ⚠️ 無法下載: ${efkPath}`);
-                        }
+                        // 使用 fetchBlobResource 支援 Electron 的 app-resource:// 協議
+                        const blob = await fetchBlobResource(efkUrl);
+                        zip.file(efkPath, blob);
+                        addedFiles.add(efkPath);
+                        console.log(`[EffectTestPanel] ✅ 添加: ${efkPath}`);
                     } catch (err) {
                         failedFiles.push(efkPath);
                         console.error(`[EffectTestPanel] ❌ 下載失敗: ${efkPath}`, err);
@@ -2012,30 +2157,32 @@ export default function EffectTestPanel({
                         // 計算資源的完整路徑
                         let resourcePath = resource.path;
                         
+                        // 處理 app-resource:// 協議路徑（Electron 環境）
+                        if (resourcePath.startsWith('app-resource://')) {
+                            // 從 app-resource://public/effekseer/xxx 提取 xxx
+                            resourcePath = resourcePath.replace(/^app-resource:\/\/public\/effekseer\//, '');
+                        }
+                        // 處理網頁環境的 /effekseer/ 路徑
+                        else if (resourcePath.includes('/effekseer/')) {
+                            // 移除 effekseer 路徑前綴
+                            resourcePath = resourcePath.replace(/.*\/effekseer\//, '');
+                        }
                         // 如果是相對路徑，拼接特效所在目錄
-                        if (!resourcePath.startsWith('/') && !resourcePath.startsWith('http')) {
+                        else if (!resourcePath.startsWith('/') && !resourcePath.startsWith('http')) {
                             const effectDir = efkPath.includes('/') 
                                 ? efkPath.substring(0, efkPath.lastIndexOf('/') + 1) 
                                 : '';
                             resourcePath = effectDir + resourcePath;
-                        } else if (resourcePath.includes('/effekseer/')) {
-                            // 移除 effekseer 路徑前綴（相容網頁和 Electron 兩種格式）
-                            resourcePath = resourcePath.replace(/.*\/effekseer\//, '');
                         }
 
                         if (!addedFiles.has(resourcePath) && resource.exists) {
                             try {
                                 const resourceUrl = getEffekseerPath(resourcePath);
-                                const response = await fetch(resourceUrl);
-                                if (response.ok) {
-                                    const blob = await response.blob();
-                                    zip.file(resourcePath, blob);
-                                    addedFiles.add(resourcePath);
-                                    console.log(`[EffectTestPanel] ✅ 添加資源: ${resourcePath}`);
-                                } else {
-                                    failedFiles.push(resourcePath);
-                                    console.warn(`[EffectTestPanel] ⚠️ 無法下載資源: ${resourcePath}`);
-                                }
+                                // 使用 fetchBlobResource 支援 Electron 的 app-resource:// 協議
+                                const blob = await fetchBlobResource(resourceUrl);
+                                zip.file(resourcePath, blob);
+                                addedFiles.add(resourcePath);
+                                console.log(`[EffectTestPanel] ✅ 添加資源: ${resourcePath}`);
                             } catch (err) {
                                 failedFiles.push(resourcePath);
                                 console.error(`[EffectTestPanel] ❌ 下載資源失敗: ${resourcePath}`, err);
@@ -2196,6 +2343,21 @@ export default function EffectTestPanel({
                     )}
                 </div>
 
+                {/* 上傳特效資料夾按鈕 */}
+                <button
+                    onClick={() => folderUploadInputRef.current?.click()}
+                    disabled={!isRuntimeReady || isUploadingFolder}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-cyan-600 hover:bg-cyan-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-cyan-900/20"
+                    title="從電腦任意位置選擇包含 .efk 和資源的資料夾"
+                >
+                    {isUploadingFolder ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                        <FolderOpen className="w-3.5 h-3.5" />
+                    )}
+                    {isUploadingFolder ? '載入中...' : '上傳特效資料夾'}
+                </button>
+
                 <button
                     onClick={addEffectCard}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded-md text-xs font-medium transition-colors shadow-lg shadow-blue-900/20"
@@ -2204,6 +2366,18 @@ export default function EffectTestPanel({
                     新增特效
                 </button>
             </div>
+
+            {/* 隱藏的資料夾上傳 input */}
+            <input
+                ref={folderUploadInputRef}
+                type="file"
+                // @ts-expect-error webkitdirectory is a non-standard attribute
+                webkitdirectory="true"
+                multiple
+                className="hidden"
+                onChange={handleUploadEffectFolder}
+                accept=".efk,.efkefc,.efkp,.png,.jpg,.jpeg,.gif,.webp,.dds,.tga,.efkmat,.efkmodel"
+            />
 
             {/* Effect Cards List */}
             <div className="flex flex-col gap-3 min-h-[100px]">

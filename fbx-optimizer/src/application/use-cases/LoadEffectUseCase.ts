@@ -1,45 +1,19 @@
 import { getEffekseerRuntimeAdapter } from './effectRuntimeStore';
 
 /**
- * 載入 Effekseer 特效檔的 Use Case（支援單檔或資料夾）
- * 
- * 支援兩種模式：
- * 1. 單檔模式：只載入 .efk，資源需在 public/ 下
- * 2. 資料夾模式：上傳 .efk + 所有關聯檔案（.png, .efkmat 等）
+ * 載入 Effekseer 特效檔的 Use Case（資料夾模式）
+ *
+ * 重點：不要用 redirect 回傳 data: URL（Effekseer 1.70 會用「副檔名」判斷載入方式，
+ * data: URL 沒有 .png/.jpg 副檔名，會被當成二進位，最後導致 texImage2D 參數型別錯誤）。
+ *
+ * 正確作法：用 ArrayBuffer 載入 .efk，並透過 setResourceLoader 以 ArrayBuffer 供應資源。
  */
 export class LoadEffectUseCase {
-    /**
-     * 載入特效檔案（支援單檔或多檔）
-     * 
-     * @param params - 載入參數
-     * @param params.id - 特效的唯一識別 ID
-     * @param params.files - 檔案陣列（單檔或資料夾內的所有檔案）
-     * @param params.scale - 特效縮放倍率（預設 1.0）
-     * @returns Promise<string> - 返回特效的 Blob URL
-     * @throws {Error} 當載入失敗時拋出錯誤
-     * 
-     * @example
-     * ```typescript
-     * // 單檔模式
-     * await LoadEffectUseCase.execute({
-     *   id: 'effect_001',
-     *   files: [efkFile],
-     *   scale: 1.0
-     * });
-     * 
-     * // 資料夾模式
-     * await LoadEffectUseCase.execute({
-     *   id: 'effect_002',
-     *   files: [efkFile, texture1, texture2, materialFile],
-     *   scale: 1.0
-     * });
-     * ```
-     */
     public static async execute(params: {
         id: string;
         files: File[];
         scale?: number;
-    }): Promise<string> {
+    }): Promise<void> {
         const { id, files, scale } = params;
 
         if (!files || files.length === 0) {
@@ -47,50 +21,63 @@ export class LoadEffectUseCase {
         }
 
         // 找出主特效檔
-        const effectFile = files.find(f => 
-            f.name.match(/\.(efk|efkefc|efkp)$/i)
-        );
-
+        const effectFile = files.find(f => f.name.match(/\.(efk|efkefc|efkp)$/i));
         if (!effectFile) {
             throw new Error('[LoadEffectUseCase] 找不到主特效檔（.efk / .efkefc / .efkp）');
         }
 
-        console.log(`[LoadEffectUseCase] 開始載入特效: ${effectFile.name}，共 ${files.length} 個檔案`);
+        console.log(`[LoadEffectUseCase] 🚀 開始處理特效: ${effectFile.name}（共 ${files.length} 個檔案）`);
 
-        // 建立資源映射表（檔名 -> Blob URL）
-        const resourceMap = new Map<string, string>();
+        // 找出根資料夾名稱（用於去除 webkitRelativePath 的第一層）
+        const effectRelativePath = (effectFile as any).webkitRelativePath || effectFile.name;
+        const rootFolder = effectRelativePath.includes('/') ? effectRelativePath.split('/')[0] + '/' : '';
 
-        for (const file of files) {
-            const blobUrl = URL.createObjectURL(file);
-            
-            // 取得相對路徑（如果有 webkitRelativePath）
+        // 讀取所有檔案為 ArrayBuffer
+        console.log('[LoadEffectUseCase] 📂 讀取檔案內容為 ArrayBuffer...');
+        const fileBuffers = await Promise.all(files.map(async (file) => ({ file, buffer: await file.arrayBuffer() })));
+
+        const effectBuffer = fileBuffers.find(x => x.file === effectFile)!.buffer;
+
+        // 建立資源映射表（路徑 -> ArrayBuffer）
+        const resources = new Map<string, ArrayBuffer>();
+
+        for (const { file, buffer } of fileBuffers) {
+            // 主特效檔不放到資源表（由 loadEffect(buffer) 載入）
+            if (file === effectFile) continue;
+
             const relativePath = (file as any).webkitRelativePath || file.name;
-            
-            // 正規化路徑（統一使用 / 分隔符）
-            const normalizedPath = relativePath.replace(/\\/g, '/');
-            
-            // 同時註冊完整路徑和純檔名
-            resourceMap.set(normalizedPath, blobUrl);
-            resourceMap.set(file.name, blobUrl);
-            
-            console.log(`[LoadEffectUseCase] 資源映射: ${normalizedPath} -> ${blobUrl}`);
+            const normalizedPath = String(relativePath).replace(/\\/g, '/');
+            const pathWithoutRoot = rootFolder && normalizedPath.startsWith(rootFolder)
+                ? normalizedPath.substring(rootFolder.length)
+                : normalizedPath;
+            const pureFileName = file.name;
+
+            // 註冊多種 key，讓 Effekseer 引用的相對路徑更容易命中
+            const keys = new Set<string>([
+                normalizedPath,
+                pathWithoutRoot,
+                pureFileName,
+                `./${pureFileName}`,
+                `./${pathWithoutRoot}`,
+                // 只取最後一段（避免 efk 只寫檔名）
+                normalizedPath.split('/').pop() || pureFileName,
+            ]);
+
+            for (const key of keys) {
+                if (key) resources.set(key, buffer);
+            }
         }
 
-        // 建立主特效檔的 Blob URL
-        const effectBlobUrl = resourceMap.get(effectFile.name)!;
-
-        // 透過 Adapter 載入特效（傳入資源映射表）
         const adapter = getEffekseerRuntimeAdapter();
-        await adapter.loadEffect({
+        await adapter.waitForReady();
+
+        await adapter.loadEffectFromArrayBuffer({
             id,
-            url: effectBlobUrl,
+            effectBuffer,
             scale: scale ?? 1.0,
-            resourceMap  // 傳入資源映射表，用於 redirect
+            resources,
         });
 
-        console.log(`[LoadEffectUseCase] ✓ 特效載入成功: ${id} (${files.length} 個檔案)`);
-
-        return effectBlobUrl;
+        console.log(`[LoadEffectUseCase] ✅ 特效載入完成: ${id}`);
     }
 }
-

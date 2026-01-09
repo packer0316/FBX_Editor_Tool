@@ -41,6 +41,183 @@ export class EffekseerRuntimeAdapter {
     }
 
     /**
+     * 等待 Runtime 初始化完成
+     * @param timeout 最大等待時間（毫秒）
+     */
+    public async waitForReady(timeout: number = 10000): Promise<void> {
+        if (this.isReady()) return;
+
+        console.log('[EffekseerRuntimeAdapter] ⏳ 等待 Runtime 初始化...');
+        return new Promise((resolve, reject) => {
+            const start = Date.now();
+            const check = setInterval(() => {
+                if (this.isReady()) {
+                    clearInterval(check);
+                    console.log('[EffekseerRuntimeAdapter] ✅ Runtime 已就緒');
+                    resolve();
+                } else if (Date.now() - start > timeout) {
+                    clearInterval(check);
+                    reject(new Error('[EffekseerRuntimeAdapter] 初始化超時，請檢查 3D 場景是否正確載入'));
+                }
+            }, 100);
+        });
+    }
+
+    /**
+     * 以 ArrayBuffer 載入特效，並透過 setResourceLoader 從記憶體提供資源（解決 redirect + data/blob URL 導致的 texImage2D 問題）
+     */
+    public async loadEffectFromArrayBuffer(params: {
+        id: string;
+        effectBuffer: ArrayBuffer;
+        scale?: number;
+        resources: Map<string, ArrayBuffer>;
+    }): Promise<void> {
+        if (!this.isRuntimeInitialized || !this.effekseerContext) {
+            throw new Error('[EffekseerRuntimeAdapter] 尚未初始化，請先呼叫 initWithThreeContext()');
+        }
+
+        if (this.loadedEffects.has(params.id)) {
+            console.log(`[EffekseerRuntimeAdapter] 特效已載入過: ${params.id}`);
+            return;
+        }
+
+        const { id, effectBuffer, scale, resources } = params;
+
+        // 簡單的 Power-of-two 轉換（比照 effekseer.js 的行為）
+        const isPowerOfTwo = (v: number) => (v & (v - 1)) === 0;
+        const calcNextPow2 = (v: number) => {
+            const sizes = [2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048];
+            for (const s of sizes) if (s >= v) return s;
+            return 2048;
+        };
+        const convertPowerOfTwoImage = (img: HTMLImageElement) => {
+            if (img.width <= 0 || img.height <= 0) return img;
+            if (isPowerOfTwo(img.width) && isPowerOfTwo(img.height)) return img;
+            const canvas = document.createElement('canvas');
+            canvas.width = calcNextPow2(img.width);
+            canvas.height = calcNextPow2(img.height);
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return img;
+            ctx.drawImage(img, 0, 0, img.width, img.height, 0, 0, canvas.width, canvas.height);
+            return canvas;
+        };
+
+        const normalizeKey = (p: string) => decodeURIComponent(p).replace(/\\/g, '/');
+        const stripQuery = (p: string) => p.split('?')[0];
+
+        const findResource = (path: string): ArrayBuffer | null => {
+            const clean = normalizeKey(stripQuery(path));
+            const fileName = clean.split('/').pop() || clean;
+            const candidates = [
+                clean,
+                clean.replace(/^\.\//, ''),
+                clean.replace(/^\.\.\//, ''),
+                fileName,
+                `./${fileName}`,
+            ];
+            for (const c of candidates) {
+                if (resources.has(c)) return resources.get(c)!;
+            }
+            // 模糊搜尋：只比檔名
+            for (const [k, v] of resources) {
+                const kn = normalizeKey(k);
+                const kf = kn.split('/').pop() || kn;
+                if (kf.toLowerCase() === fileName.toLowerCase()) return v;
+            }
+            return null;
+        };
+
+        const loadBinaryViaXHR = (url: string): Promise<ArrayBuffer> =>
+            new Promise((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+                xhr.open('GET', url, true);
+                xhr.responseType = 'arraybuffer';
+                xhr.onload = () => resolve(xhr.response);
+                xhr.onerror = () => reject(new Error('Network error'));
+                xhr.send(null);
+            });
+
+        // 設置 resource loader：先從 resources Map 取，取不到就走預設 URL 載入（維持原行為）
+        this.effekseerContext.setResourceLoader((path: string, onload?: (arg: any) => void, onerror?: (reason: string, path: string) => void) => {
+            const extPath = stripQuery(path);
+            const ext = (extPath.lastIndexOf('.') >= 0 ? extPath.slice(extPath.lastIndexOf('.')).toLowerCase() : '');
+
+            const buffer = findResource(path);
+
+            // 圖片資源
+            if (ext === '.png' || ext === '.jpg' || ext === '.jpeg') {
+                const mime = ext === '.png' ? 'image/png' : 'image/jpeg';
+                const useBuffer = buffer;
+
+                const loadImageFromBlob = (ab: ArrayBuffer) => {
+                    const blob = new Blob([new Uint8Array(ab)], { type: mime });
+                    const url = URL.createObjectURL(blob);
+                    const img = new Image();
+                    img.onload = () => {
+                        try {
+                            const converted = convertPowerOfTwoImage(img);
+                            onload?.(converted);
+                        } finally {
+                            URL.revokeObjectURL(url);
+                        }
+                    };
+                    img.onerror = () => {
+                        URL.revokeObjectURL(url);
+                        onerror?.('not found', path);
+                    };
+                    img.src = url;
+                };
+
+                if (useBuffer) {
+                    loadImageFromBlob(useBuffer);
+                    return;
+                }
+
+                // fallback：走 URL 載入
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => onload?.(convertPowerOfTwoImage(img));
+                img.onerror = () => onerror?.('not found', path);
+                img.src = path;
+                return;
+            }
+
+            // 其他二進位資源（efkmat/efkmodel/等）
+            if (buffer) {
+                onload?.(buffer);
+                return;
+            }
+
+            // fallback：走 URL 下載二進位
+            loadBinaryViaXHR(path)
+                .then((ab) => onload?.(ab))
+                .catch(() => onerror?.('not found', path));
+        });
+
+        let effect: effekseer.EffekseerEffect;
+        await new Promise<void>((resolve, reject) => {
+            const onload = () => {
+                console.log(`[EffekseerRuntimeAdapter] ✓ 特效載入完成(ArrayBuffer): ${id}`);
+                resolve();
+            };
+            const onerror = (message: string, path: string) => {
+                console.error(`[EffekseerRuntimeAdapter] ✗ 特效載入失敗(ArrayBuffer): ${message} (${path})`);
+                reject(new Error(`[EffekseerRuntimeAdapter] 載入特效失敗: ${message} (${path})`));
+            };
+
+            // Effekseer 1.70 支援 data=ArrayBuffer
+            effect = (this.effekseerContext as any).loadEffect(
+                effectBuffer,
+                scale ?? 1.0,
+                onload,
+                onerror
+            );
+        });
+
+        this.loadedEffects.set(id, effect!);
+    }
+
+    /**
      * 使用 Three.js WebGL Context 初始化 Effekseer Runtime（官方推薦方式）
      *
      * @param webglContext - Three.js renderer.getContext() 返回的 WebGL Context
@@ -169,26 +346,54 @@ export class EffekseerRuntimeAdapter {
 
             // 資源重定向函數：當 Effekseer 請求相對路徑的資源時，返回對應的 Blob URL
             const redirect = resourceMap ? (path: string) => {
+                console.log(`[EffekseerRuntimeAdapter] 資源請求原始路徑: ${path}`);
+                
                 // 正規化路徑
-                const normalizedPath = path.replace(/\\/g, '/');
+                let normalizedPath = path.replace(/\\/g, '/');
+                
+                // 處理 blob: URL 的情況（Effekseer 可能會拼接出無效的 blob URL）
+                if (normalizedPath.includes('blob:')) {
+                    // 從 blob URL 中提取純檔名
+                    // 例如: blob:http://localhost:5173/abc123/../texture.png -> texture.png
+                    const match = normalizedPath.match(/[^/\\]+\.(png|jpg|jpeg|gif|webp|dds|tga|efkmat|efkmodel)$/i);
+                    if (match) {
+                        normalizedPath = match[0];
+                        console.log(`[EffekseerRuntimeAdapter] 從 blob URL 提取檔名: ${normalizedPath}`);
+                    }
+                }
+                
+                // 提取純檔名（不含路徑）
+                const pureFileName = normalizedPath.split('/').pop() || normalizedPath;
                 
                 // 嘗試多種匹配策略
                 const strategies = [
                     normalizedPath,                           // 完整路徑
-                    normalizedPath.split('/').pop() || '',   // 純檔名
-                    normalizedPath.replace(/^\.\//, ''),    // 移除 ./
-                    normalizedPath.replace(/^\.\.\//, ''),  // 移除 ../
+                    pureFileName,                             // 純檔名
+                    normalizedPath.replace(/^\.\//, ''),      // 移除 ./
+                    normalizedPath.replace(/^\.\.\//, ''),    // 移除 ../
+                    normalizedPath.replace(/^.*\//, ''),      // 移除所有目錄
                 ];
 
+                // 額外策略：遍歷 resourceMap 尋找檔名匹配
                 for (const key of strategies) {
                     if (resourceMap.has(key)) {
                         const redirectUrl = resourceMap.get(key)!;
-                        console.log(`[EffekseerRuntimeAdapter] 資源重定向: ${path} -> ${redirectUrl}`);
+                        console.log(`[EffekseerRuntimeAdapter] ✅ 資源重定向: ${path} -> ${redirectUrl}`);
                         return redirectUrl;
                     }
                 }
 
+                // 最後嘗試：用純檔名在 resourceMap 中搜尋（模糊匹配）
+                for (const [key, value] of resourceMap.entries()) {
+                    const keyFileName = key.split('/').pop() || key;
+                    if (keyFileName.toLowerCase() === pureFileName.toLowerCase()) {
+                        console.log(`[EffekseerRuntimeAdapter] ✅ 模糊匹配成功: ${path} -> ${value}`);
+                        return value;
+                    }
+                }
+
                 console.warn(`[EffekseerRuntimeAdapter] ⚠️ 找不到資源: ${path}`);
+                console.warn(`[EffekseerRuntimeAdapter] 可用資源:`, Array.from(resourceMap.keys()));
                 return path; // 找不到就返回原路徑，讓 Effekseer 自己處理
             } : undefined;
 
